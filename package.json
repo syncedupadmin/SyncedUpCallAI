@@ -1,0 +1,31 @@
+{
+  "name": "syncedup-call-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "migrate": "psql $DATABASE_URL -f migrations/000_init.sql",
+    "backfill": "tsx src/scripts/backfill.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "next": "^14.2.32",
+    "pg": "^8.12.0",
+    "pino": "^9.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "swr": "^2.2.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "tsx": "^4.15.7",
+    "typescript": "^5.6.2"
+  }
+}
