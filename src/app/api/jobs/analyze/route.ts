@@ -3,6 +3,8 @@ import { db } from '@/src/server/db';
 import { ANALYSIS_SCHEMA, validateAnalysis } from '@/src/server/lib/json-guard';
 import { ANALYSIS_SYSTEM, userPrompt } from '@/src/server/lib/prompts';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.JOBS_SECRET}`)
     return NextResponse.json({ ok: false }, { status: 401 });
