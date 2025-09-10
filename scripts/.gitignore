@@ -1,0 +1,5 @@
+# Environment configuration
+.env
+
+# Output directory with downloaded transcripts
+out/

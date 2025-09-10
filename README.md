@@ -29,5 +29,21 @@ See `.env.local.example` for required variables.
 - `npm run migrate` apply base schema
 - `npm run backfill` requeue last 30 days without transcripts
 
+## Quick Validate
+
+Test the system's real-time features, batch processing, and exports:
+
+```bash
+cd scripts
+cp .env.example .env
+# Edit .env with your secrets
+./seed-call.sh           # Create test call
+./transcribe.sh <id>      # Start transcription
+./stream-status.sh <id>   # Watch live status
+./download-transcript.sh <id>  # Export transcript
+```
+
+See [scripts/README.md](scripts/README.md) for complete testing documentation.
+
 ## License
 You can license this out; runtime is portable.
