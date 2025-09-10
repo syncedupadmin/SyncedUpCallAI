@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "app/api/**/route.ts": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
