@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "c8cdf68b-e1e5-4bb7-9f09-264ec8fdcd28",
+      "started_at": "2025-09-10T15:16:54.000Z",
+      "duration_sec": 35,
+      "disposition": "Completed",
+      "recording_url": "https://cdn.pixabay.com/download/audio/2021/08/08/audio_1a1a1b1d93.mp3",
+      "contact_id": "ebb99e5d-b8e7-4608-a011-f0e6aba5b19a",
+      "agent_id": "d20b24d6-9524-4993-ba38-a849e87b6606",
+      "agency_id": "test-agency",
+      "lead_id": "L-success-1757517414",
+      "campaign": "ACA-Q4",
+      "direction": "outbound",
+      "ended_at": "2025-09-10T15:17:29.000Z",
+      "customer_phone": "+15558675309",
+      "agent": "Test Agent",
+      "reason_primary": null,
+      "summary": null,
+      "has_policy_300_plus": false
+    }
+  ],
+  "total": 2,
+  "limit": 1,
+  "offset": 0,
+  "hasMore": true
+}

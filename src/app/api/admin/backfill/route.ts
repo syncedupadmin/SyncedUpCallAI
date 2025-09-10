@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
     // Log backfill completion
     await db.none(`
       INSERT INTO call_events(call_id, type, payload)
-      VALUES('SYSTEM', 'backfill_completed', $1)
+      VALUES(NULL, 'backfill_completed', $1)
     `, [{
       type,
       processed,
@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
     const events = await db.manyOrNone(`
       SELECT payload, created_at
       FROM call_events
-      WHERE call_id = 'SYSTEM' 
+      WHERE call_id IS NULL 
         AND type = 'backfill_completed'
       ORDER BY created_at DESC
       LIMIT 10

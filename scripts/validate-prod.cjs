@@ -172,7 +172,7 @@ async function validate() {
   await test('GET /api/ui/call (no ID)', async () => {
     const res = await request(`${APP_URL}/api/ui/call`);
     const data = JSON.parse(res.body);
-    if (data.error !== 'id_required') throw new Error('Expected id_required error');
+    if (data.error !== 'missing_id') throw new Error('Expected missing_id error');
   });
 
   await test('GET /api/ui/call (404)', async () => {
