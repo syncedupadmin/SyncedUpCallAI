@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = Number(searchParams.get('limit') ?? 50);
 
-    const rows = await db.manyOrNone(`
+    const result = await db.query(`
       with src as (
         select 
           c.id,
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       order by s.started_at desc nulls last
     `, [limit]);
 
-    return NextResponse.json({ ok: true, rows });
+    return NextResponse.json({ ok: true, rows: result.rows });
   } catch (err: any) {
     console.error('ui/calls GET error', err);
     return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });

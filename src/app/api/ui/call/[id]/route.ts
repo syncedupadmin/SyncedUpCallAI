@@ -33,13 +33,14 @@ export async function GET(
       where call_id = $1
     `, [id]);
 
-    const events = await db.manyOrNone(`
+    const eventsResult = await db.query(`
       select id, type, payload, at
       from call_events
       where call_id = $1
       order by at desc
       limit 100
     `, [id]);
+    const events = eventsResult.rows;
 
     return NextResponse.json({ ok: true, call, transcript, analysis, events });
   } catch (err: any) {
