@@ -15,9 +15,8 @@ export async function GET(req: NextRequest) {
     const call = await db.oneOrNone(`
       SELECT 
         c.*,
-        CASE WHEN p.premium >= 300 THEN true ELSE false END as has_policy_300_plus
+        false as has_policy_300_plus
       FROM calls c
-      LEFT JOIN policies_stub p ON p.customer_phone = c.customer_phone
       WHERE c.id = $1
     `, [id]);
 
@@ -35,10 +34,8 @@ export async function GET(req: NextRequest) {
       SELECT * FROM analyses WHERE call_id = $1
     `, [id]);
 
-    // Get contact info if available
-    const contact = await db.oneOrNone(`
-      SELECT * FROM policies_stub WHERE customer_phone = $1
-    `, [call.customer_phone]);
+    // Get contact info if available (policies_stub disabled for now)
+    const contact = null;
 
     // Get last 50 events
     const events = await db.manyOrNone(`

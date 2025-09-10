@@ -248,9 +248,9 @@ export async function GET(req: NextRequest) {
     // Get current gaps
     const gaps = await db.one(`
       SELECT 
-        (SELECT COUNT(*) FROM calls c LEFT JOIN transcripts t ON t.call_id = c.id WHERE t.id IS NULL AND c.convoso_audio_url IS NOT NULL) as missing_transcripts,
-        (SELECT COUNT(*) FROM transcripts t LEFT JOIN analyses a ON a.call_id = t.call_id WHERE a.id IS NULL AND t.text IS NOT NULL) as missing_analyses,
-        (SELECT COUNT(*) FROM transcripts t LEFT JOIN transcript_embeddings e ON e.call_id = t.call_id WHERE e.id IS NULL AND t.text IS NOT NULL) as missing_embeddings,
+        (SELECT COUNT(*) FROM calls c LEFT JOIN transcripts t ON t.call_id = c.id WHERE t.call_id IS NULL AND c.convoso_audio_url IS NOT NULL) as missing_transcripts,
+        (SELECT COUNT(*) FROM transcripts t LEFT JOIN analyses a ON a.call_id = t.call_id WHERE a.call_id IS NULL AND t.text IS NOT NULL) as missing_analyses,
+        (SELECT COUNT(*) FROM transcripts t LEFT JOIN transcript_embeddings e ON e.call_id = t.call_id WHERE e.call_id IS NULL AND t.text IS NOT NULL) as missing_embeddings,
         (SELECT COUNT(*) FROM (SELECT generate_series(CURRENT_DATE - interval '30 days', CURRENT_DATE, '1 day')::date as date) d LEFT JOIN revenue_rollups r ON r.date = d.date WHERE r.id IS NULL) as missing_rollups
     `);
 

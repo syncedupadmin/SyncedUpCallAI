@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "now": "2025-09-10T23:52:14.799Z",
+  "env": {
+    "DATABASE_URL": true,
+    "CONVOSO_WEBHOOK_SECRET": true,
+    "JOBS_SECRET": true,
+    "OPENAI_API_KEY": true,
+    "DEEPGRAM_API_KEY": true,
+    "ASSEMBLYAI_API_KEY": true
+  },
+  "meta": {
+    "vercelEnv": "production",
+    "commitSha": "0c07dc2bfa47033bd35414523297f9411d489780"
+  }
+}
