@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/jobs/batch",
-      "schedule": "*/5 * * * *",
-      "headers": { "Authorization": "Bearer ${JOBS_SECRET}" }
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
