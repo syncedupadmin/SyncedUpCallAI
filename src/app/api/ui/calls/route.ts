@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const { rows } = await db.query(`
     select c.id, c.started_at, c.duration_sec, c.disposition, c.recording_url,

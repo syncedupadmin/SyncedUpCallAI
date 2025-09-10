@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   // Use stub: high-value = premium >= 300
   const { rows } = await db.query(`

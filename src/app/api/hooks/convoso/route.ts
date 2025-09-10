@@ -3,6 +3,8 @@ import { db } from '@/src/server/db';
 import { ConvosoV1 } from '@/src/server/lib/validation';
 import { idemKey, asIso } from '@/src/server/lib/util';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   if (req.headers.get('x-webhook-secret') !== process.env.CONVOSO_WEBHOOK_SECRET)
     return NextResponse.json({ ok: false }, { status: 401 });
