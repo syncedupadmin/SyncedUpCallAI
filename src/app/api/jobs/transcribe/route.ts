@@ -3,6 +3,7 @@ import { db } from '@/src/server/db';
 import { transcribe, translateToEnglish } from '@/src/server/asr';
 import { ensureEmbedding } from '@/src/server/embeddings';
 import { truncatePayload } from '@/src/server/lib/retry';
+import { SSEManager } from '@/src/lib/sse';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Send SSE update: transcribing
+    SSEManager.sendStatus(callId, 'transcribing', { engine: 'starting' });
+    
     // Use new ASR service layer
     const result = await transcribe(url);
     
@@ -96,6 +100,9 @@ export async function POST(req: NextRequest) {
     let analyzeOk = false;
     let analyzeData: any = {};
     try {
+      // Send SSE update: analyzing
+      SSEManager.sendStatus(callId, 'analyzing', { stage: 'starting' });
+      
       const analyzeResp = await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
@@ -119,6 +126,14 @@ export async function POST(req: NextRequest) {
       await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`, 
         [callId, truncatePayload({ error: analyzeError.message })]);
     }
+
+    // Send final SSE status
+    SSEManager.sendStatus(callId, 'done', { 
+      transcribed: true, 
+      analyzed: analyzeOk,
+      engine: result.engine,
+      lang: result.lang
+    });
 
     return NextResponse.json({ 
       ok: true, 

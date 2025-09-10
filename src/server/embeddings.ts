@@ -57,6 +57,11 @@ export async function ensureEmbedding(callId: string): Promise<boolean> {
   `, [callId]);
 
   if (existing) {
+    // Log that we skipped embedding creation
+    await db.none(`
+      insert into call_events(call_id, type, payload)
+      values($1, 'embedding_skip', $2)
+    `, [callId, { reason: 'already_exists' }]);
     return false; // Already exists
   }
 

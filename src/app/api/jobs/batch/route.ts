@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { sleep } from '@/src/server/lib/retry';
+import { BatchProgressTracker } from '@/src/lib/sse';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,16 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.JOBS_SECRET}`) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  }
+
+  // Check if requesting progress update
+  const batchId = req.nextUrl.searchParams.get('batch_id');
+  if (batchId) {
+    const progress = BatchProgressTracker.getProgress(batchId);
+    if (!progress) {
+      return NextResponse.json({ ok: false, error: 'batch_not_found' }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, progress });
   }
 
   const { rows } = await db.query(`
@@ -29,6 +40,11 @@ export async function GET(req: NextRequest) {
   let scanned = rows.length;
   let posted = 0;
   let failed = 0;
+  let completed = 0;
+
+  // Initialize batch tracking
+  const newBatchId = `batch_${Date.now()}`;
+  BatchProgressTracker.initBatch(newBatchId, scanned);
 
   for (const r of rows) {
     try {
@@ -40,9 +56,20 @@ export async function GET(req: NextRequest) {
       
       if (resp.ok) {
         posted++;
+        const result = await resp.json();
+        if (result.ok) {
+          completed++;
+        }
+        // Update progress
+        BatchProgressTracker.updateProgress(newBatchId, { 
+          posted, 
+          completed,
+          failed 
+        });
       } else {
         failed++;
         console.error(`Batch transcribe failed for ${r.id}:`, await resp.text());
+        BatchProgressTracker.updateProgress(newBatchId, { failed });
       }
       
       // Add delay between requests to avoid overwhelming ASR services
@@ -52,13 +79,19 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       failed++;
       console.error(`Batch transcribe error for ${r.id}:`, error);
+      BatchProgressTracker.updateProgress(newBatchId, { failed });
     }
   }
 
+  const finalProgress = BatchProgressTracker.getProgress(newBatchId);
+
   return NextResponse.json({ 
     ok: true, 
+    batch_id: newBatchId,
+    progress: finalProgress,
     scanned,
     posted,
+    completed,
     failed
   });
 }

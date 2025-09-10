@@ -11,6 +11,7 @@ export default function CallDetailPage() {
   const [triggerBusy, setTriggerBusy] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedText, setHighlightedText] = useState('');
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/ui/call/${params.id}`)
@@ -22,6 +23,34 @@ export default function CallDetailPage() {
       .catch(() => {
         setLoading(false);
       });
+  }, [params.id]);
+
+  // Set up SSE for live status updates
+  useEffect(() => {
+    if (!params.id) return;
+
+    const eventSource = new EventSource(`/api/ui/stream/${params.id}`);
+    
+    eventSource.addEventListener('status', (event) => {
+      const data = JSON.parse(event.data);
+      setLiveStatus(data.status);
+      
+      // Refresh data when done
+      if (data.status === 'done') {
+        fetch(`/api/ui/call/${params.id}`)
+          .then(res => res.json())
+          .then(d => setData(d))
+          .catch(console.error);
+      }
+    });
+
+    eventSource.addEventListener('error', () => {
+      setLiveStatus(null);
+    });
+
+    return () => {
+      eventSource.close();
+    };
   }, [params.id]);
 
   const triggerJob = async (job: 'transcribe' | 'analyze') => {
@@ -164,6 +193,16 @@ export default function CallDetailPage() {
           {call.disposition && (
             <span className="badge">{call.disposition}</span>
           )}
+          {liveStatus && (
+            <span className="badge badge-warning pulse" style={{ 
+              animation: 'pulse 1.5s ease-in-out infinite' 
+            }}>
+              {liveStatus === 'transcribing' && '🎤 Transcribing...'}
+              {liveStatus === 'analyzing' && '🤖 Analyzing...'}
+              {liveStatus === 'done' && '✅ Complete'}
+              {liveStatus === 'error' && '❌ Error'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -255,6 +294,17 @@ export default function CallDetailPage() {
               analysis ? 'Analyzed ✓' : 'Analyze'
             )}
           </button>
+          
+          {transcript && (
+            <a 
+              href={`/api/ui/call/export?id=${params.id}&format=txt`}
+              download
+              className="btn btn-ghost"
+              style={{ fontSize: 14 }}
+            >
+              📥 Download Transcript
+            </a>
+          )}
         </div>
       </div>
 
