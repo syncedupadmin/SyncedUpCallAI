@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { transcribe, translateToEnglish } from '@/src/server/asr';
 import { ensureEmbedding } from '@/src/server/embeddings';
+import { truncatePayload } from '@/src/server/lib/retry';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,25 +12,43 @@ export async function POST(req: NextRequest) {
 
   const { callId, recordingUrl } = await req.json();
   
+  // Load call with duration and recording
+  const call = await db.oneOrNone(`
+    select id, duration_sec, recording_url 
+    from calls 
+    where id=$1
+  `, [callId]);
+  
+  if (!call) {
+    return NextResponse.json({ ok: false, error: 'call_not_found' }, { status: 404 });
+  }
+  
+  // Check duration >= 10s
+  if (!call.duration_sec || call.duration_sec < 10) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_skipped', $2)`, 
+      [callId, { duration_sec: call.duration_sec || 0 }]);
+    return NextResponse.json({ ok: false, error: 'short_call' });
+  }
+  
+  // Check recording URL present
+  const url = recordingUrl || call.recording_url;
+  if (!url) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'no_recording', $2)`, 
+      [callId, { error: 'Recording URL not provided' }]);
+    return NextResponse.json({ ok: false, error: 'no_recording' });
+  }
+  
   // Check if already transcribed
   const existing = await db.oneOrNone(`select call_id from transcripts where call_id=$1`, [callId]);
   if (existing) {
     await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_skipped', $2)`, 
       [callId, { reason: 'already_exists' }]);
-    return NextResponse.json({ ok: true, skipped: 'exists' });
-  }
-  
-  // Check if call is >= 10s
-  const call = await db.oneOrNone(`select duration_sec from calls where id=$1`, [callId]);
-  if (!call || (call.duration_sec && call.duration_sec < 10)) {
-    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_skipped', $2)`, 
-      [callId, { duration_sec: call?.duration_sec || 0 }]);
-    return NextResponse.json({ ok: false, error: 'short_call' });
+    return NextResponse.json({ ok: true, status: 'exists' });
   }
 
   try {
     // Use new ASR service layer
-    const result = await transcribe(recordingUrl);
+    const result = await transcribe(url);
     
     // Translate if needed
     let translatedText = result.translated_text;
@@ -54,33 +73,67 @@ export async function POST(req: NextRequest) {
       JSON.stringify(result.words || [])
     ]);
 
-    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribed', $2)`, 
-      [callId, { engine: result.engine, lang: result.lang, chars: result.text.length }]);
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_ok', $2)`, 
+      [callId, { 
+        engine: result.engine, 
+        lang: result.lang, 
+        chars: result.text.length,
+        words_count: result.words?.length || 0
+      }]);
 
     // Generate embedding for search
+    let embeddingCreated = false;
     try {
       await ensureEmbedding(callId);
-    } catch (embedError) {
+      embeddingCreated = true;
+    } catch (embedError: any) {
       console.error('Embedding generation failed:', embedError);
-      // Don't fail the whole request if embedding fails
+      await db.none(`insert into call_events(call_id, type, payload) values($1, 'embedding_error', $2)`, 
+        [callId, truncatePayload({ error: embedError.message })]);
     }
 
     // Trigger analysis
-    await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callId })
-    });
+    let analyzeOk = false;
+    let analyzeData: any = {};
+    try {
+      const analyzeResp = await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId })
+      });
+      
+      if (analyzeResp.ok) {
+        analyzeOk = true;
+        const data = await analyzeResp.json();
+        analyzeData = {
+          qa_score: data.qa_score,
+          reason_primary: data.reason_primary
+        };
+      } else {
+        const errorText = await analyzeResp.text();
+        await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`, 
+          [callId, truncatePayload({ status: analyzeResp.status, error: errorText })]);
+      }
+    } catch (analyzeError: any) {
+      console.error('Analysis trigger failed:', analyzeError);
+      await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`, 
+        [callId, truncatePayload({ error: analyzeError.message })]);
+    }
 
     return NextResponse.json({ 
       ok: true, 
       engine: result.engine,
       lang: result.lang,
-      saved: true
+      embedding: embeddingCreated,
+      analyze_ok: analyzeOk,
+      ...analyzeData
     });
   } catch (error: any) {
-    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_failed', $2)`, 
-      [callId, { error: error.message }]);
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_error', $2)`, 
+      [callId, truncatePayload({ 
+        error: error.message,
+        stack: error.stack?.substring(0, 500)
+      })]);
     return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
   }
 }

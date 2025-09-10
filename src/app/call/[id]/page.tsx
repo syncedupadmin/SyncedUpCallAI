@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function CallDetailPage() {
@@ -9,6 +9,8 @@ export default function CallDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showOriginal, setShowOriginal] = useState(false);
   const [triggerBusy, setTriggerBusy] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedText, setHighlightedText] = useState('');
 
   useEffect(() => {
     fetch(`/api/ui/call/${params.id}`)
@@ -98,6 +100,29 @@ export default function CallDetailPage() {
     return '#ef4444';
   };
 
+  // Highlight search query in transcript
+  const highlightText = (text: string, query: string) => {
+    if (!query || query.length < 2) return text;
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, i) => 
+      regex.test(part) ? 
+        `<mark style="background: #fbbf24; color: #000; padding: 2px 0">${part}</mark>` : 
+        part
+    ).join('');
+  };
+
+  // Process transcript with search highlighting
+  const processedTranscript = useMemo(() => {
+    if (!transcript?.text) return '';
+    const textToProcess = showOriginal && transcript.text ? 
+      transcript.text : 
+      (transcript.translated_text || transcript.text);
+    return highlightText(textToProcess, searchQuery);
+  }, [transcript, showOriginal, searchQuery]);
+
   return (
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* Header */}
@@ -167,19 +192,41 @@ export default function CallDetailPage() {
           </div>
         </div>
 
+        {/* Audio Player */}
+        {call.recording_url && (
+          <div style={{ marginTop: 24, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 8 }}>Recording</div>
+            <audio 
+              controls 
+              style={{ 
+                width: '100%', 
+                maxWidth: 600,
+                background: '#1a1a24',
+                borderRadius: 8
+              }}
+            >
+              <source src={call.recording_url} type="audio/mpeg" />
+              <source src={call.recording_url} type="audio/wav" />
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        )}
+
         {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
           {call.recording_url && (
             <a 
               href={call.recording_url} 
               target="_blank" 
-              className="btn btn-primary"
+              className="btn btn-ghost"
               style={{ fontSize: 14 }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}>
-                <polygon points="5 3 19 12 5 21 5 3" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Open Recording
+              Download
             </a>
           )}
           
@@ -215,16 +262,57 @@ export default function CallDetailPage() {
         {/* Left Column - Transcript */}
         <div>
           <div className="glass-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600 }}>Transcript</h3>
-              {transcript?.translated_text && transcript.lang !== 'en' && (
-                <button
-                  onClick={() => setShowOriginal(!showOriginal)}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 12 }}
-                >
-                  {showOriginal ? 'Show English' : 'Show Original'}
-                </button>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Transcript</h3>
+                {transcript?.translated_text && transcript.lang !== 'en' && (
+                  <button
+                    onClick={() => setShowOriginal(!showOriginal)}
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12 }}
+                  >
+                    {showOriginal ? 'Show English' : 'Show Original'}
+                  </button>
+                )}
+              </div>
+              
+              {/* Search box */}
+              {transcript && (
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="Search in transcript..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 36px 8px 12px',
+                      background: 'rgba(20, 20, 30, 0.6)',
+                      border: '1px solid rgba(0, 212, 255, 0.2)',
+                      borderRadius: 8,
+                      color: '#fff',
+                      fontSize: 14
+                    }}
+                  />
+                  <svg 
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                    style={{ 
+                      position: 'absolute', 
+                      right: 12, 
+                      top: '50%', 
+                      transform: 'translateY(-50%)',
+                      opacity: 0.5
+                    }}
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                </div>
               )}
             </div>
 
@@ -242,21 +330,27 @@ export default function CallDetailPage() {
               <div style={{ maxHeight: 600, overflowY: 'auto' }}>
                 {diarizedSegments.length > 0 ? (
                   <div style={{ fontSize: 14, lineHeight: 1.8 }}>
-                    {diarizedSegments.map((seg: any, i: number) => (
-                      <div key={i} style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, color: '#00d4ff', marginBottom: 4 }}>
-                          {seg.speaker || `Speaker ${seg.speaker_id || i % 2}`} • {seg.start ? `${Math.floor(seg.start / 60)}:${(seg.start % 60).toFixed(0).padStart(2, '0')}` : ''}
+                    {diarizedSegments.map((seg: any, i: number) => {
+                      const segmentText = seg.text || seg.transcript || '';
+                      const highlighted = highlightText(segmentText, searchQuery);
+                      return (
+                        <div key={i} style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 11, color: '#00d4ff', marginBottom: 4 }}>
+                            {seg.speaker || `Speaker ${seg.speaker_id || i % 2}`} • {seg.start ? `${Math.floor(seg.start / 60)}:${(seg.start % 60).toFixed(0).padStart(2, '0')}` : ''}
+                          </div>
+                          <div 
+                            style={{ color: '#e5e5e5' }}
+                            dangerouslySetInnerHTML={{ __html: highlighted }}
+                          />
                         </div>
-                        <div style={{ color: '#e5e5e5' }}>
-                          {seg.text || seg.transcript}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 14, lineHeight: 1.8, color: '#e5e5e5', whiteSpace: 'pre-wrap' }}>
-                    {showOriginal && transcript.text ? transcript.text : (transcript.translated_text || transcript.text)}
-                  </div>
+                  <div 
+                    style={{ fontSize: 14, lineHeight: 1.8, color: '#e5e5e5', whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: processedTranscript }}
+                  />
                 )}
                 
                 {transcript.engine && (
