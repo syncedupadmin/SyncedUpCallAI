@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
       try {
         const { postSlack } = await import('@/src/server/lib/alerts');
         
-        const blocks = [
+        const blocks: any[] = [
           {
             type: 'header',
             text: {

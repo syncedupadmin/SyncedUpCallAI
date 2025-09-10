@@ -175,7 +175,7 @@ export async function sendHighRiskCallAlert(
     agentName?: string;
   }
 ): Promise<void> {
-  const blocks = [
+  const blocks: any[] = [
     {
       type: 'header',
       text: {

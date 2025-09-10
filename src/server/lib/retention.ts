@@ -122,7 +122,7 @@ export async function applyRetentionPolicy(
         )
       `, [transcriptCutoff]);
       
-      results.transcriptsDeleted = deleted.rowCount;
+      results.transcriptsDeleted = deleted.rowCount || 0;
     }
 
     // 3. Delete old analyses
@@ -138,7 +138,7 @@ export async function applyRetentionPolicy(
         )
       `, [analysisCutoff]);
       
-      results.analysesDeleted = deleted.rowCount;
+      results.analysesDeleted = deleted.rowCount || 0;
     }
 
     // 4. Delete old events
@@ -151,7 +151,7 @@ export async function applyRetentionPolicy(
         WHERE created_at < $1
       `, [eventCutoff]);
       
-      results.eventsDeleted = deleted.rowCount;
+      results.eventsDeleted = deleted.rowCount || 0;
     }
 
     // 5. Clear audio URLs
@@ -168,7 +168,7 @@ export async function applyRetentionPolicy(
           AND convoso_audio_url IS NOT NULL
       `, [audioCutoff]);
       
-      results.audioUrlsCleared = cleared.rowCount;
+      results.audioUrlsCleared = cleared.rowCount || 0;
     }
 
     // Log retention action
