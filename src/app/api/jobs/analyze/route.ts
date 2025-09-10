@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { ANALYSIS_SCHEMA, validateAnalysis } from '@/src/server/lib/json-guard';
 import { ANALYSIS_SYSTEM, userPrompt } from '@/src/server/lib/prompts';
+import { alert } from '@/src/server/lib/alerts';
+import { withinCancelWindow } from '@/src/server/lib/biz';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +13,21 @@ export async function POST(req: NextRequest) {
 
   const { callId } = await req.json();
   const row = await db.oneOrNone(`
-    select c.*, t.text, t.redacted from calls c join transcripts t on t.call_id=c.id where c.id=$1
+    select c.*, t.text, t.redacted, ct.primary_phone, ag.name as agent_name 
+    from calls c 
+    join transcripts t on t.call_id=c.id 
+    left join contacts ct on ct.id = c.contact_id
+    left join agents ag on ag.id = c.agent_id
+    where c.id=$1
   `, [callId]);
   if (!row) return NextResponse.json({ ok: false, error: 'no_transcript' }, { status: 404 });
+  
+  // Check if call is >= 10s
+  if (row.duration_sec && row.duration_sec < 10) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_analysis_skipped', $2)`, 
+      [callId, { duration_sec: row.duration_sec }]);
+    return NextResponse.json({ ok: false, error: 'short_call' });
+  }
 
   const meta = {
     agent_id: row.agent_id, campaign: row.campaign, direction: row.direction,
@@ -58,5 +72,39 @@ export async function POST(req: NextRequest) {
   `, [callId, riskEasy]);
 
   await db.none(`insert into call_events(call_id,type,payload) values($1,'analyzed',$2)`, [callId, j]);
+  
+  // Check for alerts
+  const policy = await db.oneOrNone(`
+    select premium from policies_stub 
+    where contact_id = $1 and status = 'active'
+    order by premium desc 
+    limit 1
+  `, [row.contact_id]);
+  
+  const premium = policy?.premium || 0;
+  
+  // Same-day cancel alert
+  if (withinCancelWindow(row.started_at) && 
+      (row.disposition === 'Cancelled' || j.reason_primary === 'requested_cancel')) {
+    await alert('same_day_cancel', {
+      agent: row.agent_name,
+      phone: row.primary_phone,
+      duration_sec: row.duration_sec,
+      premium
+    });
+  }
+  
+  // High-value at risk alert
+  const riskReasons = ['bank_decline', 'trust_scam_fear', 'benefits_confusion', 'already_covered', 
+                       'agent_miscommunication', 'followup_never_received', 'requested_callback', 'other'];
+  if (premium >= 300 && riskReasons.includes(j.reason_primary)) {
+    await alert('high_value_risk', {
+      reason: j.reason_primary,
+      agent: row.agent_name,
+      phone: row.primary_phone,
+      premium
+    });
+  }
+  
   return NextResponse.json({ ok: true });
 }

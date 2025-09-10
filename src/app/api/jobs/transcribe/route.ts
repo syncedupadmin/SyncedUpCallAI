@@ -8,6 +8,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
 
   const { callId, recordingUrl } = await req.json();
+  
+  // Check if call is >= 10s
+  const call = await db.oneOrNone(`select duration_sec from calls where id=$1`, [callId]);
+  if (!call || (call.duration_sec && call.duration_sec < 10)) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_skipped', $2)`, 
+      [callId, { duration_sec: call?.duration_sec || 0 }]);
+    return NextResponse.json({ ok: false, error: 'short_call' });
+  }
 
   async function deepgram() {
     const resp = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&diarize=true&utterances=true&detect_language=true', {

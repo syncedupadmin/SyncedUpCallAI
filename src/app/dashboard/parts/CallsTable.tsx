@@ -85,9 +85,15 @@ export default function CallsTable({ rows }: { rows: Row[] }) {
                 </span>
               </td>
               <td>
-                <span style={{ color: '#00d4ff' }}>
-                  {r.customer_phone ?? '—'}
-                </span>
+                {r.customer_phone ? (
+                  <a 
+                    href={`/journey/${r.customer_phone.replace(/\D/g, '')}`}
+                    style={{ color: '#00d4ff', textDecoration: 'none' }}
+                    title="View customer journey"
+                  >
+                    {r.customer_phone}
+                  </a>
+                ) : '—'}
               </td>
               <td>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

@@ -3,6 +3,10 @@
     {
       "path": "/api/jobs/batch",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/jobs/backfill",
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [

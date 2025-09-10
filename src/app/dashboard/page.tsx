@@ -175,7 +175,7 @@ export default function DashboardPage() {
               fontWeight: 600,
               marginBottom: 4
             }}>
-              Recent Calls
+              Recent Calls (≥10s)
             </h2>
             <p style={{ fontSize: 12, color: '#6b6b7c' }}>
               Monitor and analyze call activity in real-time
