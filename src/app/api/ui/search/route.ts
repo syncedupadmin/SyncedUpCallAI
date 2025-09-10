@@ -4,6 +4,18 @@ import { PAGINATION, createPaginatedResponse } from '@/src/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET(req: NextRequest) {
+  // For GET requests, return empty results with ok:true
+  return NextResponse.json({ 
+    ok: true, 
+    data: [], 
+    total: 0, 
+    limit: 20, 
+    offset: 0, 
+    hasMore: false 
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -14,7 +26,7 @@ export async function POST(req: NextRequest) {
     const validatedOffset = Math.min(Math.max(0, offset), PAGINATION.MAX_OFFSET);
     
     if (!q) {
-      return NextResponse.json({ error: 'Query parameter "q" is required' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'missing_query' }, { status: 400 });
     }
     
     const er = await fetch('https://api.openai.com/v1/embeddings', {
@@ -56,9 +68,9 @@ export async function POST(req: NextRequest) {
     `, [v, validatedLimit, validatedOffset]);
     
     const response = createPaginatedResponse(rows, total, validatedLimit, validatedOffset);
-    return NextResponse.json({ ...response, query: q });
+    return NextResponse.json({ ok: true, ...response, query: q });
   } catch (err: any) {
     console.error('ui/search POST error', err);
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });
   }
 }

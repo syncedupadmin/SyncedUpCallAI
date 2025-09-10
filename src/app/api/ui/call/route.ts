@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id');
   
   if (!id) {
-    return NextResponse.json({ ok: false, error: 'id_required' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'missing_id' }, { status: 400 });
   }
 
   try {

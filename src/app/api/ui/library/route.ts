@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       
       if (category === 'best') {
         const response = createPaginatedResponse(bestResult.rows, bestTotal, limit, offset);
-        return NextResponse.json({ category: 'best', ...response });
+        return NextResponse.json({ ok: true, category: 'best', ...response });
       }
     }
     
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       
       if (category === 'worst') {
         const response = createPaginatedResponse(worstResult.rows, worstTotal, limit, offset);
-        return NextResponse.json({ category: 'worst', ...response });
+        return NextResponse.json({ ok: true, category: 'worst', ...response });
       }
     }
     
@@ -85,12 +85,12 @@ export async function GET(req: NextRequest) {
         order by an.qa_score asc, c.started_at desc
         limit 20
       `);
-      return NextResponse.json({ best: best.rows, worst: worst.rows });
+      return NextResponse.json({ ok: true, best: best.rows, worst: worst.rows });
     }
     
-    return NextResponse.json({ error: 'Invalid category parameter' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'invalid_category' }, { status: 400 });
   } catch (err: any) {
     console.error('ui/library GET error', err);
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });
   }
 }

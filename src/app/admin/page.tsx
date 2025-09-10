@@ -87,13 +87,57 @@ export default function AdminPage() {
       const secret = prompt('Enter JOBS_SECRET:');
       if (!secret) return;
       
-      const res = await fetch(`/api/jobs/batch/scan?secret=${secret}`);
+      const res = await fetch(`/api/jobs/batch/scan?secret=${secret}`, {
+        method: 'POST'
+      });
       const data = await res.json();
       setBatchData(data);
+      
+      // Show success toast
+      if (data.ok || data.posted > 0) {
+        alert(`✅ Batch scan completed: ${data.posted || 0} jobs posted`);
+      }
     } catch (err: any) {
       setBatchData({ error: err.message });
+      alert(`❌ Batch scan failed: ${err.message}`);
     } finally {
       setLoading({ ...loading, batch: false });
+    }
+  };
+
+  const analyzeUnanalyzed = async () => {
+    setLoading({ ...loading, analyze: true });
+    try {
+      const secret = prompt('Enter JOBS_SECRET:');
+      if (!secret) return;
+      
+      // First get unanalyzed calls
+      const scanRes = await fetch(`/api/jobs/batch/scan?secret=${secret}`);
+      const scanData = await scanRes.json();
+      
+      if (scanData.unanalyzed && scanData.unanalyzed.length > 0) {
+        // Queue analysis for each unanalyzed call
+        let queued = 0;
+        for (const callId of scanData.unanalyzed.slice(0, 10)) { // Limit to 10
+          try {
+            await fetch(`/api/jobs/analyze?secret=${secret}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: callId })
+            });
+            queued++;
+          } catch (e) {
+            console.error(`Failed to queue analysis for ${callId}`, e);
+          }
+        }
+        alert(`✅ Queued ${queued} calls for analysis`);
+      } else {
+        alert('ℹ️ No unanalyzed calls found');
+      }
+    } catch (err: any) {
+      alert(`❌ Failed to analyze: ${err.message}`);
+    } finally {
+      setLoading({ ...loading, analyze: false });
     }
   };
 
@@ -221,9 +265,18 @@ export default function AdminPage() {
             onClick={runBatchScan}
             disabled={loading.batch}
             className="btn btn-primary"
+            style={{ marginBottom: 8, width: '100%' }}
+          >
+            {loading.batch ? 'Scanning...' : '🔍 Run Batch Scan'}
+          </button>
+          
+          <button
+            onClick={analyzeUnanalyzed}
+            disabled={loading.analyze}
+            className="btn btn-secondary"
             style={{ marginBottom: 16, width: '100%' }}
           >
-            {loading.batch ? 'Scanning...' : '🔍 Scan Batch Now'}
+            {loading.analyze ? 'Analyzing...' : '🧠 Analyze Unanalyzed'}
           </button>
           
           {batchData && (

@@ -26,10 +26,22 @@ export async function GET(req: NextRequest) {
       limit $1 offset $2
     `, [limit, offset]);
     
+    // When empty, ensure we return ok:true with empty rows array
+    if (rows.length === 0) {
+      return NextResponse.json({ 
+        ok: true, 
+        rows: [], 
+        total: 0,
+        limit,
+        offset,
+        hasMore: false 
+      });
+    }
+    
     const response = createPaginatedResponse(rows, total, limit, offset);
-    return NextResponse.json(response);
+    return NextResponse.json({ ok: true, ...response });
   } catch (err: any) {
     console.error('admin/last-webhooks GET error', err);
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });
   }
 }
