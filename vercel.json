@@ -7,6 +7,14 @@
     {
       "path": "/api/jobs/backfill",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/rollup",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 2 * * *"
     }
   ],
   "headers": [

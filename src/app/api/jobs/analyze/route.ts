@@ -187,6 +187,14 @@ export async function POST(req: NextRequest) {
     });
   }
   
+  // Check for high-risk calls and send alerts
+  try {
+    const { processHighRiskCall } = await import('@/src/server/lib/rules');
+    await processHighRiskCall(callId, j);
+  } catch (riskError) {
+    console.error('High-risk check failed:', riskError);
+  }
+  
   return NextResponse.json({ 
     ok: true,
     saved: true,
