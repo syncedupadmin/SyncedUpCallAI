@@ -1,15 +1,24 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import CallsTable from './parts/CallsTable';
 
-export const dynamic = 'force-dynamic';
+export default function DashboardPage() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-async function getCalls() {
-  const res = await fetch(`${process.env.APP_URL}/api/ui/calls?limit=50`, { cache: 'no-store' });
-  if (!res.ok) return { ok: false, rows: [] as any[] };
-  return res.json();
-}
-
-export default async function DashboardPage() {
-  const { rows } = await getCalls();
+  useEffect(() => {
+    fetch('/api/ui/calls?limit=50')
+      .then(res => res.json())
+      .then(data => {
+        setRows(data.rows || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setRows([]);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
@@ -17,7 +26,7 @@ export default async function DashboardPage() {
       <p style={{ opacity: 0.8, marginBottom: 16 }}>
         View recent calls, trigger transcription/analysis, and drill into details.
       </p>
-      <CallsTable rows={rows ?? []} />
+      {loading ? <p>Loading calls...</p> : <CallsTable rows={rows} />}
     </main>
   );
 }

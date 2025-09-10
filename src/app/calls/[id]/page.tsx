@@ -1,13 +1,31 @@
-export const dynamic = 'force-dynamic';
+'use client';
 
-async function getData(id: string) {
-  const res = await fetch(`${process.env.APP_URL}/api/ui/call/${id}`, { cache: 'no-store' });
-  if (!res.ok) return { ok: false };
-  return res.json();
-}
+import { useEffect, useState } from 'react';
 
-export default async function CallDetail({ params }: { params: { id: string } }) {
-  const data = await getData(params.id);
+export default function CallDetail({ params }: { params: { id: string } }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/ui/call/${params.id}`)
+      .then(res => res.json())
+      .then(result => {
+        setData(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        setData({ ok: false });
+        setLoading(false);
+      });
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <main style={{ padding: 24 }}>
+        <p>Loading call details...</p>
+      </main>
+    );
+  }
 
   if (!data?.ok) {
     return (
