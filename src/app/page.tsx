@@ -1,38 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const [health, setHealth] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => {
-        setHealth(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setHealth({ ok: false });
-        setLoading(false);
-      });
-  }, []);
+    // Redirect to dashboard
+    router.replace('/dashboard');
+  }, [router]);
+
   return (
-    <main style={{ padding: 24, maxWidth: 980, margin: '0 auto' }}>
-      <h1>SyncedUpCallAI – Health</h1>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <>
-          <pre style={{ background: '#111', padding: 16, borderRadius: 8, overflow: 'auto', color: '#fff' }}>
-            {JSON.stringify(health, null, 2)}
-          </pre>
-          <p style={{ marginTop: 16 }}>
-            <a href="/dashboard" style={{ color: '#0070f3', textDecoration: 'underline' }}>Go to Dashboard →</a>
-          </p>
-        </>
-      )}
-    </main>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh',
+      background: '#0a0a0f'
+    }}>
+      <div className="pulse" style={{ color: '#6b6b7c' }}>
+        Redirecting to dashboard...
+      </div>
+    </div>
   );
 }
