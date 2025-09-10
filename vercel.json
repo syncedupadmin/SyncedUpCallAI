@@ -1,31 +1,21 @@
 {
+  "crons": [
+    {
+      "path": "/api/jobs/batch",
+      "schedule": "*/5 * * * *",
+      "headers": { "Authorization": "Bearer ${JOBS_SECRET}" }
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
         }
       ]
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/jobs/batch",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
