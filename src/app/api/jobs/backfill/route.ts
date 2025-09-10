@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
+import { ensureEmbedding } from '@/src/server/embeddings';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,35 @@ export async function POST(req: NextRequest) {
           }
         } catch (err) {
           console.error(`Backfill analysis error for ${call.id}:`, err);
+          skipped++;
+        }
+      }
+    }
+
+    // Backfill embeddings
+    if (kind === 'embeddings' || kind === 'all') {
+      const missingEmbeddings = await db.query(`
+        select t.call_id
+        from transcripts t
+        left join transcript_embeddings e on e.call_id = t.call_id
+        where e.call_id is null
+          and (t.translated_text is not null or t.text is not null)
+        order by t.created_at desc
+        limit $1
+      `, [safeLimit]);
+
+      scanned += missingEmbeddings.rows.length;
+
+      for (const row of missingEmbeddings.rows) {
+        try {
+          const created = await ensureEmbedding(row.call_id);
+          if (created) {
+            processed++;
+          } else {
+            skipped++; // Already existed
+          }
+        } catch (err) {
+          console.error(`Backfill embedding error for ${row.call_id}:`, err);
           skipped++;
         }
       }

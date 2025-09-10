@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
+import { transcribe, translateToEnglish } from '@/src/server/asr';
+import { ensureEmbedding } from '@/src/server/embeddings';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,14 @@ export async function POST(req: NextRequest) {
 
   const { callId, recordingUrl } = await req.json();
   
+  // Check if already transcribed
+  const existing = await db.oneOrNone(`select call_id from transcripts where call_id=$1`, [callId]);
+  if (existing) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_skipped', $2)`, 
+      [callId, { reason: 'already_exists' }]);
+    return NextResponse.json({ ok: true, skipped: 'exists' });
+  }
+  
   // Check if call is >= 10s
   const call = await db.oneOrNone(`select duration_sec from calls where id=$1`, [callId]);
   if (!call || (call.duration_sec && call.duration_sec < 10)) {
@@ -17,67 +27,60 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'short_call' });
   }
 
-  async function deepgram() {
-    const resp = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&diarize=true&utterances=true&detect_language=true', {
-      method: 'POST',
-      headers: { 'Authorization': `Token ${process.env.DEEPGRAM_API_KEY!}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: recordingUrl })
-    });
-    if (!resp.ok) throw new Error('deepgram_failed');
-    const dg = await resp.json();
-    const text = dg.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '';
-    const diarized = dg.results?.utterances ?? [];
-    await db.none(`
-      insert into transcripts(call_id, engine, text, redacted, diarized, words)
-      values($1,'deepgram',$2,$2,$3,$4)
-      on conflict (call_id) do update set text=$2, redacted=$2, diarized=$3, words=$4
-    `, [callId, text, JSON.stringify(diarized), JSON.stringify(dg.results)]);
-  }
-
-  async function assembly() {
-    const aai = await fetch('https://api.assemblyai.com/v2/transcribe', {
-      method: 'POST',
-      headers: { 'Authorization': process.env.ASSEMBLYAI_API_KEY!, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio_url: recordingUrl, speaker_labels: true, punctuate: true, format_text: true })
-    });
-    if (!aai.ok) throw new Error('assemblyai_submit_failed');
-    const job = await aai.json();
-    // Poll quickly (batch job context)
-    for (let i=0; i<40; i++) {
-      await new Promise(r=>setTimeout(r, 3000));
-      const poll = await fetch(`https://api.assemblyai.com/v2/transcribe/${job.id}`, {
-        headers: { 'Authorization': process.env.ASSEMBLYAI_API_KEY! }
-      });
-      const res = await poll.json();
-      if (res.status === 'completed') {
-        const text = res.text || '';
-        const diarized = res.utterances || [];
-        await db.none(`
-          insert into transcripts(call_id, engine, text, redacted, diarized, words)
-          values($1,'assemblyai',$2,$2,$3,$4)
-          on conflict (call_id) do update set text=$2, redacted=$2, diarized=$3, words=$4
-        `, [callId, text, JSON.stringify(diarized), JSON.stringify(res)]);
-        return;
-      }
-      if (res.status === 'error') throw new Error('assemblyai_failed');
-    }
-    throw new Error('assemblyai_timeout');
-  }
-
   try {
-    await deepgram();
-  } catch (e) {
-    try { await assembly(); }
-    catch (e2) { return NextResponse.json({ ok:false, error:String(e2) }, { status: 502 }); }
+    // Use new ASR service layer
+    const result = await transcribe(recordingUrl);
+    
+    // Translate if needed
+    let translatedText = result.translated_text;
+    if (!translatedText && result.lang !== 'en') {
+      translatedText = await translateToEnglish(result.text, result.lang);
+    }
+    
+    // Store transcript with all metadata
+    await db.none(`
+      insert into transcripts(call_id, engine, lang, text, translated_text, redacted, diarized, words, created_at)
+      values($1, $2, $3, $4, $5, $4, $6, $7, now())
+      on conflict (call_id) do update set
+        engine=$2, lang=$3, text=$4, translated_text=$5, redacted=$4, 
+        diarized=$6, words=$7, created_at=now()
+    `, [
+      callId, 
+      result.engine,
+      result.lang,
+      result.text,
+      translatedText || result.text,
+      JSON.stringify(result.diarized || []),
+      JSON.stringify(result.words || [])
+    ]);
+
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribed', $2)`, 
+      [callId, { engine: result.engine, lang: result.lang, chars: result.text.length }]);
+
+    // Generate embedding for search
+    try {
+      await ensureEmbedding(callId);
+    } catch (embedError) {
+      console.error('Embedding generation failed:', embedError);
+      // Don't fail the whole request if embedding fails
+    }
+
+    // Trigger analysis
+    await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callId })
+    });
+
+    return NextResponse.json({ 
+      ok: true, 
+      engine: result.engine,
+      lang: result.lang,
+      saved: true
+    });
+  } catch (error: any) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_failed', $2)`, 
+      [callId, { error: error.message }]);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
   }
-
-  await db.none(`insert into call_events(call_id,type) values($1,'transcribed')`, [callId]);
-
-  await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callId })
-  });
-
-  return NextResponse.json({ ok: true });
 }

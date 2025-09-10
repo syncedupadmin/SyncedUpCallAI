@@ -10,10 +10,16 @@ export async function GET(
   try {
     const id = params.id;
 
+    // Get comprehensive call details with all related data
     const call = await db.oneOrNone(`
-      select c.*, ct.primary_phone as customer_phone
+      select 
+        c.*,
+        ct.primary_phone as customer_phone,
+        ag.name as agent_name,
+        ag.team as agent_team
       from calls c
       left join contacts ct on ct.id = c.contact_id
+      left join agents ag on ag.id = c.agent_id
       where c.id = $1
     `, [id]);
 
@@ -22,13 +28,38 @@ export async function GET(
     }
 
     const transcript = await db.oneOrNone(`
-      select call_id, text, redacted, created_at
+      select 
+        call_id,
+        engine,
+        lang,
+        text,
+        translated_text,
+        redacted,
+        diarized,
+        words,
+        created_at
       from transcripts
       where call_id = $1
     `, [id]);
 
     const analysis = await db.oneOrNone(`
-      select call_id, reason_primary, reason_secondary, confidence, summary, created_at
+      select 
+        call_id,
+        reason_primary,
+        reason_secondary,
+        confidence,
+        qa_score,
+        script_adherence,
+        sentiment_agent,
+        sentiment_customer,
+        risk_flags,
+        actions,
+        key_quotes,
+        summary,
+        model,
+        token_input,
+        token_output,
+        created_at
       from analyses
       where call_id = $1
     `, [id]);
@@ -38,11 +69,25 @@ export async function GET(
       from call_events
       where call_id = $1
       order by at desc
-      limit 100
+      limit 50
     `, [id]);
     const events = eventsResult.rows;
+    
+    // Check embedding status
+    const embedding = await db.oneOrNone(`
+      select created_at 
+      from transcript_embeddings 
+      where call_id = $1
+    `, [id]);
 
-    return NextResponse.json({ ok: true, call, transcript, analysis, events });
+    return NextResponse.json({ 
+      ok: true, 
+      call, 
+      transcript, 
+      analysis, 
+      events,
+      has_embedding: !!embedding
+    });
   } catch (err: any) {
     console.error('ui/call/[id] GET error', err);
     return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });

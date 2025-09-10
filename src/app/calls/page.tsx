@@ -39,14 +39,25 @@ export default function CallsPage() {
             <tbody>
               {rows.map((r:any)=> (
                 <tr key={r.id} style={{borderTop:'1px solid #1f2a37'}}>
-                  <td>{r.started_at ? new Date(r.started_at).toLocaleString() : '—'}</td>
+                  <td>
+                    <a href={`/call/${r.id}`} style={{color:'#00d4ff', textDecoration:'none'}}>
+                      {r.started_at ? new Date(r.started_at).toLocaleString() : '—'}
+                    </a>
+                  </td>
                   <td>{r.agent||'—'}</td>
                   <td>{r.primary_phone||'—'}</td>
                   <td>{r.disposition||'—'}</td>
                   <td>{r.reason_primary||'—'}</td>
                   <td>{r.duration_sec||0}s</td>
-                  <td>{r.summary||'—'}</td>
-                  <td>{r.recording_url ? <a href={r.recording_url} target="_blank">Play</a> : '—'}</td>
+                  <td style={{maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                    {r.summary||'—'}
+                  </td>
+                  <td>
+                    <div style={{display:'flex', gap:8}}>
+                      <a href={`/call/${r.id}`} style={{color:'#00d4ff'}}>View</a>
+                      {r.recording_url && <a href={r.recording_url} target="_blank">Play</a>}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

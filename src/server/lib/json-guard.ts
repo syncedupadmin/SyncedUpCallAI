@@ -3,7 +3,7 @@ const ajv = new Ajv({ allErrors: true, strict: false });
 export const ANALYSIS_SCHEMA = {
   type: 'object',
   properties: {
-    reason_primary: { enum: ['pricing','duplicate_policy','spouse_approval','bank_decline','benefits_confusion','trust_scam_fear','already_covered','agent_miscommunication','followup_never_received','requested_callback','other'] },
+    reason_primary: { enum: ['pricing','duplicate_policy','spouse_approval','bank_decline','benefits_confusion','trust_scam_fear','already_covered','agent_miscommunication','followup_never_received','requested_callback','requested_cancel','other'] },
     reason_secondary: { type: 'string' },
     confidence: { type: 'number', minimum: 0, maximum: 1 },
     qa_score: { type: 'integer', minimum: 0, maximum: 100 },

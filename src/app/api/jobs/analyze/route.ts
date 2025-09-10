@@ -12,8 +12,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
 
   const { callId } = await req.json();
+  
+  // Check if already analyzed
+  const existing = await db.oneOrNone(`select call_id from analyses where call_id=$1`, [callId]);
+  if (existing) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'analysis_skipped', $2)`, 
+      [callId, { reason: 'already_exists' }]);
+    return NextResponse.json({ ok: true, skipped: 'exists' });
+  }
+  
   const row = await db.oneOrNone(`
-    select c.*, t.text, t.redacted, ct.primary_phone, ag.name as agent_name 
+    select c.*, 
+           t.text, 
+           t.translated_text,
+           t.lang,
+           t.redacted, 
+           ct.primary_phone, 
+           ag.name as agent_name 
     from calls c 
     join transcripts t on t.call_id=c.id 
     left join contacts ct on ct.id = c.contact_id
@@ -30,9 +45,17 @@ export async function POST(req: NextRequest) {
   }
 
   const meta = {
-    agent_id: row.agent_id, campaign: row.campaign, direction: row.direction,
-    disposition: row.disposition, duration_sec: row.duration_sec, sale_time: row.sale_time
+    agent_id: row.agent_id, 
+    agent_name: row.agent_name,
+    campaign: row.campaign, 
+    direction: row.direction,
+    disposition: row.disposition, 
+    duration_sec: row.duration_sec, 
+    sale_time: row.sale_time
   };
+  
+  // Use translated text if available, otherwise original
+  const textToAnalyze = row.translated_text || row.text;
 
   // OpenAI primary
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -41,15 +64,65 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       model:'gpt-4o-mini',
       temperature:0.2,
-      messages:[{ role:'system', content: ANALYSIS_SYSTEM }, { role:'user', content: userPrompt(meta, row.text) }],
+      messages:[{ role:'system', content: ANALYSIS_SYSTEM }, { role:'user', content: userPrompt(meta, textToAnalyze) }],
       response_format:{ type:'json_object' }
     })
   });
-  if (!r.ok) return NextResponse.json({ ok:false, error:'llm_unavailable' }, { status: 502 });
-  const out = await r.json();
-  let j: any; try { j = JSON.parse(out.choices[0].message.content); } catch { j = null; }
+  let j: any = null;
+  let model = 'gpt-4o-mini';
+  let tokenInput = 0;
+  let tokenOutput = 0;
+  
+  if (r.ok) {
+    const out = await r.json();
+    try { 
+      j = JSON.parse(out.choices[0].message.content); 
+      tokenInput = out.usage?.prompt_tokens || 0;
+      tokenOutput = out.usage?.completion_tokens || 0;
+    } catch { j = null; }
+  }
+  
+  // Try Anthropic fallback if OpenAI failed or invalid
+  if (!r.ok || !j || !validateAnalysis(j)) {
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const anthropicResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 2000,
+            temperature: 0.2,
+            system: ANALYSIS_SYSTEM,
+            messages: [{
+              role: 'user',
+              content: userPrompt(meta, textToAnalyze)
+            }]
+          })
+        });
+        
+        if (anthropicResp.ok) {
+          const anthropicOut = await anthropicResp.json();
+          try {
+            j = JSON.parse(anthropicOut.content[0].text);
+            model = 'claude-3.5-sonnet';
+            tokenInput = anthropicOut.usage?.input_tokens || 0;
+            tokenOutput = anthropicOut.usage?.output_tokens || 0;
+          } catch { j = null; }
+        }
+      } catch (anthError) {
+        console.error('Anthropic fallback failed:', anthError);
+      }
+    }
+  }
+  
   if (!j || !validateAnalysis(j)) {
-    await db.none(`insert into call_events(call_id,type,payload) values($1,'analysis_failed',$2)`, [callId, out]);
+    await db.none(`insert into call_events(call_id,type,payload) values($1,'analysis_failed',$2)`, 
+      [callId, { error: 'Both OpenAI and Anthropic failed or returned invalid schema' }]);
     return NextResponse.json({ ok:false, error:'schema_invalid' }, { status: 422 });
   }
 
@@ -62,7 +135,7 @@ export async function POST(req: NextRequest) {
       sentiment_agent=$7, sentiment_customer=$8, risk_flags=$9, actions=$10, key_quotes=$11, summary=$12, model=$13
   `, [callId, j.reason_primary, (j as any).reason_secondary||null, j.confidence, j.qa_score, j.script_adherence,
       (j as any).sentiment_agent||null, (j as any).sentiment_customer||null, (j as any).risk_flags||[], (j as any).actions||[], JSON.stringify((j as any).key_quotes||[]), j.summary,
-      'gpt-4o-mini', out.usage?.prompt_tokens||null, out.usage?.completion_tokens||null]);
+      model, tokenInput, tokenOutput]);
 
   // Simple at-risk flag based on your rule
   const riskEasy = ((j.reason_primary === 'bank_decline' || j.reason_primary == 'trust_scam_fear' || j.reason_primary == 'spouse_approval') && (j.qa_score || 0) < 60) && 1 || 0
@@ -72,6 +145,14 @@ export async function POST(req: NextRequest) {
   `, [callId, riskEasy]);
 
   await db.none(`insert into call_events(call_id,type,payload) values($1,'analyzed',$2)`, [callId, j]);
+  
+  // Generate embedding if not exists
+  try {
+    const { ensureEmbedding } = await import('@/src/server/embeddings');
+    await ensureEmbedding(callId);
+  } catch (embedError) {
+    console.error('Embedding generation failed:', embedError);
+  }
   
   // Check for alerts
   const policy = await db.oneOrNone(`
@@ -106,5 +187,11 @@ export async function POST(req: NextRequest) {
     });
   }
   
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ 
+    ok: true,
+    saved: true,
+    model,
+    qa_score: j.qa_score,
+    reason_primary: j.reason_primary
+  });
 }

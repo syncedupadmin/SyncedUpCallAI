@@ -32,11 +32,23 @@ export async function POST(req: NextRequest) {
     `);
     const total = parseInt(countResult.rows[0].total, 10);
 
-    // Get paginated results
+    // Get paginated results with enhanced fields
     const { rows } = await db.query(`
-      select c.id, c.started_at, ag.name agent, an.reason_primary, 1 - (embedding <=> $1) as score
+      select 
+        c.id, 
+        c.started_at, 
+        c.duration_sec,
+        c.disposition,
+        ag.name as agent, 
+        an.reason_primary, 
+        an.qa_score,
+        an.script_adherence,
+        an.summary,
+        t.lang,
+        1 - (e.embedding <=> $1) as score
       from transcript_embeddings e
       join calls c on c.id=e.call_id
+      join transcripts t on t.call_id=c.id
       left join agents ag on ag.id=c.agent_id
       left join analyses an on an.call_id=c.id
       order by e.embedding <=> $1

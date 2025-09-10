@@ -143,7 +143,7 @@ export default function CallsTable({ rows }: { rows: Row[] }) {
               <td style={{ textAlign: 'right' }}>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <a 
-                    href={`/calls/${r.id}`} 
+                    href={`/call/${r.id}`} 
                     className="btn btn-ghost"
                     style={{ 
                       padding: '6px 12px',
