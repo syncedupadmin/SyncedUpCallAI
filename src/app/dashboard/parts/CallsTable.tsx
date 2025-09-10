@@ -14,19 +14,40 @@ type Row = {
   has_policy_300_plus?: boolean;
 };
 
-export default function CallsTable({ rows }: { rows: Row[] }) {
+interface CallsTableProps {
+  rows: Row[];
+  onJobStart?: (callId: string, jobType: 'transcribe' | 'analyze') => void;
+  jobProgress?: Record<string, number>;
+  jobStatus?: Record<string, string>;
+}
+
+export default function CallsTable({ 
+  rows, 
+  onJobStart,
+  jobProgress = {},
+  jobStatus = {}
+}: CallsTableProps) {
   const [busy, setBusy] = useState<string | null>(null);
   
   const doAction = async (endpoint: 'transcribe' | 'analyze', callId: string) => {
     try {
       setBusy(callId + endpoint);
+      
+      // Notify parent about job start if handler provided
+      if (onJobStart) {
+        onJobStart(callId, endpoint);
+      }
+      
       const res = await fetch(`/api/ui/trigger/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ call_id: callId }),
       });
       const data = await res.json();
-      alert(`${endpoint}: ` + JSON.stringify(data));
+      
+      if (!data.ok) {
+        alert(`${endpoint} failed: ${data.error || 'Unknown error'}`);
+      }
     } catch (e: any) {
       alert('Request failed');
     } finally {

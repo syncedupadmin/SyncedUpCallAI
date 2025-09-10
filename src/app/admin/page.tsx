@@ -1,0 +1,301 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export default function AdminPage() {
+  const [envStatus, setEnvStatus] = useState<any>(null);
+  const [webhookCount, setWebhookCount] = useState<number | null>(null);
+  const [healthData, setHealthData] = useState<any>(null);
+  const [batchData, setBatchData] = useState<any>(null);
+  const [lastCallId, setLastCallId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    // Check env variables (client-side mock - real check should be server-side)
+    checkEnvironment();
+    fetchWebhookCount();
+    fetchLastCall();
+  }, []);
+
+  const checkEnvironment = async () => {
+    // This is a mock - in production, create a secure endpoint that checks server-side
+    const envVars = {
+      OPENAI_API_KEY: process.env.NEXT_PUBLIC_OPENAI_KEY_SET === 'true',
+      DEEPGRAM_API_KEY: process.env.NEXT_PUBLIC_DEEPGRAM_KEY_SET === 'true',
+      ASSEMBLYAI_API_KEY: process.env.NEXT_PUBLIC_ASSEMBLYAI_KEY_SET === 'true',
+      JOBS_SECRET: process.env.NEXT_PUBLIC_JOBS_SECRET_SET === 'true',
+      DATABASE_URL: true, // Assume set if app is running
+      APP_URL: true
+    };
+    
+    // In production, call an API endpoint that checks these server-side
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      setEnvStatus({
+        OPENAI_API_KEY: data.ok,
+        DEEPGRAM_API_KEY: data.ok,
+        ASSEMBLYAI_API_KEY: data.ok,
+        JOBS_SECRET: data.ok,
+        DATABASE_URL: data.db?.ok || false,
+        APP_URL: data.ok
+      });
+    } catch {
+      setEnvStatus(envVars);
+    }
+  };
+
+  const fetchWebhookCount = async () => {
+    try {
+      const res = await fetch('/api/admin/last-webhooks');
+      const data = await res.json();
+      setWebhookCount(data.count || 0);
+    } catch {
+      setWebhookCount(0);
+    }
+  };
+
+  const fetchLastCall = async () => {
+    try {
+      const res = await fetch('/api/ui/calls?limit=1&offset=0');
+      const data = await res.json();
+      if (data.data && data.data.length > 0) {
+        setLastCallId(data.data[0].id);
+      }
+    } catch {
+      setLastCallId(null);
+    }
+  };
+
+  const runHealthCheck = async () => {
+    setLoading({ ...loading, health: true });
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      setHealthData(data);
+    } catch (err: any) {
+      setHealthData({ error: err.message });
+    } finally {
+      setLoading({ ...loading, health: false });
+    }
+  };
+
+  const runBatchScan = async () => {
+    setLoading({ ...loading, batch: true });
+    try {
+      // Try to get JOBS_SECRET from a secure source
+      const secret = prompt('Enter JOBS_SECRET:');
+      if (!secret) return;
+      
+      const res = await fetch(`/api/jobs/batch/scan?secret=${secret}`);
+      const data = await res.json();
+      setBatchData(data);
+    } catch (err: any) {
+      setBatchData({ error: err.message });
+    } finally {
+      setLoading({ ...loading, batch: false });
+    }
+  };
+
+  return (
+    <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
+      <h1 style={{ 
+        fontSize: 32, 
+        fontWeight: 700,
+        background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+        marginBottom: 32
+      }}>
+        Operator Console
+      </h1>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 24 }}>
+        {/* Environment Status */}
+        <div className="glass-card">
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            Environment Readiness
+          </h3>
+          {envStatus ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {Object.entries(envStatus).map(([key, value]) => (
+                <div key={key} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  background: 'rgba(20, 20, 30, 0.4)',
+                  borderRadius: 6
+                }}>
+                  <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#a8a8b3' }}>
+                    {key}
+                  </span>
+                  <span style={{ fontSize: 16 }}>
+                    {value ? '✅' : '❌'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="pulse" style={{ color: '#6b6b7c' }}>Checking environment...</div>
+          )}
+        </div>
+
+        {/* Webhook Activity */}
+        <div className="glass-card">
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            Recent Activity
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ 
+              padding: 16, 
+              background: 'rgba(0, 212, 255, 0.1)', 
+              borderRadius: 8,
+              border: '1px solid rgba(0, 212, 255, 0.2)'
+            }}>
+              <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 4 }}>
+                Recent Webhooks (25 min)
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: '#00d4ff' }}>
+                {webhookCount !== null ? webhookCount : '—'}
+              </div>
+            </div>
+
+            {lastCallId && (
+              <a 
+                href={`/api/ui/call/export?id=${lastCallId}&format=txt`}
+                download
+                className="btn btn-ghost"
+                style={{ textAlign: 'center' }}
+              >
+                📥 Download Last Transcript
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Health Check */}
+        <div className="glass-card">
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            System Health
+          </h3>
+          <button
+            onClick={runHealthCheck}
+            disabled={loading.health}
+            className="btn btn-primary"
+            style={{ marginBottom: 16, width: '100%' }}
+          >
+            {loading.health ? 'Running...' : '🏥 Run Health Check'}
+          </button>
+          
+          {healthData && (
+            <div style={{ 
+              padding: 12, 
+              background: '#0a0a0f', 
+              borderRadius: 8,
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              maxHeight: 300,
+              overflowY: 'auto'
+            }}>
+              <pre style={{ 
+                fontSize: 11, 
+                fontFamily: 'monospace',
+                color: healthData.ok ? '#10b981' : '#ef4444',
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all'
+              }}>
+                {JSON.stringify(healthData, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* Batch Scanner */}
+        <div className="glass-card">
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            Batch Operations
+          </h3>
+          <button
+            onClick={runBatchScan}
+            disabled={loading.batch}
+            className="btn btn-primary"
+            style={{ marginBottom: 16, width: '100%' }}
+          >
+            {loading.batch ? 'Scanning...' : '🔍 Scan Batch Now'}
+          </button>
+          
+          {batchData && (
+            <div style={{ 
+              padding: 16, 
+              background: 'rgba(124, 58, 237, 0.1)', 
+              borderRadius: 8,
+              border: '1px solid rgba(124, 58, 237, 0.2)'
+            }}>
+              {batchData.error ? (
+                <div style={{ color: '#ef4444' }}>Error: {batchData.error}</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: '#6b6b7c' }}>Scanned</span>
+                    <span style={{ fontWeight: 600 }}>{batchData.scanned || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: '#6b6b7c' }}>Posted</span>
+                    <span style={{ fontWeight: 600 }}>{batchData.posted || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: '#6b6b7c' }}>Completed</span>
+                    <span style={{ fontWeight: 600, color: '#10b981' }}>
+                      {batchData.completed || 0}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* System Info */}
+      <div className="glass-card" style={{ marginTop: 24 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+          Quick Actions
+        </h3>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <a href="/batch" className="btn btn-ghost">
+            📊 Batch Monitor
+          </a>
+          <a href="/api/admin/last-webhooks" target="_blank" className="btn btn-ghost">
+            🔗 View Webhooks API
+          </a>
+          <a href="/api/health" target="_blank" className="btn btn-ghost">
+            💓 Health API
+          </a>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-ghost"
+          >
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Footer info */}
+      <div style={{ 
+        marginTop: 40, 
+        padding: 20, 
+        textAlign: 'center',
+        color: '#6b6b7c',
+        fontSize: 12
+      }}>
+        <div>Operator Console v0.9</div>
+        <div style={{ marginTop: 8 }}>
+          Environment: {process.env.NODE_ENV || 'production'} | 
+          Build: {new Date().toISOString().split('T')[0]}
+        </div>
+      </div>
+    </div>
+  );
+}

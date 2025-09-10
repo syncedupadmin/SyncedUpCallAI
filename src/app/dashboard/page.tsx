@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react';
 import CallsTable from './parts/CallsTable';
 import Pagination from '@/src/components/Pagination';
+import ProgressBar from '@/src/components/ProgressBar';
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [jobProgress, setJobProgress] = useState<Record<string, number>>({});
+  const [jobStatus, setJobStatus] = useState<Record<string, string>>({});
   const limit = 20;
   
   // Mock metrics data
@@ -42,6 +45,62 @@ export default function DashboardPage() {
 
   const handlePageChange = (newOffset: number) => {
     fetchCalls(newOffset);
+  };
+
+  // Monitor SSE for job progress
+  const monitorCallProgress = (callId: string) => {
+    const eventSource = new EventSource(`/api/ui/stream/${callId}`);
+    
+    eventSource.addEventListener('status', (event) => {
+      const data = JSON.parse(event.data);
+      let progress = 5; // Default queued
+      
+      switch (data.status) {
+        case 'queued':
+          progress = 5;
+          break;
+        case 'transcribing':
+          progress = data.progress || 50; // 25-75%
+          break;
+        case 'embedding':
+          progress = 85;
+          break;
+        case 'analyzing':
+          progress = 95;
+          break;
+        case 'done':
+          progress = 100;
+          setTimeout(() => {
+            eventSource.close();
+            // Remove from tracking after completion
+            const newProgress = { ...jobProgress };
+            const newStatus = { ...jobStatus };
+            delete newProgress[callId];
+            delete newStatus[callId];
+            setJobProgress(newProgress);
+            setJobStatus(newStatus);
+          }, 2000);
+          break;
+        case 'error':
+          setJobStatus({ ...jobStatus, [callId]: 'error' });
+          eventSource.close();
+          break;
+      }
+      
+      setJobProgress({ ...jobProgress, [callId]: progress });
+      setJobStatus({ ...jobStatus, [callId]: data.status });
+    });
+
+    eventSource.addEventListener('error', () => {
+      setJobStatus({ ...jobStatus, [callId]: 'error' });
+      eventSource.close();
+    });
+  };
+
+  const handleJobStart = (callId: string, jobType: 'transcribe' | 'analyze') => {
+    setJobProgress({ ...jobProgress, [callId]: 5 });
+    setJobStatus({ ...jobStatus, [callId]: 'queued' });
+    monitorCallProgress(callId);
   };
 
   return (
@@ -206,7 +265,12 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <CallsTable rows={rows} />
+            <CallsTable 
+              rows={rows} 
+              onJobStart={handleJobStart}
+              jobProgress={jobProgress}
+              jobStatus={jobStatus}
+            />
             <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
               <Pagination
                 total={total}

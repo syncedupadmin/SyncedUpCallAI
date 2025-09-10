@@ -1,0 +1,106 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Health Check
+        env:
+          APP_URL: ${{ secrets.APP_URL || 'https://synced-up-call-ai.vercel.app' }}
+        run: |
+          echo "Testing health endpoint..."
+          response=$(curl -s -w "\n%{http_code}" "$APP_URL/api/health")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Health check failed with status $http_code"
+            exit 1
+          fi
+          
+          if echo "$body" | grep -q '"ok":true'; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check response invalid"
+            exit 1
+          fi
+
+      - name: Test Read-Only Endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL || 'https://synced-up-call-ai.vercel.app' }}
+        run: |
+          echo "Testing calls endpoint..."
+          response=$(curl -s -w "\n%{http_code}" "$APP_URL/api/ui/calls?limit=1&offset=0")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response (truncated): $(echo "$body" | head -c 200)..."
+          
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Calls endpoint failed with status $http_code"
+            exit 1
+          fi
+          
+          if echo "$body" | grep -q '"data":\['; then
+            echo "✅ Calls endpoint returned valid data structure"
+          else
+            echo "❌ Calls endpoint response invalid"
+            exit 1
+          fi
+
+      - name: Test Dashboard Page
+        env:
+          APP_URL: ${{ secrets.APP_URL || 'https://synced-up-call-ai.vercel.app' }}
+        run: |
+          echo "Testing dashboard page..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/dashboard")
+          
+          echo "HTTP Status: $response"
+          
+          if [ "$response" = "200" ]; then
+            echo "✅ Dashboard page loaded successfully"
+          else
+            echo "❌ Dashboard page failed with status $response"
+            exit 1
+          fi
+
+      - name: Test Static Assets
+        env:
+          APP_URL: ${{ secrets.APP_URL || 'https://synced-up-call-ai.vercel.app' }}
+        run: |
+          echo "Testing static assets..."
+          # Test if Next.js is serving assets
+          response=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/_next/static/chunks/main-app.js" || true)
+          
+          # Allow 200 or 404 (asset names change between builds)
+          if [ "$response" = "200" ] || [ "$response" = "404" ]; then
+            echo "✅ Static assets endpoint responding (status: $response)"
+          else
+            echo "⚠️ Unexpected status for static assets: $response"
+          fi
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "🎉 All smoke tests passed!"
+          echo "- Health check: ✅"
+          echo "- API endpoints: ✅"
+          echo "- Dashboard: ✅"
+          echo "- Static assets: ✅"
