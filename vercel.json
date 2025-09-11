@@ -32,6 +32,12 @@
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/retention/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/backfill/route.ts": {
+      "maxDuration": 300
     }
   }
 }
