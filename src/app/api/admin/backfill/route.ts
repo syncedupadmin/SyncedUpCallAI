@@ -33,11 +33,11 @@ export async function POST(req: NextRequest) {
         const params = startDate && endDate ? [startDate, endDate, limit] : [limit];
         
         const calls = await db.manyOrNone(`
-          SELECT c.id, c.convoso_audio_url, c.started_at
+          SELECT c.id, c.recording_url, c.started_at
           FROM calls c
           LEFT JOIN transcripts t ON t.call_id = c.id
-          WHERE t.id IS NULL 
-            AND c.convoso_audio_url IS NOT NULL
+          WHERE t.call_id IS NULL 
+            AND c.recording_url IS NOT NULL
             ${dateFilter}
           ORDER BY c.started_at DESC
           LIMIT $${params.length}
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 id: call.id,
-                audioUrl: call.convoso_audio_url,
+                audioUrl: call.recording_url,
                 force
               })
             });

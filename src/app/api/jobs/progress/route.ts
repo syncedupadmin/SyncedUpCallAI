@@ -43,15 +43,15 @@ export async function GET(req: NextRequest) {
             c.id,
             c.disposition,
             CASE 
-              WHEN a.id IS NOT NULL THEN 'done'
+              WHEN a.call_id IS NOT NULL THEN 'done'
               WHEN e.call_id IS NOT NULL THEN 'analyzing'
               WHEN t.call_id IS NOT NULL THEN 'embedding'
-              WHEN c.convoso_audio_url IS NOT NULL THEN 'transcribing'
+              WHEN c.recording_url IS NOT NULL THEN 'transcribing'
               ELSE 'queued'
             END as status,
             t.call_id IS NOT NULL as has_transcript,
             e.call_id IS NOT NULL as has_embedding,
-            a.id IS NOT NULL as has_analysis
+            a.call_id IS NOT NULL as has_analysis
           FROM calls c
           LEFT JOIN transcripts t ON t.call_id = c.id
           LEFT JOIN transcript_embeddings e ON e.call_id = c.id
