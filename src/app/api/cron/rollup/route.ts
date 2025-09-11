@@ -25,6 +25,13 @@ export async function GET(req: NextRequest) {
     // Generate rollup using stored procedure
     await db.none(`SELECT generate_daily_rollup($1::date)`, [dateStr]);
 
+    // Update cron heartbeat
+    await db.none(`
+      UPDATE cron_heartbeats 
+      SET last_ok = NOW(), last_message = $2
+      WHERE name = $1
+    `, ['rollups', `Successfully generated rollup for ${dateStr}`]);
+
     // Get the generated rollup
     const rollup = await db.oneOrNone(`
       SELECT * FROM revenue_rollups WHERE date = $1

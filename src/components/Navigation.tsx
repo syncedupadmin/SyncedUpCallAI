@@ -2,9 +2,30 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function Navigation() {
   const pathname = usePathname();
+  const [cronStatus, setCronStatus] = useState<'ok' | 'stale' | null>(null);
+
+  useEffect(() => {
+    // Check cron status on mount and every 60s
+    const checkCronStatus = async () => {
+      try {
+        const res = await fetch('/api/health/cron');
+        const data = await res.json();
+        if (data.ok) {
+          setCronStatus(data.all_ok ? 'ok' : 'stale');
+        }
+      } catch {
+        setCronStatus(null);
+      }
+    };
+    
+    checkCronStatus();
+    const interval = setInterval(checkCronStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navItems = [
     {
@@ -176,8 +197,23 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Status Indicator */}
+        {/* Status Indicators */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {cronStatus && (
+            <div style={{
+              padding: '4px 8px',
+              borderRadius: 4,
+              background: cronStatus === 'ok' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+              border: `1px solid ${cronStatus === 'ok' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+              fontSize: 10,
+              fontWeight: 600,
+              color: cronStatus === 'ok' ? '#10b981' : '#f59e0b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}>
+              CRON {cronStatus === 'ok' ? 'OK' : 'STALE'}
+            </div>
+          )}
           <div style={{
             width: 8,
             height: 8,

@@ -42,6 +42,13 @@ export async function GET(req: NextRequest) {
     `, [policy.id]);
     runId = run.id;
 
+    // Update cron heartbeat
+    await db.none(`
+      UPDATE cron_heartbeats 
+      SET last_ok = NOW(), last_message = $2
+      WHERE name = $1
+    `, ['retention', `Starting retention policy ${policy.id}`]);
+
     // Apply retention policy
     const results = await applyRetentionPolicy({
       transcriptDays: policy.transcript_days,

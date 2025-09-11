@@ -141,6 +141,34 @@ export default function AdminPage() {
     }
   };
 
+  const replayQuarantined = async () => {
+    setLoading({ ...loading, replay: true });
+    try {
+      const secret = prompt('Enter JOBS_SECRET:');
+      if (!secret) return;
+      
+      const res = await fetch('/api/admin/replay', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-jobs-secret': secret
+        },
+        body: JSON.stringify({ limit: 10 })
+      });
+      
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ Re-enqueued ${data.enqueued} quarantined events`);
+      } else {
+        alert(`❌ Failed to replay: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`❌ Failed to replay: ${err.message}`);
+    } finally {
+      setLoading({ ...loading, replay: false });
+    }
+  };
+
   return (
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
       <h1 style={{ 
@@ -274,9 +302,18 @@ export default function AdminPage() {
             onClick={analyzeUnanalyzed}
             disabled={loading.analyze}
             className="btn btn-secondary"
-            style={{ marginBottom: 16, width: '100%' }}
+            style={{ marginBottom: 8, width: '100%' }}
           >
             {loading.analyze ? 'Analyzing...' : '🧠 Analyze Unanalyzed'}
+          </button>
+          
+          <button
+            onClick={replayQuarantined}
+            disabled={loading.replay}
+            className="btn btn-warning"
+            style={{ marginBottom: 16, width: '100%' }}
+          >
+            {loading.replay ? 'Replaying...' : '🔁 Replay Quarantined (10)'}
           </button>
           
           {batchData && (
