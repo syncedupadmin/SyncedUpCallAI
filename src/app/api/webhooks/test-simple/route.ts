@@ -14,21 +14,20 @@ export async function POST(req: NextRequest) {
     await db.none(`
       INSERT INTO calls (
         id,
-        customer_phone,
-        agent_name,
+        source,
+        source_ref,
         campaign,
         disposition,
         direction,
         started_at,
         ended_at,
         duration_sec,
-        recording_url,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        recording_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `, [
       callId,
-      '+15551234567',
-      'Test Agent',
+      'test',
+      'test-simple',
       'TEST-CAMPAIGN',
       'Test Call',
       'outbound',

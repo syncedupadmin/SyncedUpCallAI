@@ -73,20 +73,15 @@ export async function POST(req: NextRequest) {
           recording_url = COALESCE($2, recording_url),
           disposition = COALESCE($3, disposition),
           duration_sec = COALESCE($4, duration_sec),
-          customer_phone = COALESCE($5, customer_phone),
-          agent_name = COALESCE($6, agent_name),
-          campaign = COALESCE($7, campaign),
-          direction = COALESCE($8, direction),
-          ended_at = COALESCE($9, ended_at),
-          updated_at = NOW()
+          campaign = COALESCE($5, campaign),
+          direction = COALESCE($6, direction),
+          ended_at = COALESCE($7, ended_at)
         WHERE id = $1
       `, [
         callId,
         data.recording_url,
         data.disposition,
         data.duration_sec || data.duration,
-        data.customer_phone || data.phone_number,
-        data.agent_name || data.agent,
         data.campaign,
         data.direction || 'outbound',
         data.ended_at || data.end_time
@@ -98,27 +93,20 @@ export async function POST(req: NextRequest) {
       await db.none(`
         INSERT INTO calls (
           id,
-          lead_id,
-          agent_id,
-          agency_id,
-          customer_phone,
-          agent_name,
+          source,
+          source_ref,
           campaign,
           disposition,
           direction,
           started_at,
           ended_at,
           duration_sec,
-          recording_url,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+          recording_url
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `, [
         callId,
-        data.lead_id,
-        data.agent_id,
-        data.agency_id || 'convoso',
-        data.customer_phone || data.phone_number,
-        data.agent_name || data.agent,
+        'convoso',
+        data.convoso_call_id || data.call_id,
         data.campaign,
         data.disposition || 'Unknown',
         data.direction || 'outbound',
