@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest) {
     
     // Create a test webhook payload
     const testPayload = {
-      call_id: body.call_id || `test-${Date.now()}`,
-      lead_id: body.lead_id || 'L-test-123',
+      call_id: body.call_id || crypto.randomUUID(),
+      lead_id: body.lead_id || crypto.randomUUID(),
       agent_id: body.agent_id || 'agent-test',
       agent_name: body.agent_name || 'Test Agent',
       customer_phone: body.customer_phone || '+15551234567',
