@@ -28,7 +28,7 @@ export default function ValueDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/reports/rollups?days=30')
+    fetch('/api/reports/rollups/simple?days=30')
       .then(res => res.json())
       .then((data: RollupData) => {
         if (data.ok) {
