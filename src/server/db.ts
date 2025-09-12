@@ -1,66 +1,154 @@
 import pg from 'pg';
+import { URL } from 'url';
 
-// CRITICAL: Force SSL globally for ALL pg connections
-// This MUST be set before any Pool or Client is created
-// Set it unconditionally if we're not in local development
-if (process.env.DATABASE_URL) {
-  // If we have a DATABASE_URL at all, assume we need SSL with no cert verification
-  pg.defaults.ssl = { rejectUnauthorized: false };
-  console.log('SSL defaults forcefully set for all pg connections');
-}
+/**
+ * Parse DATABASE_URL into connection parameters
+ */
+const parseConnectionString = (connectionString: string) => {
+  try {
+    const url = new URL(connectionString);
+    
+    return {
+      host: url.hostname,
+      port: parseInt(url.port) || 5432,
+      database: url.pathname.substring(1), // Remove leading slash
+      user: url.username,
+      password: url.password,
+    };
+  } catch (error) {
+    throw new Error(`Invalid DATABASE_URL format: ${error}`);
+  }
+};
 
-// Enhanced connection pool configuration for Supabase
-const createPool = () => {
-  // Always use SSL if DATABASE_URL exists (which means we're not in local dev without a DB)
-  const needsSSL = !!process.env.DATABASE_URL;
+/**
+ * Determine if SSL should be used based on the connection parameters
+ */
+const shouldUseSSL = (host: string): boolean => {
+  // Use SSL for any non-localhost connections
+  return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1';
+};
+
+/**
+ * Create database pool with proper SSL configuration for production environments
+ */
+const createPool = (): pg.Pool => {
+  const connectionString = process.env.DATABASE_URL;
   
-  console.log('Creating database pool:', {
-    hasDbUrl: !!process.env.DATABASE_URL,
-    sslEnabled: needsSSL,
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+
+  console.log('Creating database pool for:', {
     NODE_ENV: process.env.NODE_ENV,
-    VERCEL: process.env.VERCEL
+    VERCEL: !!process.env.VERCEL,
+    hasConnectionString: !!connectionString
   });
-  
-  const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    // Connection pool settings optimized for Supabase
-    max: 10, // Maximum number of connections in the pool
-    min: 2, // Minimum number of connections to maintain
+
+  // Parse the connection string to get individual parameters
+  const connectionParams = parseConnectionString(connectionString);
+  const useSSL = shouldUseSSL(connectionParams.host);
+
+  console.log('Database connection config:', {
+    host: connectionParams.host,
+    port: connectionParams.port,
+    database: connectionParams.database,
+    user: connectionParams.user,
+    sslEnabled: useSSL
+  });
+
+  // Create pool configuration with explicit SSL settings
+  const poolConfig: pg.PoolConfig = {
+    host: connectionParams.host,
+    port: connectionParams.port,
+    database: connectionParams.database,
+    user: connectionParams.user,
+    password: connectionParams.password,
+    
+    // Connection pool settings optimized for serverless environments
+    max: 10, // Maximum connections in pool
+    min: 0, // Start with no idle connections in serverless
     idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 10000, // Timeout after 10 seconds if unable to connect
-    // Handle connection errors gracefully
-    allowExitOnIdle: true,
-    // SSL configuration - use when DATABASE_URL exists
-    ssl: needsSSL
-      ? { rejectUnauthorized: false }  // Required for Supabase/Heroku Postgres
-      : undefined
+    connectionTimeoutMillis: 10000, // Timeout after 10 seconds
+    allowExitOnIdle: true, // Allow process to exit when all connections idle
+    
+    // SSL configuration - critical for Supabase and other hosted databases
+    ssl: useSSL ? {
+      rejectUnauthorized: false // Required for Supabase's self-signed certificates
+    } : false
+  };
+
+  const pool = new pg.Pool(poolConfig);
+
+  // Enhanced error handling
+  pool.on('error', (err, client) => {
+    const dbError = err as any; // Cast to handle pg-specific error properties
+    console.error('Database pool error:', {
+      message: err.message,
+      code: dbError.code,
+      name: err.name,
+      stack: err.stack
+    });
+    
+    // If it's an SSL error, provide additional context
+    if (err.message.includes('SSL') || err.message.includes('certificate')) {
+      console.error('SSL certificate error detected. This may indicate a configuration issue with the database connection.');
+    }
   });
 
-  // Handle pool-level errors
-  pool.on('error', (err) => {
-    console.error('Database pool error:', err);
-  });
-
-  // Handle connection errors
   pool.on('connect', (client) => {
-    console.log('New database connection established');
+    console.log('New database connection established successfully');
+  });
+
+  pool.on('acquire', (client) => {
+    console.log('Database connection acquired from pool');
+  });
+
+  pool.on('release', (client) => {
+    console.log('Database connection returned to pool');
   });
 
   return pool;
 };
 
-// Lazy initialization of the pool to ensure SSL defaults are set first
-let pool: pg.Pool | null = null;
+/**
+ * Singleton pattern for database pool
+ * Ensures only one pool instance per process, critical for serverless environments
+ */
+class DatabaseConnection {
+  private static instance: DatabaseConnection;
+  private pool: pg.Pool | null = null;
+
+  private constructor() {}
+
+  static getInstance(): DatabaseConnection {
+    if (!DatabaseConnection.instance) {
+      DatabaseConnection.instance = new DatabaseConnection();
+    }
+    return DatabaseConnection.instance;
+  }
+
+  getPool(): pg.Pool {
+    if (!this.pool) {
+      this.pool = createPool();
+    }
+    return this.pool;
+  }
+
+  async closePool(): Promise<void> {
+    if (this.pool) {
+      console.log('Closing database pool...');
+      await this.pool.end();
+      this.pool = null;
+      console.log('Database pool closed successfully');
+    }
+  }
+}
+
+// Get the singleton instance
+const dbConnection = DatabaseConnection.getInstance();
 
 const getPool = (): pg.Pool => {
-  if (!pool) {
-    // Set SSL defaults again just to be absolutely sure
-    if (process.env.DATABASE_URL) {
-      pg.defaults.ssl = { rejectUnauthorized: false };
-    }
-    pool = createPool();
-  }
-  return pool;
+  return dbConnection.getPool();
 };
 
 // Enhanced query wrapper with retry logic and proper error handling
@@ -161,12 +249,7 @@ export const db = {
   // Graceful shutdown
   shutdown: async () => {
     try {
-      if (pool) {
-        console.log('Closing database pool...');
-        await pool.end();
-        console.log('Database pool closed successfully');
-        pool = null;
-      }
+      await dbConnection.closePool();
     } catch (error) {
       console.error('Error closing database pool:', error);
     }
@@ -193,3 +276,6 @@ process.on('uncaughtException', async (error) => {
 
 // Export getPool for advanced usage if needed
 export { getPool as pool };
+
+// Export the database connection instance for advanced usage if needed
+export { dbConnection };
