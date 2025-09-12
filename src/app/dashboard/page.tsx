@@ -12,14 +12,30 @@ export default function DashboardPage() {
   const [offset, setOffset] = useState(0);
   const [jobProgress, setJobProgress] = useState<Record<string, number>>({});
   const [jobStatus, setJobStatus] = useState<Record<string, string>>({});
+  const [metrics, setMetrics] = useState({
+    totalCalls: 0,
+    avgDuration: '0s',
+    successRate: 0,
+    activeAgents: 0,
+    weekChange: 0,
+    todayCalls: 0
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
   const limit = 20;
-  
-  // Mock metrics data
-  const metrics = {
-    totalCalls: 1247,
-    avgDuration: '2m 34s',
-    successRate: 87.3,
-    activeAgents: 42
+
+  const fetchStats = () => {
+    setStatsLoading(true);
+    fetch('/api/ui/stats')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.metrics) {
+          setMetrics(data.metrics);
+        }
+        setStatsLoading(false);
+      })
+      .catch(() => {
+        setStatsLoading(false);
+      });
   };
 
   const fetchCalls = (newOffset: number) => {
@@ -41,6 +57,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchCalls(0);
+    fetchStats();
+    
+    // Refresh stats every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handlePageChange = (newOffset: number) => {
@@ -131,25 +152,48 @@ export default function DashboardPage() {
         marginBottom: 40
       }}>
         <div className="metric-card">
-          <div className="metric-value">{metrics.totalCalls.toLocaleString()}</div>
+          <div className="metric-value">
+            {statsLoading ? (
+              <span className="pulse">...</span>
+            ) : (
+              metrics.totalCalls.toLocaleString()
+            )}
+          </div>
           <div className="metric-label">Total Calls</div>
           <div style={{ 
             marginTop: 12, 
             fontSize: 12, 
-            color: '#10b981',
+            color: metrics.weekChange >= 0 ? '#10b981' : '#ef4444',
             display: 'flex',
             alignItems: 'center',
             gap: 4
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-            </svg>
-            +12.5% from last week
+            {!statsLoading && metrics.weekChange !== 0 && (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  {metrics.weekChange >= 0 ? (
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                  ) : (
+                    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+                  )}
+                </svg>
+                {metrics.weekChange >= 0 ? '+' : ''}{metrics.weekChange}% from last week
+              </>
+            )}
+            {!statsLoading && metrics.weekChange === 0 && (
+              <span style={{ color: '#6b6b7c' }}>No change from last week</span>
+            )}
           </div>
         </div>
 
         <div className="metric-card">
-          <div className="metric-value">{metrics.avgDuration}</div>
+          <div className="metric-value">
+            {statsLoading ? (
+              <span className="pulse">...</span>
+            ) : (
+              metrics.avgDuration
+            )}
+          </div>
           <div className="metric-label">Average Duration</div>
           <div style={{ 
             marginTop: 12,
@@ -170,7 +214,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="metric-card">
-          <div className="metric-value">{metrics.successRate}%</div>
+          <div className="metric-value">
+            {statsLoading ? (
+              <span className="pulse">...</span>
+            ) : (
+              `${metrics.successRate}%`
+            )}
+          </div>
           <div className="metric-label">Success Rate</div>
           <div style={{ marginTop: 12 }}>
             <div style={{ 
@@ -180,11 +230,12 @@ export default function DashboardPage() {
               overflow: 'hidden'
             }}>
               <div style={{ 
-                width: `${metrics.successRate}%`,
+                width: statsLoading ? '0%' : `${metrics.successRate}%`,
                 height: '100%',
                 background: 'linear-gradient(90deg, #00d4ff, #7c3aed)',
                 borderRadius: 4,
-                boxShadow: '0 0 10px rgba(0, 212, 255, 0.5)'
+                boxShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+                transition: 'width 0.5s ease'
               }} />
             </div>
           </div>
@@ -192,16 +243,24 @@ export default function DashboardPage() {
 
         <div className="metric-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="metric-value">{metrics.activeAgents}</div>
-            <div className="pulse" style={{
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              background: '#10b981',
-              boxShadow: '0 0 20px rgba(16, 185, 129, 0.5)'
-            }} />
+            <div className="metric-value">
+              {statsLoading ? (
+                <span className="pulse">...</span>
+              ) : (
+                metrics.activeAgents
+              )}
+            </div>
+            {metrics.activeAgents > 0 && (
+              <div className="pulse" style={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 20px rgba(16, 185, 129, 0.5)'
+              }} />
+            )}
           </div>
-          <div className="metric-label">Active Agents</div>
+          <div className="metric-label">Active Agents (24h)</div>
           <div style={{ 
             marginTop: 12,
             display: 'flex',
@@ -212,7 +271,8 @@ export default function DashboardPage() {
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                background: i < 5 ? '#10b981' : '#1a1a24'
+                background: i < Math.min(metrics.activeAgents, 8) ? '#10b981' : '#1a1a24',
+                transition: 'background 0.3s'
               }} />
             ))}
           </div>
