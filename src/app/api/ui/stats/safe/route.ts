@@ -17,7 +17,6 @@ export async function GET(req: NextRequest) {
       SELECT COUNT(*) as total
       FROM calls
       WHERE started_at >= NOW() - INTERVAL '7 days'
-        AND started_at < NOW()
     `);
     const lastWeekCalls = parseInt(lastWeekResult.total);
 
@@ -39,8 +38,7 @@ export async function GET(req: NextRequest) {
     // Get average duration (in seconds)
     const avgDurationResult = await db.one(`
       SELECT 
-        COALESCE(AVG(duration_sec), 0) as avg_duration,
-        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_sec), 0) as median_duration
+        COALESCE(AVG(duration_sec), 0) as avg_duration
       FROM calls
       WHERE duration_sec > 0
         AND duration_sec < 3600  -- Exclude outliers over 1 hour
@@ -84,63 +82,6 @@ export async function GET(req: NextRequest) {
     `);
     const todayCalls = parseInt(todayCallsResult.today);
 
-    // Get call distribution by hour for today
-    const hourlyDistribution = await db.manyOrNone(`
-      SELECT 
-        EXTRACT(HOUR FROM started_at) as hour,
-        COUNT(*) as count
-      FROM calls
-      WHERE DATE(started_at) = CURRENT_DATE
-      GROUP BY EXTRACT(HOUR FROM started_at)
-      ORDER BY hour
-    `);
-
-    // Get top agents by call count (last 7 days)
-    // Note: agent_name might not exist in older databases
-    const topAgents = await db.manyOrNone(`
-      SELECT 
-        COALESCE(c.agent_name, a.name, 'Unknown') as agent_name,
-        c.agent_id,
-        COUNT(*) as call_count,
-        AVG(c.duration_sec) as avg_duration
-      FROM calls c
-      LEFT JOIN agents a ON c.agent_id = a.id
-      WHERE c.started_at >= NOW() - INTERVAL '7 days'
-        AND c.agent_id IS NOT NULL
-      GROUP BY c.agent_id, c.agent_name, a.name
-      ORDER BY call_count DESC
-      LIMIT 5
-    `);
-
-    // Get disposition breakdown
-    const dispositionBreakdown = await db.manyOrNone(`
-      SELECT 
-        disposition,
-        COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()), 1) as percentage
-      FROM calls
-      WHERE disposition IS NOT NULL
-        AND disposition != 'Unknown'
-      GROUP BY disposition
-      ORDER BY count DESC
-      LIMIT 5
-    `);
-
-    // Get campaign performance
-    const campaignStats = await db.manyOrNone(`
-      SELECT 
-        campaign,
-        COUNT(*) as total_calls,
-        AVG(duration_sec) as avg_duration,
-        COUNT(*) FILTER (WHERE disposition IN ('Completed', 'Success', 'Connected', 'Answered')) as successful_calls
-      FROM calls
-      WHERE campaign IS NOT NULL
-        AND started_at >= NOW() - INTERVAL '7 days'
-      GROUP BY campaign
-      ORDER BY total_calls DESC
-      LIMIT 5
-    `);
-
     return NextResponse.json({
       ok: true,
       metrics: {
@@ -149,23 +90,7 @@ export async function GET(req: NextRequest) {
         successRate: Math.round(successRate * 10) / 10, // Round to 1 decimal
         activeAgents,
         weekChange: Math.round(weekChange * 10) / 10,
-        todayCalls,
-        medianDuration: Math.round(parseFloat(avgDurationResult.median_duration))
-      },
-      charts: {
-        hourlyDistribution,
-        topAgents: topAgents.map(a => ({
-          ...a,
-          avg_duration: Math.round(a.avg_duration)
-        })),
-        dispositionBreakdown,
-        campaignStats: campaignStats.map(c => ({
-          ...c,
-          avg_duration: Math.round(c.avg_duration),
-          success_rate: c.total_calls > 0 
-            ? Math.round((c.successful_calls / c.total_calls) * 1000) / 10 
-            : 0
-        }))
+        todayCalls
       },
       timestamp: new Date().toISOString()
     });
@@ -182,14 +107,7 @@ export async function GET(req: NextRequest) {
         successRate: 0,
         activeAgents: 0,
         weekChange: 0,
-        todayCalls: 0,
-        medianDuration: 0
-      },
-      charts: {
-        hourlyDistribution: [],
-        topAgents: [],
-        dispositionBreakdown: [],
-        campaignStats: []
+        todayCalls: 0
       }
     });
   }

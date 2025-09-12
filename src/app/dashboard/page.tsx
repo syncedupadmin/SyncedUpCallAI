@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   const fetchStats = () => {
     setStatsLoading(true);
-    fetch('/api/ui/stats')
+    fetch('/api/ui/stats/safe')
       .then(res => res.json())
       .then(data => {
         if (data.ok && data.metrics) {

@@ -217,11 +217,10 @@ export async function GET(req: NextRequest) {
         agent_id,
         agent_name,
         recording_url,
-        started_at,
-        created_at
+        started_at
       FROM calls 
       WHERE source = 'convoso'
-      ORDER BY created_at DESC 
+      ORDER BY started_at DESC 
       LIMIT 10
     `);
     
