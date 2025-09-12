@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/src/server/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest) {
+  try {
+    // Get webhook logs from call_events table
+    const logs = await db.manyOrNone(`
+      SELECT 
+        ce.id,
+        ce.call_id,
+        ce.type,
+        ce.payload,
+        ce.at as created_at,
+        c.source,
+        c.campaign,
+        c.disposition
+      FROM call_events ce
+      LEFT JOIN calls c ON c.id = ce.call_id
+      WHERE ce.type = 'webhook_received'
+      ORDER BY ce.at DESC
+      LIMIT 100
+    `);
+
+    // Transform logs for display
+    const transformedLogs = logs.map(log => {
+      const payload = log.payload || {};
+      return {
+        id: log.id,
+        type: payload.lead_id ? 'lead' : 'call',
+        status: 'success',
+        data: {
+          name: payload.agent_name || payload.lead_data?.first_name 
+            ? `${payload.lead_data?.first_name || ''} ${payload.lead_data?.last_name || ''}`.trim() 
+            : undefined,
+          phone: payload.phone_number || payload.lead_data?.phone_number,
+          email: payload.lead_data?.email,
+          agent: payload.agent_name,
+          campaign: log.campaign,
+          disposition: log.disposition,
+          ...payload
+        },
+        created_at: log.created_at,
+        error: null
+      };
+    });
+
+    return NextResponse.json({
+      ok: true,
+      data: transformedLogs
+    });
+  } catch (error: any) {
+    console.error('Error fetching webhook logs:', error);
+    return NextResponse.json({
+      ok: false,
+      error: error.message,
+      data: []
+    });
+  }
+}
