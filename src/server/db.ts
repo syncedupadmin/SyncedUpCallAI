@@ -44,25 +44,16 @@ const createPool = (): pg.Pool => {
     hasConnectionString: !!connectionString
   });
 
-  // Parse the connection string to get individual parameters
-  const connectionParams = parseConnectionString(connectionString);
-  const useSSL = shouldUseSSL(connectionParams.host);
+  // Check if we need SSL based on the connection string
+  const needsSSL = connectionString.includes('sslmode=require') || 
+                   connectionString.includes('supabase') ||
+                   connectionString.includes('pooler');
 
-  console.log('Database connection config:', {
-    host: connectionParams.host,
-    port: connectionParams.port,
-    database: connectionParams.database,
-    user: connectionParams.user,
-    sslEnabled: useSSL
-  });
+  console.log('Database connection using connectionString directly with SSL:', needsSSL);
 
-  // Create pool configuration with explicit SSL settings
+  // Use connectionString directly to preserve all query parameters
   const poolConfig: pg.PoolConfig = {
-    host: connectionParams.host,
-    port: connectionParams.port,
-    database: connectionParams.database,
-    user: connectionParams.user,
-    password: connectionParams.password,
+    connectionString, // Use the full connection string with all query params
     
     // Connection pool settings optimized for serverless environments
     max: 10, // Maximum connections in pool
@@ -72,9 +63,9 @@ const createPool = (): pg.Pool => {
     allowExitOnIdle: true, // Allow process to exit when all connections idle
     
     // SSL configuration - critical for Supabase and other hosted databases
-    ssl: useSSL ? {
+    ssl: needsSSL ? {
       rejectUnauthorized: false // Required for Supabase's self-signed certificates
-    } : false
+    } : undefined
   };
 
   const pool = new pg.Pool(poolConfig);
