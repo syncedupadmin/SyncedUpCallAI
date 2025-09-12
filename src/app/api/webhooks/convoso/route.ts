@@ -80,23 +80,32 @@ export async function POST(req: NextRequest) {
     
     // Log the request for debugging
     console.log('Webhook received:', {
-      headers: Object.fromEntries(req.headers.entries()),
+      type: body.disposition || body.duration ? 'call' : 'lead',
       body: body
     });
     
-    // Skip signature verification for now to get it working
-    // Uncomment this if you want to enable signature verification
-    // if (!verifySignature(req, bodyText)) {
-    //   return NextResponse.json(
-    //     { error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    // 1) Derive ONE canonical callId and stick to it
+    const callId = 
+      body.call_id || 
+      body.convoso_call_id || 
+      body.CallID ||
+      body.id || 
+      crypto.randomUUID();
     
-    // Extract call data from the webhook payload
-    // Capture all possible agent fields from Convoso
+    // 2) Determine if this is lead-only data (no call information)
+    const isLeadOnly = 
+      !body.disposition && 
+      !body.duration && 
+      !body.duration_sec &&
+      !body.recording_url && 
+      !body.call_id && 
+      !body.convoso_call_id &&
+      !body.CallID &&
+      !body.call_duration;
+    
+    // Extract data from the webhook payload
     const callData = {
-      call_id: body.call_id || body.convoso_call_id || body.id || crypto.randomUUID(),
+      call_id: callId, // Use the canonical ID
       lead_id: body.lead_id || body.LeadID || body.lead?.id,
       convoso_call_id: body.convoso_call_id || body.CallID || body.call_id,
       agent_id: body.agent_id || body.UserID || body.user_id || body.agent?.id,
@@ -104,43 +113,26 @@ export async function POST(req: NextRequest) {
       agent_email: body.agent_email || body.user_email || body.agent?.email,
       phone_number: body.phone_number || body.customer_phone || body.phone || body.PhoneNumber,
       campaign: body.campaign || body.campaign_name || body.Campaign,
-      disposition: body.disposition || body.call_disposition || body.Disposition || 'Unknown',
+      disposition: body.disposition || body.call_disposition || body.Disposition,
       direction: body.direction || body.call_direction || body.Direction || 'outbound',
-      duration: body.duration || body.duration_sec || body.call_duration || body.Duration || 0,
+      duration: body.duration || body.duration_sec || body.call_duration || body.Duration,
       recording_url: body.recording_url || body.recording || body.call_recording || body.RecordingURL,
       started_at: body.started_at || body.start_time || body.call_start || body.StartTime,
       ended_at: body.ended_at || body.end_time || body.call_end || body.EndTime,
       notes: body.notes || body.call_notes || body.Notes,
-      // Include the full lead data if provided
-      lead_data: body.lead || {
-        first_name: body.first_name || body.FirstName,
-        last_name: body.last_name || body.LastName,
-        email: body.email || body.Email,
-        phone_number: body.phone_number || body.PhoneNumber
-      },
       // Store the complete raw webhook data
       raw_data: body
     };
     
     // Store in database with error handling
-    // Note: The calls table only has these columns:
-    // id, source, source_ref, campaign, disposition, direction,
-    // started_at, ended_at, duration_sec, recording_url, agent_id
     try {
-      // First, check if we need to create or get the agent
-      let agentId = null;
+      // 3) Upsert agent if we have agent info
+      let agentId: string | null = null;
       if (callData.agent_id || callData.agent_name) {
         try {
-          // Try to find or create agent
           const agentResult = await db.oneOrNone(`
             INSERT INTO agents (id, ext_ref, name, team, active)
-            VALUES (
-              gen_random_uuid(),
-              $1,
-              $2,
-              'convoso',
-              true
-            )
+            VALUES (gen_random_uuid(), $1, $2, 'convoso', true)
             ON CONFLICT (ext_ref) DO UPDATE SET
               name = COALESCE(EXCLUDED.name, agents.name),
               active = true
@@ -149,99 +141,102 @@ export async function POST(req: NextRequest) {
             callData.agent_id || callData.agent_name,
             callData.agent_name || callData.agent_id
           ]);
-          
-          if (agentResult) {
-            agentId = agentResult.id;
-          }
+          agentId = agentResult?.id ?? null;
         } catch (agentError) {
           console.log('Could not create/update agent:', agentError);
         }
       }
 
-      await db.none(`
-        INSERT INTO calls (
-          id,
-          source,
-          source_ref,
-          campaign,
-          disposition,
-          direction,
-          started_at,
-          ended_at,
-          duration_sec,
-          recording_url,
-          agent_id,
-          agent_name,
-          agent_email,
-          lead_id,
-          metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-        ON CONFLICT (id) DO UPDATE SET
-          recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
-          disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
-          duration_sec = COALESCE(EXCLUDED.duration_sec, calls.duration_sec),
-          ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
-          agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
-          agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
-          agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
-          metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
-          updated_at = NOW()
-      `, [
-        callData.call_id,
-        'convoso',
-        callData.convoso_call_id || body.call_id || callData.call_id,
-        callData.campaign,
-        callData.disposition,
-        callData.direction,
-        callData.started_at || new Date().toISOString(),
-        callData.ended_at || new Date().toISOString(),
-        callData.duration,
-        callData.recording_url,
-        agentId,
-        callData.agent_name,
-        callData.agent_email,
-        callData.lead_id,
-        JSON.stringify(callData.raw_data)
-      ]);
+      // 4) Only insert into calls table when it's actually call data (not lead-only)
+      if (!isLeadOnly) {
+        await db.none(`
+          INSERT INTO calls (
+            id,
+            source,
+            source_ref,
+            campaign,
+            disposition,
+            direction,
+            started_at,
+            ended_at,
+            duration_sec,
+            recording_url,
+            agent_id,
+            agent_name,
+            agent_email,
+            lead_id,
+            metadata
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          ON CONFLICT (id) DO UPDATE SET
+            recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
+            disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
+            duration_sec = COALESCE(EXCLUDED.duration_sec, calls.duration_sec),
+            ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
+            agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
+            agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
+            agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
+            metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
+            updated_at = NOW()
+        `, [
+          callId, // Use the canonical ID
+          'convoso',
+          callData.convoso_call_id || callId,
+          callData.campaign || null,
+          callData.disposition || null,
+          callData.direction,
+          callData.started_at || new Date().toISOString(),
+          callData.ended_at || new Date().toISOString(),
+          callData.duration || null,
+          callData.recording_url || null,
+          agentId,
+          callData.agent_name || null,
+          callData.agent_email || null,
+          callData.lead_id || null,
+          JSON.stringify(callData.raw_data)
+        ]);
+        
+        console.log('Call saved successfully:', callId);
+        
+        // Queue recording fetch if no recording URL present
+        if (!callData.recording_url) {
+          await queueRecordingFetch(callId, callData);
+        }
+      } else {
+        console.log('Lead-only data received, skipping call insert:', callId);
+      }
       
-      // Store additional metadata in a separate tracking table if needed
-      // This could be the call_events table or a custom metadata table
+      // 5) Always capture the raw payload as an event, linked to the SAME callId
       try {
         await db.none(`
           INSERT INTO call_events (call_id, type, payload, at)
-          VALUES ($1, 'webhook_received', $2, NOW())
+          VALUES ($1, $2, $3, NOW())
         `, [
-          callData.call_id,
+          callId, // Use the same canonical ID
+          isLeadOnly ? 'lead_webhook_received' : 'webhook_received',
           JSON.stringify({
             agent_name: callData.agent_name,
             agent_email: callData.agent_email,
             lead_id: callData.lead_id,
             convoso_call_id: callData.convoso_call_id,
             phone_number: callData.phone_number,
-            lead_data: callData.lead_data,
             raw_data: callData.raw_data
           })
         ]);
       } catch (metaError) {
-        console.log('Could not store metadata:', metaError);
+        console.log('Could not store event metadata:', metaError);
       }
       
-      console.log('Call saved successfully:', callData.call_id);
-      
-      // Queue recording fetch if no recording URL present
-      if (!callData.recording_url) {
-        await queueRecordingFetch(callData.call_id, callData);
-      }
     } catch (dbError: any) {
       console.error('Database error:', dbError);
       // Continue even if database fails - don't break the webhook
     }
     
-    // Return success to Convoso
+    // Return success to Convoso with the canonical callId
     return NextResponse.json({
       ok: true,
-      message: 'Webhook processed successfully',
-      call_id: callData.call_id
+      message: isLeadOnly ? 'Lead data processed successfully' : 'Webhook processed successfully',
+      call_id: callId,
+      type: isLeadOnly ? 'lead' : 'call'
     });
     
   } catch (error: any) {
