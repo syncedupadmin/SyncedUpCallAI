@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
     console.log('Starting process-recordings cron job');
     
     // Get pending recordings that are due for processing
-    const pendingRecordings = await db.any(`
+    const pendingRecordings = await db.manyOrNone(`
       SELECT 
         pr.*,
         c.metadata as call_metadata

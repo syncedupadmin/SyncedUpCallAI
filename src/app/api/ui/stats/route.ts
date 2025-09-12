@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     const todayCalls = parseInt(todayCallsResult.today);
 
     // Get call distribution by hour for today
-    const hourlyDistribution = await db.any(`
+    const hourlyDistribution = await db.manyOrNone(`
       SELECT 
         EXTRACT(HOUR FROM created_at) as hour,
         COUNT(*) as count
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     `);
 
     // Get top agents by call count (last 7 days)
-    const topAgents = await db.any(`
+    const topAgents = await db.manyOrNone(`
       SELECT 
         agent_name,
         agent_id,
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     `);
 
     // Get disposition breakdown
-    const dispositionBreakdown = await db.any(`
+    const dispositionBreakdown = await db.manyOrNone(`
       SELECT 
         disposition,
         COUNT(*) as count,
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
     `);
 
     // Get campaign performance
-    const campaignStats = await db.any(`
+    const campaignStats = await db.manyOrNone(`
       SELECT 
         campaign,
         COUNT(*) as total_calls,

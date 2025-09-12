@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     // Get recent calls
-    const recentCalls = await db.any(`
+    const recentCalls = await db.manyOrNone(`
       SELECT 
         id,
         source,
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
     `);
     
     // Get pending recordings
-    const pendingRecordings = await db.any(`
+    const pendingRecordings = await db.manyOrNone(`
       SELECT 
         pr.id,
         pr.call_id,
