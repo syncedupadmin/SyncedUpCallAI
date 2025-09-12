@@ -1,13 +1,19 @@
 import pg from 'pg';
 
-// Force SSL for all node-postgres clients (Pool/Client) in production
+// Force SSL for all node-postgres clients (Pool/Client) in production or Vercel
 // This makes tls.connect skip CA verification, which avoids the self-signed chain error
-if (process.env.NODE_ENV === 'production') {
+// Check both NODE_ENV and VERCEL env vars since Vercel doesn't always set NODE_ENV to production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+
+if (isProduction) {
   pg.defaults.ssl = { rejectUnauthorized: false };
 }
 
 // Enhanced connection pool configuration for Supabase
 const createPool = () => {
+  // Determine if we need SSL (production or Vercel environment)
+  const needsSSL = isProduction || process.env.DATABASE_URL?.includes('supabase');
+  
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     // Connection pool settings optimized for Supabase
@@ -17,8 +23,8 @@ const createPool = () => {
     connectionTimeoutMillis: 10000, // Timeout after 10 seconds if unable to connect
     // Handle connection errors gracefully
     allowExitOnIdle: true,
-    // SSL configuration for production
-    ssl: process.env.NODE_ENV === 'production' 
+    // SSL configuration - always use when connecting to Supabase
+    ssl: needsSSL
       ? { rejectUnauthorized: false }  // Required for Supabase/Heroku Postgres
       : undefined
   });
