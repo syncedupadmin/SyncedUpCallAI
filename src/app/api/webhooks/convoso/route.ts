@@ -6,6 +6,10 @@ export const dynamic = 'force-dynamic';
 
 // Queue recording fetch for later processing
 async function queueRecordingFetch(callId: string, callData: any) {
+  // Skip if pending_recordings table doesn't exist
+  return;
+  
+  /* Disabled until migration is run
   try {
     // Schedule for 2 minutes from now
     const scheduledFor = new Date(Date.now() + 2 * 60 * 1000);
@@ -41,6 +45,7 @@ async function queueRecordingFetch(callId: string, callData: any) {
   } catch (error) {
     console.error('Error queueing recording fetch:', error);
   }
+  */
 }
 
 // Verify webhook signature (optional)
@@ -118,7 +123,41 @@ export async function POST(req: NextRequest) {
     };
     
     // Store in database with error handling
+    // Note: The calls table only has these columns:
+    // id, source, source_ref, campaign, disposition, direction,
+    // started_at, ended_at, duration_sec, recording_url, agent_id
     try {
+      // First, check if we need to create or get the agent
+      let agentId = null;
+      if (callData.agent_id || callData.agent_name) {
+        try {
+          // Try to find or create agent
+          const agentResult = await db.oneOrNone(`
+            INSERT INTO agents (id, ext_ref, name, team, active)
+            VALUES (
+              gen_random_uuid(),
+              $1,
+              $2,
+              'convoso',
+              true
+            )
+            ON CONFLICT (ext_ref) DO UPDATE SET
+              name = COALESCE(EXCLUDED.name, agents.name),
+              active = true
+            RETURNING id
+          `, [
+            callData.agent_id || callData.agent_name,
+            callData.agent_name || callData.agent_id
+          ]);
+          
+          if (agentResult) {
+            agentId = agentResult.id;
+          }
+        } catch (agentError) {
+          console.log('Could not create/update agent:', agentError);
+        }
+      }
+
       await db.none(`
         INSERT INTO calls (
           id,
@@ -131,29 +170,18 @@ export async function POST(req: NextRequest) {
           ended_at,
           duration_sec,
           recording_url,
-          agent_id,
-          agent_name,
-          agent_email,
-          convoso_lead_id,
-          convoso_call_id,
-          metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          agent_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (id) DO UPDATE SET
           recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
           disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
           duration_sec = COALESCE(EXCLUDED.duration_sec, calls.duration_sec),
           ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
-          agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
-          agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
-          agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
-          convoso_lead_id = COALESCE(EXCLUDED.convoso_lead_id, calls.convoso_lead_id),
-          convoso_call_id = COALESCE(EXCLUDED.convoso_call_id, calls.convoso_call_id),
-          metadata = EXCLUDED.metadata,
-          updated_at = NOW()
+          agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id)
       `, [
         callData.call_id,
         'convoso',
-        callData.convoso_call_id || body.call_id,
+        callData.convoso_call_id || body.call_id || callData.call_id,
         callData.campaign,
         callData.disposition,
         callData.direction,
@@ -161,18 +189,30 @@ export async function POST(req: NextRequest) {
         callData.ended_at || new Date().toISOString(),
         callData.duration,
         callData.recording_url,
-        callData.agent_id,
-        callData.agent_name,
-        callData.agent_email,
-        callData.lead_id,
-        callData.convoso_call_id,
-        JSON.stringify({
-          agent: callData.agent_name,
-          lead_id: callData.lead_id,
-          lead_data: callData.lead_data,
-          raw_data: callData.raw_data
-        })
+        agentId
       ]);
+      
+      // Store additional metadata in a separate tracking table if needed
+      // This could be the call_events table or a custom metadata table
+      try {
+        await db.none(`
+          INSERT INTO call_events (call_id, type, payload, at)
+          VALUES ($1, 'webhook_received', $2, NOW())
+        `, [
+          callData.call_id,
+          JSON.stringify({
+            agent_name: callData.agent_name,
+            agent_email: callData.agent_email,
+            lead_id: callData.lead_id,
+            convoso_call_id: callData.convoso_call_id,
+            phone_number: callData.phone_number,
+            lead_data: callData.lead_data,
+            raw_data: callData.raw_data
+          })
+        ]);
+      } catch (metaError) {
+        console.log('Could not store metadata:', metaError);
+      }
       
       console.log('Call saved successfully:', callData.call_id);
       
@@ -210,36 +250,42 @@ export async function GET(req: NextRequest) {
     // Get recent calls
     const recentCalls = await db.manyOrNone(`
       SELECT 
-        id,
-        source,
-        campaign,
-        disposition,
-        agent_id,
-        agent_name,
-        recording_url,
-        started_at
-      FROM calls 
-      WHERE source = 'convoso'
-      ORDER BY started_at DESC 
+        c.id,
+        c.source,
+        c.campaign,
+        c.disposition,
+        c.agent_id,
+        a.name as agent_name,
+        c.recording_url,
+        c.started_at
+      FROM calls c
+      LEFT JOIN agents a ON a.id = c.agent_id
+      WHERE c.source = 'convoso'
+      ORDER BY c.started_at DESC 
       LIMIT 10
     `);
     
-    // Get pending recordings
-    const pendingRecordings = await db.manyOrNone(`
-      SELECT 
-        pr.id,
-        pr.call_id,
-        pr.lead_id,
-        pr.agent_name,
-        pr.scheduled_for,
-        pr.attempts,
-        pr.processed,
-        pr.error_message
-      FROM pending_recordings pr
-      WHERE pr.processed = FALSE
-      ORDER BY pr.scheduled_for ASC
-      LIMIT 10
-    `);
+    // Get pending recordings (only if table exists)
+    let pendingRecordings = [];
+    try {
+      pendingRecordings = await db.manyOrNone(`
+        SELECT 
+          pr.id,
+          pr.call_id,
+          pr.lead_id,
+          pr.agent_name,
+          pr.scheduled_for,
+          pr.attempts,
+          pr.processed,
+          pr.error_message
+        FROM pending_recordings pr
+        WHERE pr.processed = FALSE
+        ORDER BY pr.scheduled_for ASC
+        LIMIT 10
+      `);
+    } catch (error) {
+      console.log('pending_recordings table not found');
+    }
     
     return NextResponse.json({
       ok: true,
