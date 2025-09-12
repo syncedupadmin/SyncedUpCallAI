@@ -29,39 +29,32 @@ export async function GET(req: NextRequest) {
     `);
     const total = parseInt(countResult.rows[0]?.total || 0, 10);
 
-    // Get paginated data
+    // Get paginated data - using only columns that exist in your database
     const result = await db.query(`
-      with src as (
-        select
-          c.id,
-          c.started_at,
-          c.duration_sec,
-          c.disposition,
-          c.recording_url,
-          c.contact_id,
-          c.agent_id,
-          c.agency_id,
-          c.source_ref as lead_id,
-          c.campaign,
-          c.direction,
-          c.ended_at
-        from calls c
-        order by c.started_at desc nulls last
-        limit $1 offset $2
-      )
       select
-        s.*,
-        ct.primary_phone as customer_phone,
-        ag.name as agent,
-        an.reason_primary,
-        an.summary,
-        vf.has_policy_300_plus
-      from src s
-      left join contacts ct on ct.id = s.contact_id
-      left join agents ag on ag.id = s.agent_id
-      left join analyses an on an.call_id = s.id
-      left join call_value_flags vf on vf.call_id = s.id
-      order by s.started_at desc nulls last
+        c.id,
+        c.started_at,
+        c.duration_sec,
+        c.disposition,
+        c.recording_url,
+        c.contact_id,
+        c.agent_id,
+        c.agency_id,
+        c.lead_id,
+        c.campaign,
+        c.direction,
+        c.ended_at,
+        c.agent_name as agent,
+        c.agent_email,
+        c.source,
+        c.source_ref,
+        c.metadata,
+        c.sale_time,
+        ag.name as agent_from_table
+      from calls c
+      left join agents ag on ag.id = c.agent_id
+      order by c.started_at desc nulls last
+      limit $1 offset $2
     `, [limit, offset]);
 
     const response = createPaginatedResponse(result.rows, total, limit, offset);

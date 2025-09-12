@@ -170,14 +170,22 @@ export async function POST(req: NextRequest) {
           ended_at,
           duration_sec,
           recording_url,
-          agent_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          agent_id,
+          agent_name,
+          agent_email,
+          lead_id,
+          metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT (id) DO UPDATE SET
           recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
           disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
           duration_sec = COALESCE(EXCLUDED.duration_sec, calls.duration_sec),
           ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
-          agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id)
+          agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
+          agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
+          agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
+          metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
+          updated_at = NOW()
       `, [
         callData.call_id,
         'convoso',
@@ -189,7 +197,11 @@ export async function POST(req: NextRequest) {
         callData.ended_at || new Date().toISOString(),
         callData.duration,
         callData.recording_url,
-        agentId
+        agentId,
+        callData.agent_name,
+        callData.agent_email,
+        callData.lead_id,
+        JSON.stringify(callData.raw_data)
       ]);
       
       // Store additional metadata in a separate tracking table if needed
