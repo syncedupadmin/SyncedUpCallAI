@@ -49,7 +49,19 @@ const createPool = () => {
   return pool;
 };
 
-const pool = createPool();
+// Lazy initialization of the pool to ensure SSL defaults are set first
+let pool: pg.Pool | null = null;
+
+const getPool = (): pg.Pool => {
+  if (!pool) {
+    // Set SSL defaults again just to be absolutely sure
+    if (process.env.DATABASE_URL) {
+      pg.defaults.ssl = { rejectUnauthorized: false };
+    }
+    pool = createPool();
+  }
+  return pool;
+};
 
 // Enhanced query wrapper with retry logic and proper error handling
 const executeQuery = async <T = any>(
@@ -93,30 +105,30 @@ const executeQuery = async <T = any>(
 // Database interface with enhanced error handling and connection management
 export const db = {
   query: async (q: string, params?: any[]) => {
-    return executeQuery(() => pool.query(q, params));
+    return executeQuery(() => getPool().query(q, params));
   },
 
   one: async (q: string, params?: any[]) => {
-    const result = await executeQuery(() => pool.query(q, params));
+    const result = await executeQuery(() => getPool().query(q, params));
     return result.rows[0];
   },
 
   oneOrNone: async (q: string, params?: any[]) => {
-    const result = await executeQuery(() => pool.query(q, params));
+    const result = await executeQuery(() => getPool().query(q, params));
     return result.rows[0] || null;
   },
 
   manyOrNone: async (q: string, params?: any[]) => {
-    const result = await executeQuery(() => pool.query(q, params));
+    const result = await executeQuery(() => getPool().query(q, params));
     return result.rows || [];
   },
 
   none: async (q: string, params?: any[]) => {
-    await executeQuery(() => pool.query(q, params));
+    await executeQuery(() => getPool().query(q, params));
   },
 
   result: async (q: string, params?: any[]) => {
-    return executeQuery(() => pool.query(q, params));
+    return executeQuery(() => getPool().query(q, params));
   },
 
   // Health check method with timeout
@@ -126,7 +138,7 @@ export const db = {
         setTimeout(() => reject(new Error('Health check timeout')), timeoutMs);
       });
 
-      const queryPromise = pool.query('SELECT 1 as health_check');
+      const queryPromise = getPool().query('SELECT 1 as health_check');
       
       await Promise.race([queryPromise, timeoutPromise]);
       return true;
@@ -137,18 +149,24 @@ export const db = {
   },
 
   // Get pool status information
-  getPoolStatus: () => ({
-    totalCount: pool.totalCount,
-    idleCount: pool.idleCount,
-    waitingCount: pool.waitingCount,
-  }),
+  getPoolStatus: () => {
+    const currentPool = getPool();
+    return {
+      totalCount: currentPool.totalCount,
+      idleCount: currentPool.idleCount,
+      waitingCount: currentPool.waitingCount,
+    };
+  },
 
   // Graceful shutdown
   shutdown: async () => {
     try {
-      console.log('Closing database pool...');
-      await pool.end();
-      console.log('Database pool closed successfully');
+      if (pool) {
+        console.log('Closing database pool...');
+        await pool.end();
+        console.log('Database pool closed successfully');
+        pool = null;
+      }
     } catch (error) {
       console.error('Error closing database pool:', error);
     }
@@ -173,5 +191,5 @@ process.on('uncaughtException', async (error) => {
   process.exit(1);
 });
 
-// Export pool for advanced usage if needed
-export { pool };
+// Export getPool for advanced usage if needed
+export { getPool as pool };
