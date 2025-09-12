@@ -11,6 +11,8 @@ const createPool = () => {
     connectionTimeoutMillis: 10000, // Timeout after 10 seconds if unable to connect
     // Handle connection errors gracefully
     allowExitOnIdle: true,
+    // SSL configuration for production
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
 
   // Handle pool-level errors
