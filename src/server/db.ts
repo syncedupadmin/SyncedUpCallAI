@@ -12,7 +12,9 @@ const createPool = () => {
     // Handle connection errors gracefully
     allowExitOnIdle: true,
     // SSL configuration for production
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: process.env.NODE_ENV === 'production' 
+      ? { rejectUnauthorized: false }  // Required for Supabase/Heroku Postgres
+      : undefined
   });
 
   // Handle pool-level errors
