@@ -1,5 +1,11 @@
 import pg from 'pg';
 
+// Force SSL for all node-postgres clients (Pool/Client) in production
+// This makes tls.connect skip CA verification, which avoids the self-signed chain error
+if (process.env.NODE_ENV === 'production') {
+  pg.defaults.ssl = { rejectUnauthorized: false };
+}
+
 // Enhanced connection pool configuration for Supabase
 const createPool = () => {
   const pool = new pg.Pool({
