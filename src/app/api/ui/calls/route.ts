@@ -9,12 +9,25 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { limit, offset } = parsePaginationParams(searchParams);
 
+    // Check database health first with short timeout
+    const isHealthy = await db.healthCheck(2000).catch(() => false);
+    
+    if (!isHealthy) {
+      console.log('Database is unhealthy, returning empty response');
+      const response = createPaginatedResponse([], 0, limit, offset);
+      return NextResponse.json({ 
+        ok: true, 
+        ...response,
+        warning: 'Database temporarily unavailable' 
+      });
+    }
+
     // Get total count
     const countResult = await db.query(`
       select count(*) as total
       from calls c
     `);
-    const total = parseInt(countResult.rows[0].total, 10);
+    const total = parseInt(countResult.rows[0]?.total || 0, 10);
 
     // Get paginated data
     const result = await db.query(`
@@ -54,7 +67,17 @@ export async function GET(req: NextRequest) {
     const response = createPaginatedResponse(result.rows, total, limit, offset);
     return NextResponse.json({ ok: true, ...response });
   } catch (err: any) {
-    console.error('ui/calls GET error', err);
-    return NextResponse.json({ ok: false, error: 'server_error' }, { status: 500 });
+    console.error('ui/calls GET error:', err.message);
+    
+    // Return empty data gracefully instead of 500 error
+    const { searchParams } = new URL(req.url);
+    const { limit, offset } = parsePaginationParams(searchParams);
+    const response = createPaginatedResponse([], 0, limit, offset);
+    
+    return NextResponse.json({ 
+      ok: true, 
+      ...response,
+      warning: 'Unable to fetch calls at this time'
+    });
   }
 }
