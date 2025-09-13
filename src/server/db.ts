@@ -44,14 +44,16 @@ const createPool = (): pg.Pool => {
     hasConnectionString: !!connectionString
   });
 
-  // Check if we need SSL based on the connection string
-  const needsSSL = connectionString.includes('sslmode=require') || 
-                   connectionString.includes('supabase') ||
-                   connectionString.includes('pooler');
-
-  console.log('Database connection using connectionString directly with SSL:', needsSSL);
+  // Always use SSL for Supabase connections
+  const isSupabase = connectionString.includes('supabase');
+  
+  console.log('Database connection config:', {
+    isSupabase,
+    hasWorkaround: connectionString.includes('workaround=supabase-pooler.vercel')
+  });
 
   // Use connectionString directly to preserve all query parameters
+  // IMPORTANT: Do NOT include sslmode in the URL when using ssl option in config
   const poolConfig: pg.PoolConfig = {
     connectionString, // Use the full connection string with all query params
     
@@ -62,9 +64,11 @@ const createPool = (): pg.Pool => {
     connectionTimeoutMillis: 10000, // Timeout after 10 seconds
     allowExitOnIdle: true, // Allow process to exit when all connections idle
     
-    // SSL configuration - critical for Supabase and other hosted databases
-    ssl: needsSSL ? {
-      rejectUnauthorized: false // Required for Supabase's self-signed certificates
+    // SSL configuration for Supabase - REQUIRED
+    ssl: isSupabase ? {
+      rejectUnauthorized: false, // Required for Supabase's self-signed certificates
+      // In production, you should use the CA certificate instead:
+      // ca: process.env.SUPABASE_DB_CA
     } : undefined
   };
 
