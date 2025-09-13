@@ -73,12 +73,18 @@ export async function GET(
     `, [id]);
     const events = eventsResult.rows;
     
-    // Check embedding status
-    const embedding = await db.oneOrNone(`
-      select created_at 
-      from transcript_embeddings 
-      where call_id = $1
-    `, [id]);
+    // Check embedding status (check both table names for compatibility)
+    let embedding = null;
+    try {
+      embedding = await db.oneOrNone(`
+        select created_at 
+        from embeddings 
+        where call_id = $1
+      `, [id]);
+    } catch (e) {
+      // Table might not exist or be named differently
+      embedding = null;
+    }
 
     return NextResponse.json({ 
       ok: true, 
