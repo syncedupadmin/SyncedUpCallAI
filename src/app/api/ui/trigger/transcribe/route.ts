@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${process.env.APP_URL}/api/jobs/transcribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.JOBS_SECRET}` },
-      body: JSON.stringify({ call_id }),
+      body: JSON.stringify({ callId: call_id }),
       cache: 'no-store',
     });
 
