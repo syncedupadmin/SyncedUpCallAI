@@ -9,18 +9,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { limit, offset } = parsePaginationParams(searchParams);
 
-    // Check database health first with short timeout
-    const isHealthy = await db.healthCheck(2000).catch(() => false);
-    
-    if (!isHealthy) {
-      console.log('Database is unhealthy, returning empty response');
-      const response = createPaginatedResponse([], 0, limit, offset);
-      return NextResponse.json({ 
-        ok: true, 
-        ...response,
-        warning: 'Database temporarily unavailable' 
-      });
-    }
+    // Skip health check - just try to query directly
+    // The health check might be timing out unnecessarily
 
     // Get total count
     const countResult = await db.query(`
@@ -29,7 +19,7 @@ export async function GET(req: NextRequest) {
     `);
     const total = parseInt(countResult.rows[0]?.total || 0, 10);
 
-    // Get paginated data - using only columns that exist in your database
+    // Get paginated data with customer_phone from contacts table
     const result = await db.query(`
       select
         c.id,
@@ -50,8 +40,10 @@ export async function GET(req: NextRequest) {
         c.source_ref,
         c.metadata,
         c.sale_time,
+        ct.primary_phone as customer_phone,
         ag.name as agent_from_table
       from calls c
+      left join contacts ct on ct.id = c.contact_id
       left join agents ag on ag.id = c.agent_id
       order by c.started_at desc nulls last
       limit $1 offset $2
