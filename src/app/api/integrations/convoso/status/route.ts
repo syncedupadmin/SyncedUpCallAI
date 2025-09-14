@@ -75,9 +75,9 @@ export async function GET(req: NextRequest) {
         WHERE name = 'convoso-cron'
         GROUP BY name
       `);
-    } catch (err) {
+    } catch (err: any) {
       // Table might not exist or no heartbeats yet
-      console.log('[Convoso Status] cron_heartbeats query failed:', err.message);
+      console.log('[Convoso Status] cron_heartbeats query failed:', err?.message || 'Unknown error');
     }
 
     // Calculate health status
