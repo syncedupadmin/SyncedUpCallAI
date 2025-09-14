@@ -1,8 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import CallsTable from './parts/CallsTable';
+import dynamic from 'next/dynamic';
 import Pagination from '@/src/components/Pagination';
+
+// Dynamic import to prevent TDZ issues
+const CallsTable = dynamic(() => import('./parts/CallsTable'), {
+  ssr: false,
+  loading: () => <div className="pulse" style={{ color: '#6b6b7c' }}>Loading table...</div>
+});
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
@@ -57,7 +63,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchCalls(0);
     fetchStats();
-    
+
     // Refresh stats every 30 seconds
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
@@ -70,11 +76,11 @@ export default function DashboardPage() {
   // Monitor SSE for job progress
   const monitorCallProgress = (callId: string) => {
     const eventSource = new EventSource(`/api/ui/stream/${callId}`);
-    
+
     eventSource.addEventListener('status', (event) => {
       const data = JSON.parse(event.data);
       let progress = 5; // Default queued
-      
+
       switch (data.status) {
         case 'queued':
           progress = 5;
@@ -106,7 +112,7 @@ export default function DashboardPage() {
           eventSource.close();
           break;
       }
-      
+
       setJobProgress({ ...jobProgress, [callId]: progress });
       setJobStatus({ ...jobStatus, [callId]: data.status });
     });
@@ -127,8 +133,8 @@ export default function DashboardPage() {
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* Header Section */}
       <div style={{ marginBottom: 40 }}>
-        <h1 style={{ 
-          fontSize: 32, 
+        <h1 style={{
+          fontSize: 32,
           fontWeight: 700,
           background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
           WebkitBackgroundClip: 'text',
@@ -144,8 +150,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Metrics Grid */}
-      <div style={{ 
-        display: 'grid', 
+      <div style={{
+        display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
         gap: 24,
         marginBottom: 40
@@ -159,9 +165,9 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="metric-label">Total Calls</div>
-          <div style={{ 
-            marginTop: 12, 
-            fontSize: 12, 
+          <div style={{
+            marginTop: 12,
+            fontSize: 12,
             color: metrics.weekChange >= 0 ? '#10b981' : '#ef4444',
             display: 'flex',
             alignItems: 'center',
@@ -194,7 +200,7 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="metric-label">Average Duration</div>
-          <div style={{ 
+          <div style={{
             marginTop: 12,
             display: 'flex',
             gap: 4,
@@ -222,13 +228,13 @@ export default function DashboardPage() {
           </div>
           <div className="metric-label">Success Rate</div>
           <div style={{ marginTop: 12 }}>
-            <div style={{ 
-              height: 4, 
-              background: '#1a1a24', 
+            <div style={{
+              height: 4,
+              background: '#1a1a24',
               borderRadius: 4,
               overflow: 'hidden'
             }}>
-              <div style={{ 
+              <div style={{
                 width: statsLoading ? '0%' : `${metrics.successRate}%`,
                 height: '100%',
                 background: 'linear-gradient(90deg, #00d4ff, #7c3aed)',
@@ -260,7 +266,7 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="metric-label">Active Agents (24h)</div>
-          <div style={{ 
+          <div style={{
             marginTop: 12,
             display: 'flex',
             gap: 4
@@ -280,7 +286,7 @@ export default function DashboardPage() {
 
       {/* Calls Section */}
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ 
+        <div style={{
           padding: '20px 24px',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           display: 'flex',
@@ -288,8 +294,8 @@ export default function DashboardPage() {
           justifyContent: 'space-between'
         }}>
           <div>
-            <h2 style={{ 
-              fontSize: 18, 
+            <h2 style={{
+              fontSize: 18,
               fontWeight: 600,
               marginBottom: 4
             }}>
@@ -299,7 +305,7 @@ export default function DashboardPage() {
               Monitor and analyze call activity in real-time
             </p>
           </div>
-          
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" style={{ fontSize: 12 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -317,15 +323,15 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-        
+
         {loading && offset === 0 ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div className="pulse" style={{ color: '#6b6b7c' }}>Loading call data...</div>
           </div>
         ) : (
           <>
-            <CallsTable 
-              rows={rows} 
+            <CallsTable
+              rows={rows}
               onJobStart={handleJobStart}
               jobProgress={jobProgress}
               jobStatus={jobStatus}
@@ -344,7 +350,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Activity Feed */}
-      <div style={{ 
+      <div style={{
         position: 'fixed',
         bottom: 24,
         right: 24,
