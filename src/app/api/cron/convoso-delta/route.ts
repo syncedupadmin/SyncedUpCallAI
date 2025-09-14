@@ -21,8 +21,15 @@ export async function GET(req: NextRequest) {
   // Verify this is called by Vercel Cron or has valid secret
   const vercelCronHeader = req.headers.get('x-vercel-cron');
   const cronSecret = req.headers.get('x-cron-secret');
+  const authHeader = req.headers.get('authorization') || '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
-  if (!vercelCronHeader && (!cronSecret || cronSecret !== process.env.CRON_SECRET)) {
+  const authorized =
+    !!vercelCronHeader ||
+    (cronSecret && cronSecret === process.env.CRON_SECRET) ||
+    (bearer && bearer === process.env.CRON_SECRET);
+
+  if (!authorized) {
     console.warn('[Convoso Delta Cron] Unauthorized access attempt');
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
@@ -162,23 +169,14 @@ export async function GET(req: NextRequest) {
 
     await recordSyncStatus(syncStatus);
 
-    // Update cron heartbeat
+    // Update cron heartbeat (simple append; matches current schema)
     try {
-      await db.none(`
-        INSERT INTO cron_heartbeats (name, last_run, metadata)
-        VALUES ('convoso-cron', NOW(), $1)
-        ON CONFLICT (name) DO UPDATE SET
-          last_run = NOW(),
-          metadata = $1
-      `, [JSON.stringify({
-        scanned: totalScanned,
-        inserted: totalInserted,
-        updated: totalUpdated,
-        failed: totalFailed,
-        duration_ms: Date.now() - startTime,
-      })]);
+      await db.none(
+        `INSERT INTO cron_heartbeats (name, heartbeat_at) VALUES ($1, NOW())`,
+        ['convoso-cron']
+      );
     } catch (err) {
-      console.log('[Convoso Delta Cron] Could not update heartbeat');
+      console.log('[Convoso Delta Cron] Could not write heartbeat:', err);
     }
 
     console.log(

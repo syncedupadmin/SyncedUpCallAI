@@ -66,17 +66,18 @@ export async function GET(req: NextRequest) {
       LIMIT 1
     `);
 
-    // Get cron heartbeat
+    // Get cron heartbeat (get most recent heartbeat)
     let cronHeartbeat = null;
     try {
       cronHeartbeat = await db.oneOrNone(`
-        SELECT last_run, metadata
+        SELECT MAX(heartbeat_at) as last_run
         FROM cron_heartbeats
         WHERE name = 'convoso-cron'
+        GROUP BY name
       `);
     } catch (err) {
-      // Table might not exist
-      console.log('[Convoso Status] cron_heartbeats table not found');
+      // Table might not exist or no heartbeats yet
+      console.log('[Convoso Status] cron_heartbeats query failed:', err.message);
     }
 
     // Calculate health status
@@ -96,8 +97,7 @@ export async function GET(req: NextRequest) {
         } : null,
         circuit: getCircuitStatus(),
         cronHeartbeat: cronHeartbeat ? {
-          lastRun: cronHeartbeat.last_run,
-          metadata: cronHeartbeat.metadata
+          lastRun: cronHeartbeat.last_run
         } : null
       },
       history: syncHistory.map(row => ({
