@@ -74,6 +74,15 @@ export default function CallDetailPage() {
     }
   };
 
+  // Process transcript with search highlighting - must be before conditional returns
+  const processedTranscript = useMemo(() => {
+    if (!data?.transcript?.text) return '';
+    const textToProcess = showOriginal && data.transcript.text ?
+      data.transcript.text :
+      (data.transcript.translated_text || data.transcript.text);
+    return highlightText(textToProcess, searchQuery);
+  }, [data, showOriginal, searchQuery]);
+
   if (loading) {
     return (
       <div className="fade-in" style={{ padding: 40, textAlign: 'center' }}>
@@ -143,14 +152,6 @@ export default function CallDetailPage() {
     ).join('');
   };
 
-  // Process transcript with search highlighting
-  const processedTranscript = useMemo(() => {
-    if (!transcript?.text) return '';
-    const textToProcess = showOriginal && transcript.text ? 
-      transcript.text : 
-      (transcript.translated_text || transcript.text);
-    return highlightText(textToProcess, searchQuery);
-  }, [transcript, showOriginal, searchQuery]);
 
   return (
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
