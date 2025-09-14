@@ -340,6 +340,46 @@ curl -s -X POST "$APP_URL/api/ui/agents/calls/refresh" \
   -H "x-jobs-secret: $JOBS_SECRET" | jq '.'
 ```
 
+## Cron Setup
+
+### Vercel Dashboard Configuration
+
+1. **Navigate to Cron Jobs:**
+   - Go to your Vercel Dashboard
+   - Select your project
+   - Navigate to: Settings → Functions → Cron Jobs
+   - Click "Add Cron Job"
+
+2. **Configure Delta Sync Cron:**
+   - **Path:** `/api/cron/convoso-delta`
+   - **Schedule:** `*/15 * * * *` (every 15 minutes)
+   - **Region:** Same as your functions region
+   - **Environment:** Production
+
+3. **Required Environment Variables:**
+   - `CRON_SECRET` - Optional but recommended for additional security
+   - `CONVOSO_AUTH_TOKEN` - Required for API access
+   - `CONVOSO_DELTA_MINUTES` - Default: 15 (minutes to look back)
+   - `JOBS_SECRET` - Required for admin operations
+
+4. **Verify Setup:**
+   ```bash
+   # Test cron endpoint with secret
+   curl -X GET "$APP_URL/api/cron/convoso-delta" \
+     -H "x-cron-secret: $CRON_SECRET"
+
+   # Check last run status
+   curl "$APP_URL/api/integrations/convoso/status"
+   ```
+
+### Cron Behavior
+
+- **Delta Logic:** Pulls records since last successful sync or last N minutes
+- **Rate Limiting:** Minimum 60 seconds between runs
+- **Circuit Breaker:** Stops pulling if API errors exceed threshold
+- **Heartbeat:** Updates `cron_heartbeats` table for monitoring
+- **Logging:** Records all sync attempts in `convoso_sync_status` table
+
 ## Testing
 
 ### Run Smoke Tests
@@ -373,8 +413,18 @@ node scripts/smoke/convoso.mjs
      -d '{"pages":1,"perPage":10}'
    ```
 
-3. **Verify Data:**
+3. **Test Cron Delta Sync:**
+   ```bash
+   # Trigger delta sync manually
+   curl -X GET "$APP_URL/api/cron/convoso-delta" \
+     -H "x-cron-secret: $CRON_SECRET"
+   ```
+
+4. **Verify Data:**
    ```bash
    # Check agent summary
    curl "$APP_URL/api/ui/agents/calls?limit=5&offset=0"
+
+   # Check sync status
+   curl "$APP_URL/api/integrations/convoso/status"
    ```

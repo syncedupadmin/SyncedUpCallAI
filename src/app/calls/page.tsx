@@ -7,6 +7,7 @@ import FiltersBar, { SelectFilter, DateRangeFilter } from '@/src/ui/FiltersBar';
 import StatCard from '@/src/ui/StatCard';
 import Badge from '@/src/ui/Badge';
 import IconButton from '@/src/ui/IconButton';
+import AgentFilters from '@/src/components/AgentFilters';
 import { tokens } from '@/src/ui/tokens';
 import {
   Phone,
@@ -35,6 +36,7 @@ interface CallRow {
 export default function CallsPage() {
   const [offset, setOffset] = useState(0);
   const [filters, setFilters] = useState<any>({});
+  const [agentFilters, setAgentFilters] = useState<any>({});
   const [stats, setStats] = useState({
     totalCalls: 0,
     todayCalls: 0,
@@ -48,9 +50,10 @@ export default function CallsPage() {
     limit: limit.toString(),
     offset: offset.toString(),
     ...(filters.search && { search: filters.search }),
-    ...(filters.disposition && { disposition: filters.disposition }),
-    ...(filters.dateStart && { dateStart: filters.dateStart }),
-    ...(filters.dateEnd && { dateEnd: filters.dateEnd })
+    ...(filters.disposition || agentFilters.disposition) && { disposition: filters.disposition || agentFilters.disposition },
+    ...(filters.dateStart || agentFilters.from) && { dateStart: filters.dateStart || agentFilters.from },
+    ...(filters.dateEnd || agentFilters.to) && { dateEnd: filters.dateEnd || agentFilters.to },
+    ...(agentFilters.agent && { agent: agentFilters.agent })
   });
 
   const { data, isLoading } = useSWR(
@@ -237,6 +240,11 @@ export default function CallsPage() {
     setOffset(0); // Reset to first page when filters change
   };
 
+  const handleAgentFiltersChange = (newFilters: any) => {
+    setAgentFilters(newFilters);
+    setOffset(0); // Reset to first page when filters change
+  };
+
   const handlePageChange = (page: number) => {
     setOffset((page - 1) * limit);
   };
@@ -260,6 +268,12 @@ export default function CallsPage() {
           Monitor and analyze all call activity across your organization
         </p>
       </div>
+
+      {/* Agent Filters */}
+      <AgentFilters
+        value={agentFilters}
+        onChange={handleAgentFiltersChange}
+      />
 
       {/* Quick Stats */}
       <div style={{

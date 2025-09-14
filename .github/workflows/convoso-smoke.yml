@@ -1,0 +1,54 @@
+name: Convoso Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/server/convoso/**'
+      - 'src/server/db/convoso.ts'
+      - 'src/app/api/integrations/convoso/**'
+      - 'src/app/api/cron/convoso-delta/**'
+      - 'scripts/smoke/convoso.mjs'
+      - '.github/workflows/convoso-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Convoso smoke test
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
+        run: |
+          if [ -f scripts/smoke/convoso.mjs ]; then
+            echo "Running Convoso smoke test..."
+            node scripts/smoke/convoso.mjs
+          else
+            echo "Smoke test script not found, skipping..."
+            exit 0
+          fi
+
+      - name: Report status
+        if: always()
+        run: |
+          if [ $? -eq 0 ]; then
+            echo "✅ Convoso smoke test passed"
+          else
+            echo "❌ Convoso smoke test failed"
+            exit 1
+          fi

@@ -1,6 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+
+const ConvosoPanel = dynamic(() => import('./parts/ConvosoPanel'), {
+  ssr: false,
+  loading: () => <div className="pulse">Loading Convoso panel...</div>
+});
 
 export default function AdminPage() {
   const [envStatus, setEnvStatus] = useState<any>(null);
@@ -347,6 +353,9 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Convoso Sync Panel - Full Width */}
+      <ConvosoPanel />
 
       {/* System Info */}
       <div className="glass-card" style={{ marginTop: 24 }}>
