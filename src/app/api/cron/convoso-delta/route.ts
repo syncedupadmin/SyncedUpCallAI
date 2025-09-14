@@ -21,13 +21,10 @@ export async function GET(req: NextRequest) {
   // Verify this is called by Vercel Cron or has valid secret
   const vercelCronHeader = req.headers.get('x-vercel-cron');
   const cronSecret = req.headers.get('x-cron-secret');
-  const authHeader = req.headers.get('authorization') || '';
-  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
   const authorized =
     !!vercelCronHeader ||
-    (cronSecret && cronSecret === process.env.CRON_SECRET) ||
-    (bearer && bearer === process.env.CRON_SECRET);
+    (cronSecret && cronSecret === process.env.CRON_SECRET);
 
   if (!authorized) {
     console.warn('[Convoso Delta Cron] Unauthorized access attempt');
@@ -169,10 +166,12 @@ export async function GET(req: NextRequest) {
 
     await recordSyncStatus(syncStatus);
 
-    // Update cron heartbeat (simple append; matches current schema)
+    // Update cron heartbeat (upsert with ON CONFLICT)
     try {
       await db.none(
-        `INSERT INTO cron_heartbeats (name, heartbeat_at) VALUES ($1, NOW())`,
+        `INSERT INTO cron_heartbeats (name, heartbeat_at)
+         VALUES ($1, NOW())
+         ON CONFLICT (name) DO UPDATE SET heartbeat_at = NOW()`,
         ['convoso-cron']
       );
     } catch (err) {
