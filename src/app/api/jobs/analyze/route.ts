@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
-import { ANALYSIS_SCHEMA, validateAnalysis } from '@/src/server/lib/json-guard';
+import { ANALYSIS_SCHEMA, validateAnalysis, softValidateAnalysis } from '@/src/server/lib/json-guard';
 import { ANALYSIS_SYSTEM, userPrompt } from '@/src/server/lib/prompts';
 import { alert } from '@/src/server/lib/alerts';
 import { withinCancelWindow } from '@/src/server/lib/biz';
@@ -82,8 +82,24 @@ export async function POST(req: NextRequest) {
     } catch { j = null; }
   }
   
+  // Debug logging helper
+  const shouldLog = process.env.NODE_ENV !== 'production' || process.env.DEBUG_ANALYSIS === '1';
+
   // Try Anthropic fallback if OpenAI failed or invalid
-  if (!r.ok || !j || !validateAnalysis(j)) {
+  let isValid = false;
+  let validationErrors: any = null;
+
+  if (r.ok && j) {
+    isValid = validateAnalysis(j);
+    if (!isValid && shouldLog) {
+      validationErrors = (validateAnalysis as any).errors;
+      console.log(`analyze.validate.failed call_id=${callId}`);
+      console.log('Raw response (first 500 chars):', JSON.stringify(j).substring(0, 500));
+      console.log('Validation errors:', JSON.stringify(validationErrors));
+    }
+  }
+
+  if (!r.ok || !j || !isValid) {
     if (process.env.ANTHROPIC_API_KEY) {
       try {
         const anthropicResp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -104,7 +120,7 @@ export async function POST(req: NextRequest) {
             }]
           })
         });
-        
+
         if (anthropicResp.ok) {
           const anthropicOut = await anthropicResp.json();
           try {
@@ -112,6 +128,7 @@ export async function POST(req: NextRequest) {
             model = 'claude-3.5-sonnet';
             tokenInput = anthropicOut.usage?.input_tokens || 0;
             tokenOutput = anthropicOut.usage?.output_tokens || 0;
+            isValid = validateAnalysis(j);
           } catch { j = null; }
         }
       } catch (anthError) {
@@ -119,11 +136,28 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  
-  if (!j || !validateAnalysis(j)) {
-    await db.none(`insert into call_events(call_id,type,payload) values($1,'analysis_failed',$2)`, 
-      [callId, { error: 'Both OpenAI and Anthropic failed or returned invalid schema' }]);
-    return NextResponse.json({ ok:false, error:'schema_invalid' }, { status: 422 });
+
+  // If still invalid, try soft validation
+  if (!isValid && j) {
+    const softResult = softValidateAnalysis(j);
+    if (softResult.valid && softResult.data) {
+      if (shouldLog) {
+        console.log(`analyze.soft_validate.success call_id=${callId}`);
+      }
+      j = softResult.data;
+      isValid = true;
+    }
+  }
+
+  if (!j || !isValid) {
+    await db.none(`insert into call_events(call_id,type,payload) values($1,'analysis_failed',$2)`,
+      [callId, { error: 'Schema validation failed', hint: j ? 'Invalid structure' : 'No response', logged: shouldLog }]);
+    return NextResponse.json({
+      ok: false,
+      error: 'schema_invalid',
+      hint: !j ? 'No response from model' : 'Summary missing or invalid structure',
+      logged: shouldLog
+    }, { status: 422 });
   }
 
   await db.none(`
@@ -195,9 +229,9 @@ export async function POST(req: NextRequest) {
     console.error('High-risk check failed:', riskError);
   }
   
-  return NextResponse.json({ 
+  return NextResponse.json({
     ok: true,
-    saved: true,
+    created: true,
     model,
     qa_score: j.qa_score,
     reason_primary: j.reason_primary
