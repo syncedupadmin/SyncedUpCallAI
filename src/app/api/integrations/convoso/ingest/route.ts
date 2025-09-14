@@ -80,7 +80,15 @@ export async function POST(req: NextRequest) {
         const pageScanned = pageData.data.length;
         totalScanned += pageScanned;
 
-        console.log(`[Convoso Ingest] Page ${page}/${pages}: scanned=${pageScanned}`);
+        console.log(JSON.stringify({
+          level: 'info',
+          scope: 'convoso.ingest',
+          message: `Processing page ${page}/${pages}`,
+          page,
+          total_pages: pageData.total_pages,
+          scanned: pageScanned,
+          total: pageData.total,
+        }));
 
         // Process each call
         for (const call of pageData.data) {

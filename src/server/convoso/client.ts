@@ -1,5 +1,31 @@
 import { ConvosoCall, ConvosoCallPage, ConvosoAPIResponse } from './types';
 
+// ---- SAFE LOGGING HELPERS ----
+function logConvosoError(err: any, ctx: Record<string, any> = {}) {
+  const status = err?.response?.status;
+  const headers = err?.response?.headers ?? {};
+  const safe = {
+    level: 'error',
+    scope: 'convoso.client',
+    message: err?.message || 'Convoso request failed',
+    http: {
+      status,
+      retryAfter: headers['retry-after'],
+      rateLimitRemaining: headers['x-ratelimit-remaining'] ?? headers['ratelimit-remaining'],
+    },
+    cause: {
+      name: err?.name,
+      code: err?.code,
+    },
+    ctx,
+  };
+  console.error(JSON.stringify(safe));
+}
+
+function logConvosoInfo(ctx: Record<string, any>) {
+  console.log(JSON.stringify({ level: 'info', scope: 'convoso.client', ...ctx }));
+}
+
 // Circuit breaker for Convoso API (extend existing pattern)
 type CircuitState = 'closed' | 'open' | 'halfOpen';
 
@@ -220,11 +246,11 @@ export async function fetchCalls(opts: {
       lastError = error;
       recordFailure(error);
 
-      console.error(`[Convoso] Attempt ${attempt} failed:`, error.message);
+      logConvosoError(error, { fn: 'fetchCalls', attempt, page, perPage, from, to });
 
       if (attempt < maxAttempts) {
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
-        console.log(`[Convoso] Retrying in ${delay}ms...`);
+        logConvosoInfo({ message: `Retrying in ${delay}ms`, attempt, delay });
         await sleep(delay);
       }
     }

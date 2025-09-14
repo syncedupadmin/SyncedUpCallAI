@@ -179,7 +179,25 @@ export async function upsertConvosoCall(c: ConvosoCall): Promise<{ inserted: boo
       return { inserted: true, updated: false };
     }
   } catch (error: any) {
-    console.error('Error upserting Convoso call:', error.message);
+    const pg = error?.code ? {
+      code: error.code,
+      constraint: error.constraint,
+      detail: error.detail,
+      column: error.column,
+      table: error.table,
+    } : undefined;
+
+    console.error(JSON.stringify({
+      level: 'error',
+      scope: 'convoso.db',
+      message: 'Upsert failed',
+      pg,
+      safeKeys: {
+        id: c?.id,
+        agent_id: c?.agent_id,
+        started_at: c?.started_at,
+      },
+    }));
     throw error;
   }
 }

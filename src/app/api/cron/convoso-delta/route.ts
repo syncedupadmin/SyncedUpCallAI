@@ -112,7 +112,15 @@ export async function GET(req: NextRequest) {
         const pageScanned = pageData.data.length;
         totalScanned += pageScanned;
 
-        console.log(`[Convoso Delta Cron] Page ${page}: scanned=${pageScanned}`);
+        console.log(JSON.stringify({
+          level: 'info',
+          scope: 'convoso.cron',
+          message: `Delta sync page ${page}`,
+          page,
+          total_pages: pageData.total_pages,
+          scanned: pageScanned,
+          total: pageData.total,
+        }));
 
         // Process each call
         for (const call of pageData.data) {
