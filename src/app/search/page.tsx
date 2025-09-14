@@ -1,6 +1,30 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import Pagination from '@/src/components/Pagination';
+import FiltersBar, { SelectFilter } from '@/src/ui/FiltersBar';
+import Badge from '@/src/ui/Badge';
+import EmptyState from '@/src/ui/EmptyState';
+import { tokens } from '@/src/ui/tokens';
+import {
+  Search,
+  AlertCircle,
+  CreditCard,
+  Wrench,
+  Ban,
+  DollarSign,
+  Smile,
+  Brain,
+  Type,
+  Clock as ClockIcon,
+  Filter,
+  Calendar,
+  User,
+  Phone,
+  Eye,
+  Play,
+  HelpCircle
+} from '@/src/ui/icons';
 
 export default function SearchPage() {
   const [q, setQ] = useState('');
@@ -30,12 +54,12 @@ export default function SearchPage() {
 
   // Predefined search templates
   const searchTemplates = [
-    { label: 'Unhappy Customers', query: 'upset angry frustrated complaint problem', icon: '😤' },
-    { label: 'Payment Issues', query: 'payment billing charge credit card declined', icon: '💳' },
-    { label: 'Technical Problems', query: 'technical issue bug error not working broken', icon: '🔧' },
-    { label: 'Cancellations', query: 'cancel refund return stop service end subscription', icon: '🚫' },
-    { label: 'Sales Opportunities', query: 'interested upgrade additional features pricing plans', icon: '💰' },
-    { label: 'Happy Customers', query: 'thank you excellent great wonderful happy satisfied', icon: '😊' }
+    { label: 'Unhappy Customers', query: 'upset angry frustrated complaint problem', icon: <AlertCircle size={16} /> },
+    { label: 'Payment Issues', query: 'payment billing charge credit card declined', icon: <CreditCard size={16} /> },
+    { label: 'Technical Problems', query: 'technical issue bug error not working broken', icon: <Wrench size={16} /> },
+    { label: 'Cancellations', query: 'cancel refund return stop service end subscription', icon: <Ban size={16} /> },
+    { label: 'Sales Opportunities', query: 'interested upgrade additional features pricing plans', icon: <DollarSign size={16} /> },
+    { label: 'Happy Customers', query: 'thank you excellent great wonderful happy satisfied', icon: <Smile size={16} /> }
   ];
 
   useEffect(() => {
@@ -155,71 +179,66 @@ export default function SearchPage() {
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
-  const getDispositionColor = (disp: string) => {
-    const colors: Record<string, string> = {
-      'Completed': '#10b981',
-      'No Answer': '#f59e0b',
-      'Busy': '#ef4444',
-      'Failed': '#ef4444',
-      'Voicemail': '#00d4ff'
-    };
-    return colors[disp] || '#6b6b7c';
-  };
-
   return (
-    <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ padding: tokens.spacing['3xl'], maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 40 }}>
+      <div style={{ marginBottom: tokens.spacing['3xl'] }}>
         <h1 style={{
-          fontSize: 32,
-          fontWeight: 700,
-          background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          marginBottom: 8
+          fontSize: tokens.typography.fontSize['3xl'],
+          fontWeight: tokens.typography.fontWeight.bold,
+          color: tokens.colors.text,
+          marginBottom: tokens.spacing.sm
         }}>
-          Advanced Search & Analytics
+          Advanced Search
         </h1>
-        <p style={{ color: '#6b6b7c', fontSize: 14 }}>
+        <p style={{
+          color: tokens.colors.textSecondary,
+          fontSize: tokens.typography.fontSize.md
+        }}>
           Powerful semantic search with AI-driven insights across all communications
         </p>
       </div>
 
       {/* Quick Search Templates */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <div style={{ marginBottom: tokens.spacing.lg }}>
+        <div style={{
+          fontSize: tokens.typography.fontSize.xs,
+          color: tokens.colors.textTertiary,
+          marginBottom: tokens.spacing.md,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          fontWeight: tokens.typography.fontWeight.semibold
+        }}>
           Quick Searches
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: tokens.spacing.md, flexWrap: 'wrap' }}>
           {searchTemplates.map((template, i) => (
             <button
               key={i}
               onClick={() => handleTemplateSearch(template.query)}
-              className="btn btn-ghost"
               style={{
-                padding: '8px 16px',
-                fontSize: 13,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 20,
-                transition: 'all 0.2s'
+                gap: tokens.spacing.sm,
+                padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                background: tokens.colors.backgroundSecondary,
+                border: `1px solid ${tokens.colors.border}`,
+                borderRadius: tokens.radii.full,
+                color: tokens.colors.text,
+                fontSize: tokens.typography.fontSize.sm,
+                cursor: 'pointer',
+                transition: `all ${tokens.transitions.fast}`
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
+                e.currentTarget.style.borderColor = tokens.colors.primary;
                 e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = tokens.colors.border;
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <span style={{ fontSize: 16 }}>{template.icon}</span>
+              {template.icon}
               {template.label}
             </button>
           ))}
@@ -227,54 +246,67 @@ export default function SearchPage() {
       </div>
 
       {/* Advanced Search Bar */}
-      <div className="glass-card" style={{ padding: 24, marginBottom: 32 }}>
+      <div style={{
+        background: tokens.colors.backgroundSecondary,
+        border: `1px solid ${tokens.colors.border}`,
+        borderRadius: tokens.radii.lg,
+        padding: tokens.spacing.lg,
+        marginBottom: tokens.spacing['2xl']
+      }}>
         {/* Search Type Selector */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
           {[
-            { value: 'smart', label: '🧠 Smart Search', desc: 'AI-powered semantic search' },
-            { value: 'exact', label: '🔤 Exact Match', desc: 'Find exact phrases' },
-            { value: 'recent', label: '🕐 Recent Calls', desc: 'Browse latest calls' }
+            { value: 'smart', label: 'Smart Search', desc: 'AI-powered semantic search', icon: <Brain size={16} /> },
+            { value: 'exact', label: 'Exact Match', desc: 'Find exact phrases', icon: <Type size={16} /> },
+            { value: 'recent', label: 'Recent Calls', desc: 'Browse latest calls', icon: <ClockIcon size={16} /> }
           ].map(type => (
             <button
               key={type.value}
               onClick={() => setSearchType(type.value)}
               style={{
                 flex: 1,
-                padding: '12px 16px',
-                background: searchType === type.value ? 'rgba(0, 212, 255, 0.1)' : 'rgba(255, 255, 255, 0.03)',
-                border: searchType === type.value ? '1px solid rgba(0, 212, 255, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 8,
+                padding: tokens.spacing.md,
+                background: searchType === type.value ? tokens.colors.backgroundTertiary : 'transparent',
+                border: `1px solid ${searchType === type.value ? tokens.colors.primary : tokens.colors.border}`,
+                borderRadius: tokens.radii.md,
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                transition: `all ${tokens.transitions.fast}`
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{type.label}</div>
-              <div style={{ fontSize: 11, color: '#6b6b7c' }}>{type.desc}</div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: tokens.spacing.sm,
+                fontSize: tokens.typography.fontSize.sm,
+                fontWeight: tokens.typography.fontWeight.medium,
+                marginBottom: tokens.spacing.xs
+              }}>
+                {type.icon}
+                {type.label}
+              </div>
+              <div style={{
+                fontSize: tokens.typography.fontSize.xs,
+                color: tokens.colors.textTertiary
+              }}>
+                {type.desc}
+              </div>
             </button>
           ))}
         </div>
 
         {/* Main Search Input */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: tokens.spacing.md, marginBottom: tokens.spacing.md }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+            <Search
+              size={20}
               style={{
                 position: 'absolute',
-                left: 16,
+                left: tokens.spacing.md,
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: '#6b6b7c'
+                color: tokens.colors.textTertiary
               }}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
+            />
             <input
               value={q}
               onChange={e => setQ(e.target.value)}
@@ -283,79 +315,74 @@ export default function SearchPage() {
               disabled={searchType === 'recent'}
               style={{
                 width: '100%',
-                padding: '14px 16px 14px 48px',
-                background: searchType === 'recent' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 8,
-                color: '#ffffff',
-                fontSize: 14,
+                padding: `${tokens.spacing.md} ${tokens.spacing.md} ${tokens.spacing.md} 48px`,
+                background: tokens.colors.backgroundTertiary,
+                border: `1px solid ${tokens.colors.border}`,
+                borderRadius: tokens.radii.md,
+                color: tokens.colors.text,
+                fontSize: tokens.typography.fontSize.md,
                 outline: 'none',
-                transition: 'all 0.2s',
+                transition: `all ${tokens.transitions.fast}`,
                 opacity: searchType === 'recent' ? 0.5 : 1
               }}
               onFocus={(e) => {
                 if (searchType !== 'recent') {
-                  e.target.style.borderColor = 'rgba(0, 212, 255, 0.5)';
-                  e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                  e.target.style.borderColor = tokens.colors.primary;
                 }
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.target.style.borderColor = tokens.colors.border;
               }}
             />
           </div>
 
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="btn btn-ghost"
             style={{
-              padding: '0 16px',
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              background: showFilters ? 'rgba(124, 58, 237, 0.1)' : 'transparent',
-              borderColor: showFilters ? 'rgba(124, 58, 237, 0.3)' : 'rgba(255, 255, 255, 0.1)'
+              gap: tokens.spacing.sm,
+              padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+              background: showFilters ? tokens.colors.backgroundTertiary : 'transparent',
+              border: `1px solid ${showFilters ? tokens.colors.secondary : tokens.colors.border}`,
+              borderRadius: tokens.radii.md,
+              color: tokens.colors.text,
+              fontSize: tokens.typography.fontSize.sm,
+              cursor: 'pointer',
+              transition: `all ${tokens.transitions.fast}`
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-            </svg>
+            <Filter size={16} />
             Filters
             {(dateRange !== 'all' || duration !== 'all' || disposition !== 'all' || agent !== 'all') && (
-              <span style={{
-                padding: '2px 6px',
-                background: '#7c3aed',
-                borderRadius: 10,
-                fontSize: 10,
-                fontWeight: 600
-              }}>
-                Active
-              </span>
+              <Badge variant="info" size="sm">Active</Badge>
             )}
           </button>
 
           <button
             onClick={handleSearch}
             disabled={loading || (!q.trim() && searchType !== 'recent')}
-            className="btn btn-primary"
             style={{
-              minWidth: 120,
-              opacity: loading || (!q.trim() && searchType !== 'recent') ? 0.5 : 1,
-              cursor: loading || (!q.trim() && searchType !== 'recent') ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 8
+              gap: tokens.spacing.sm,
+              padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+              background: tokens.colors.primary,
+              border: `1px solid ${tokens.colors.primary}`,
+              borderRadius: tokens.radii.md,
+              color: tokens.colors.background,
+              fontSize: tokens.typography.fontSize.sm,
+              fontWeight: tokens.typography.fontWeight.medium,
+              cursor: loading || (!q.trim() && searchType !== 'recent') ? 'not-allowed' : 'pointer',
+              opacity: loading || (!q.trim() && searchType !== 'recent') ? 0.5 : 1,
+              transition: `all ${tokens.transitions.fast}`
             }}
           >
             {loading ? (
-              <span className="pulse">Searching...</span>
+              <span>Searching...</span>
             ) : (
               <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.35-4.35" />
-                </svg>
+                <Search size={16} />
                 Search
               </>
             )}
@@ -365,123 +392,62 @@ export default function SearchPage() {
         {/* Advanced Filters */}
         {showFilters && (
           <div style={{
-            padding: '16px',
-            background: 'rgba(255, 255, 255, 0.02)',
-            borderRadius: 8,
-            border: '1px solid rgba(255, 255, 255, 0.08)'
+            padding: tokens.spacing.md,
+            background: tokens.colors.backgroundTertiary,
+            borderRadius: tokens.radii.md,
+            border: `1px solid ${tokens.colors.border}`
           }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-              {/* Date Range Filter */}
-              <div>
-                <label style={{ fontSize: 11, color: '#6b6b7c', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
-                  Date Range
-                </label>
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 6,
-                    color: '#fff',
-                    fontSize: 13,
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all" style={{ background: '#14141f' }}>All Time</option>
-                  <option value="today" style={{ background: '#14141f' }}>Today</option>
-                  <option value="week" style={{ background: '#14141f' }}>Last 7 Days</option>
-                  <option value="month" style={{ background: '#14141f' }}>Last 30 Days</option>
-                  <option value="quarter" style={{ background: '#14141f' }}>Last 3 Months</option>
-                </select>
-              </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: tokens.spacing.md
+            }}>
+              <SelectFilter
+                label="Date Range"
+                options={[
+                  { value: 'all', label: 'All Time' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'week', label: 'Last 7 Days' },
+                  { value: 'month', label: 'Last 30 Days' },
+                  { value: 'quarter', label: 'Last 3 Months' }
+                ]}
+                value={dateRange}
+                onChange={setDateRange}
+              />
 
-              {/* Duration Filter */}
-              <div>
-                <label style={{ fontSize: 11, color: '#6b6b7c', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
-                  Call Duration
-                </label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 6,
-                    color: '#fff',
-                    fontSize: 13,
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all" style={{ background: '#14141f' }}>Any Duration</option>
-                  <option value="short" style={{ background: '#14141f' }}>Short (&lt; 1 min)</option>
-                  <option value="medium" style={{ background: '#14141f' }}>Medium (1-5 min)</option>
-                  <option value="long" style={{ background: '#14141f' }}>Long (&gt; 5 min)</option>
-                </select>
-              </div>
+              <SelectFilter
+                label="Call Duration"
+                options={[
+                  { value: 'all', label: 'Any Duration' },
+                  { value: 'short', label: 'Short (< 1 min)' },
+                  { value: 'medium', label: 'Medium (1-5 min)' },
+                  { value: 'long', label: 'Long (> 5 min)' }
+                ]}
+                value={duration}
+                onChange={setDuration}
+              />
 
-              {/* Disposition Filter */}
-              <div>
-                <label style={{ fontSize: 11, color: '#6b6b7c', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
-                  Call Status
-                </label>
-                <select
-                  value={disposition}
-                  onChange={(e) => setDisposition(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 6,
-                    color: '#fff',
-                    fontSize: 13,
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all" style={{ background: '#14141f' }}>All Statuses</option>
-                  {filterStats.dispositions.map(disp => (
-                    <option key={disp} value={disp} style={{ background: '#14141f' }}>{disp}</option>
-                  ))}
-                </select>
-              </div>
+              <SelectFilter
+                label="Call Status"
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  ...filterStats.dispositions.map(d => ({ value: d, label: d }))
+                ]}
+                value={disposition}
+                onChange={setDisposition}
+              />
 
-              {/* Agent Filter */}
-              <div>
-                <label style={{ fontSize: 11, color: '#6b6b7c', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
-                  Agent
-                </label>
-                <select
-                  value={agent}
-                  onChange={(e) => setAgent(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 6,
-                    color: '#fff',
-                    fontSize: 13,
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="all" style={{ background: '#14141f' }}>All Agents</option>
-                  {filterStats.agents.map(ag => (
-                    <option key={ag} value={ag} style={{ background: '#14141f' }}>{ag}</option>
-                  ))}
-                </select>
-              </div>
+              <SelectFilter
+                label="Agent"
+                options={[
+                  { value: 'all', label: 'All Agents' },
+                  ...filterStats.agents.map(a => ({ value: a, label: a }))
+                ]}
+                value={agent}
+                onChange={setAgent}
+              />
             </div>
 
-            {/* Clear Filters */}
             {(dateRange !== 'all' || duration !== 'all' || disposition !== 'all' || agent !== 'all') && (
               <button
                 onClick={() => {
@@ -490,11 +456,15 @@ export default function SearchPage() {
                   setDisposition('all');
                   setAgent('all');
                 }}
-                className="btn btn-ghost"
                 style={{
-                  marginTop: 16,
-                  fontSize: 12,
-                  padding: '6px 12px'
+                  marginTop: tokens.spacing.md,
+                  padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                  background: 'transparent',
+                  border: `1px solid ${tokens.colors.border}`,
+                  borderRadius: tokens.radii.md,
+                  color: tokens.colors.textSecondary,
+                  fontSize: tokens.typography.fontSize.sm,
+                  cursor: 'pointer'
                 }}
               >
                 Clear All Filters
@@ -506,19 +476,31 @@ export default function SearchPage() {
 
       {/* Results Section */}
       {searched && (
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{
+          background: tokens.colors.backgroundSecondary,
+          border: `1px solid ${tokens.colors.border}`,
+          borderRadius: tokens.radii.lg,
+          overflow: 'hidden'
+        }}>
           <div style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: tokens.spacing.lg,
+            borderBottom: `1px solid ${tokens.colors.border}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}>
             <div>
-              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
+              <h2 style={{
+                fontSize: tokens.typography.fontSize.lg,
+                fontWeight: tokens.typography.fontWeight.semibold,
+                marginBottom: tokens.spacing.xs
+              }}>
                 {searchType === 'recent' ? 'Recent Calls' : 'Search Results'}
               </h2>
-              <p style={{ fontSize: 12, color: '#6b6b7c' }}>
+              <p style={{
+                fontSize: tokens.typography.fontSize.sm,
+                color: tokens.colors.textTertiary
+              }}>
                 {loading ? 'Searching...' : (
                   searchType === 'recent'
                     ? `Showing ${results.length} recent calls`
@@ -527,62 +509,41 @@ export default function SearchPage() {
               </p>
             </div>
             {total > 0 && searchType !== 'recent' && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{
-                  padding: '6px 12px',
-                  background: 'rgba(0, 212, 255, 0.1)',
-                  border: '1px solid rgba(0, 212, 255, 0.3)',
-                  borderRadius: 16,
-                  fontSize: 12,
-                  color: '#00d4ff'
-                }}>
-                  {searchType === 'smart' ? '🧠 AI Relevance' : '🔤 Exact Match'}
-                </div>
-              </div>
+              <Badge variant={searchType === 'smart' ? 'info' : 'neutral'}>
+                {searchType === 'smart' ? 'AI Relevance' : 'Exact Match'}
+              </Badge>
             )}
           </div>
 
           {loading ? (
-            <div style={{ padding: 60, textAlign: 'center' }}>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{
-                  width: 60,
-                  height: 60,
-                  margin: '0 auto',
-                  border: '3px solid rgba(0, 212, 255, 0.2)',
-                  borderTop: '3px solid #00d4ff',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-              </div>
-              <div className="pulse" style={{ color: '#6b6b7c' }}>
-                Analyzing {searchType === 'smart' ? 'semantically' : 'precisely'} across all transcripts...
-              </div>
+            <div style={{
+              padding: tokens.spacing['3xl'],
+              textAlign: 'center',
+              color: tokens.colors.textTertiary
+            }}>
+              Analyzing {searchType === 'smart' ? 'semantically' : 'precisely'} across all transcripts...
             </div>
           ) : results.length > 0 ? (
             <>
-              <div style={{ padding: '0 24px' }}>
+              <div style={{ padding: `0 ${tokens.spacing.lg}` }}>
                 {results.map((r: any, index: number) => (
                   <div
                     key={r.id}
                     style={{
-                      padding: '24px 0',
-                      borderBottom: index < results.length - 1 ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                      padding: `${tokens.spacing.lg} 0`,
+                      borderBottom: index < results.length - 1 ? `1px solid ${tokens.colors.border}` : 'none',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      position: 'relative'
+                      transition: `all ${tokens.transitions.fast}`
                     }}
                     onClick={() => window.location.href = `/call/${r.id}`}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
-                      e.currentTarget.style.paddingLeft = '8px';
+                      e.currentTarget.style.paddingLeft = tokens.spacing.sm;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
                       e.currentTarget.style.paddingLeft = '0';
                     }}
                   >
-                    <div style={{ display: 'flex', gap: 20 }}>
+                    <div style={{ display: 'flex', gap: tokens.spacing.lg }}>
                       {/* Score Indicator */}
                       {r.score && searchType === 'smart' && (
                         <div style={{
@@ -593,28 +554,22 @@ export default function SearchPage() {
                             width: 60,
                             height: 60,
                             borderRadius: '50%',
-                            background: `conic-gradient(#00d4ff ${r.score * 360}deg, rgba(255,255,255,0.1) 0deg)`,
+                            background: tokens.colors.backgroundTertiary,
+                            border: `2px solid ${tokens.colors.primary}`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            position: 'relative'
+                            fontSize: tokens.typography.fontSize.lg,
+                            fontWeight: tokens.typography.fontWeight.semibold,
+                            color: tokens.colors.primary
                           }}>
-                            <div style={{
-                              width: 50,
-                              height: 50,
-                              borderRadius: '50%',
-                              background: '#0a0a0f',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 16,
-                              fontWeight: 600,
-                              color: '#00d4ff'
-                            }}>
-                              {(r.score * 100).toFixed(0)}%
-                            </div>
+                            {(r.score * 100).toFixed(0)}%
                           </div>
-                          <div style={{ fontSize: 10, color: '#6b6b7c', marginTop: 4 }}>
+                          <div style={{
+                            fontSize: tokens.typography.fontSize.xs,
+                            color: tokens.colors.textTertiary,
+                            marginTop: tokens.spacing.xs
+                          }}>
                             Match Score
                           </div>
                         </div>
@@ -622,9 +577,17 @@ export default function SearchPage() {
 
                       {/* Main Content */}
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: tokens.spacing.md,
+                          marginBottom: tokens.spacing.md
+                        }}>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>
+                            <span style={{
+                              fontSize: tokens.typography.fontSize.sm,
+                              fontWeight: tokens.typography.fontWeight.semibold
+                            }}>
                               {new Date(r.started_at).toLocaleDateString('en-US', {
                                 weekday: 'short',
                                 month: 'short',
@@ -632,7 +595,10 @@ export default function SearchPage() {
                                 year: 'numeric'
                               })}
                             </span>
-                            <span style={{ fontSize: 12, color: '#6b6b7c' }}>
+                            <span style={{
+                              fontSize: tokens.typography.fontSize.xs,
+                              color: tokens.colors.textTertiary
+                            }}>
                               {new Date(r.started_at).toLocaleTimeString('en-US', {
                                 hour: '2-digit',
                                 minute: '2-digit'
@@ -642,75 +608,73 @@ export default function SearchPage() {
 
                           {r.agent && (
                             <div style={{
-                              padding: '4px 10px',
-                              background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(0, 212, 255, 0.2))',
-                              borderRadius: 6,
-                              fontSize: 11,
-                              fontWeight: 500
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: tokens.spacing.xs,
+                              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                              background: tokens.colors.backgroundTertiary,
+                              borderRadius: tokens.radii.md,
+                              fontSize: tokens.typography.fontSize.xs
                             }}>
-                              👤 {r.agent}
+                              <User size={12} />
+                              {r.agent}
                             </div>
                           )}
 
                           {r.disposition && (
-                            <span style={{
-                              padding: '4px 10px',
-                              background: `${getDispositionColor(r.disposition)}20`,
-                              color: getDispositionColor(r.disposition),
-                              border: `1px solid ${getDispositionColor(r.disposition)}40`,
-                              borderRadius: 6,
-                              fontSize: 11,
-                              fontWeight: 500
-                            }}>
+                            <Badge
+                              variant={
+                                r.disposition === 'Completed' ? 'success' :
+                                r.disposition === 'No Answer' || r.disposition === 'Busy' ? 'warning' :
+                                r.disposition === 'Failed' ? 'danger' : 'info'
+                              }
+                              size="sm"
+                            >
                               {r.disposition}
-                            </span>
+                            </Badge>
                           )}
 
                           {r.duration_sec && (
                             <div style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 4,
-                              padding: '4px 10px',
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              borderRadius: 6,
-                              fontSize: 11
+                              gap: tokens.spacing.xs,
+                              fontSize: tokens.typography.fontSize.xs,
+                              color: tokens.colors.textSecondary
                             }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                              </svg>
+                              <ClockIcon size={12} />
                               {formatDuration(r.duration_sec)}
                             </div>
                           )}
                         </div>
 
                         {(r.reason_primary || r.reason_secondary) && (
-                          <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{
+                            marginBottom: tokens.spacing.md,
+                            display: 'flex',
+                            gap: tokens.spacing.sm,
+                            flexWrap: 'wrap'
+                          }}>
                             {r.reason_primary && (
                               <span style={{
-                                padding: '6px 12px',
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderRadius: 8,
-                                fontSize: 12,
-                                color: '#a8a8b3',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 6
+                                padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+                                background: tokens.colors.backgroundTertiary,
+                                border: `1px solid ${tokens.colors.border}`,
+                                borderRadius: tokens.radii.md,
+                                fontSize: tokens.typography.fontSize.sm,
+                                color: tokens.colors.textSecondary
                               }}>
-                                <span style={{ opacity: 0.5 }}>📌</span>
                                 {r.reason_primary}
                               </span>
                             )}
                             {r.reason_secondary && (
                               <span style={{
-                                padding: '6px 12px',
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                                borderRadius: 8,
-                                fontSize: 12,
-                                color: '#6b6b7c'
+                                padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+                                background: tokens.colors.backgroundTertiary,
+                                border: `1px solid ${tokens.colors.border}`,
+                                borderRadius: tokens.radii.md,
+                                fontSize: tokens.typography.fontSize.sm,
+                                color: tokens.colors.textTertiary
                               }}>
                                 {r.reason_secondary}
                               </span>
@@ -720,15 +684,15 @@ export default function SearchPage() {
 
                         {r.summary && (
                           <div style={{
-                            padding: '12px 16px',
-                            background: 'rgba(255, 255, 255, 0.02)',
-                            borderLeft: '2px solid rgba(0, 212, 255, 0.3)',
-                            borderRadius: '0 6px 6px 0',
-                            marginBottom: 12
+                            padding: tokens.spacing.md,
+                            background: tokens.colors.backgroundTertiary,
+                            borderLeft: `2px solid ${tokens.colors.primary}`,
+                            borderRadius: `0 ${tokens.radii.md} ${tokens.radii.md} 0`,
+                            marginBottom: tokens.spacing.md
                           }}>
                             <p style={{
-                              fontSize: 13,
-                              color: '#a8a8b3',
+                              fontSize: tokens.typography.fontSize.sm,
+                              color: tokens.colors.textSecondary,
                               lineHeight: 1.6,
                               margin: 0
                             }}>
@@ -738,45 +702,48 @@ export default function SearchPage() {
                         )}
 
                         {/* Action Buttons */}
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: tokens.spacing.sm }}>
                           <button
-                            className="btn btn-ghost"
                             style={{
-                              padding: '6px 12px',
-                              fontSize: 12,
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 6
+                              gap: tokens.spacing.xs,
+                              padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+                              background: 'transparent',
+                              border: `1px solid ${tokens.colors.border}`,
+                              borderRadius: tokens.radii.md,
+                              color: tokens.colors.text,
+                              fontSize: tokens.typography.fontSize.sm,
+                              cursor: 'pointer'
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
                               window.location.href = `/call/${r.id}`;
                             }}
                           >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
+                            <Eye size={14} />
                             View Details
                           </button>
                           {r.recording_url && (
                             <button
-                              className="btn btn-ghost"
                               style={{
-                                padding: '6px 12px',
-                                fontSize: 12,
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 6
+                                gap: tokens.spacing.xs,
+                                padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+                                background: 'transparent',
+                                border: `1px solid ${tokens.colors.border}`,
+                                borderRadius: tokens.radii.md,
+                                color: tokens.colors.text,
+                                fontSize: tokens.typography.fontSize.sm,
+                                cursor: 'pointer'
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 window.open(r.recording_url, '_blank');
                               }}
                             >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polygon points="5 3 19 12 5 21 5 3" />
-                              </svg>
+                              <Play size={14} />
                               Play Recording
                             </button>
                           )}
@@ -787,7 +754,10 @@ export default function SearchPage() {
                 ))}
               </div>
 
-              <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{
+                padding: tokens.spacing.lg,
+                borderTop: `1px solid ${tokens.colors.border}`
+              }}>
                 <Pagination
                   total={total}
                   limit={limit}
@@ -798,70 +768,57 @@ export default function SearchPage() {
               </div>
             </>
           ) : searched && !loading ? (
-            <div style={{ padding: 60, textAlign: 'center' }}>
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', opacity: 0.3 }}>
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-                <path d="M8 11h6" />
-              </svg>
-              <div style={{ fontSize: 18, fontWeight: 500, color: '#fff', marginBottom: 8 }}>
-                No results found
-              </div>
-              <div style={{ color: '#6b6b7c', fontSize: 14 }}>
-                {searchType === 'recent'
-                  ? 'No recent calls available'
-                  : `No calls matching "${q}" with current filters`}
-              </div>
-              <div style={{ color: '#6b6b7c', fontSize: 12, marginTop: 12 }}>
-                Try adjusting your search terms or clearing some filters
-              </div>
-            </div>
+            <EmptyState
+              icon={<Search size={48} />}
+              title="No results found"
+              subtitle={searchType === 'recent'
+                ? 'No recent calls available'
+                : `No calls matching "${q}" with current filters`}
+            />
           ) : null}
         </div>
       )}
 
-      {/* Floating Help Button */}
-      <div style={{
-        position: 'fixed',
-        bottom: 24,
-        right: 24,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        alignItems: 'flex-end'
-      }}>
-        {searched && total > 0 && (
+      {/* Live Status Indicator */}
+      {searched && total > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: tokens.spacing.lg,
+          right: tokens.spacing.lg,
+          padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+          background: tokens.colors.backgroundSecondary,
+          backdropFilter: 'blur(10px)',
+          border: `1px solid ${tokens.colors.border}`,
+          borderRadius: tokens.radii.full,
+          display: 'flex',
+          alignItems: 'center',
+          gap: tokens.spacing.sm,
+          fontSize: tokens.typography.fontSize.sm,
+          color: tokens.colors.textSecondary,
+          boxShadow: tokens.shadows.lg
+        }}>
           <div style={{
-            padding: '12px 20px',
-            background: 'rgba(20, 20, 30, 0.9)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(0, 212, 255, 0.3)',
-            borderRadius: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-            fontSize: 12,
-            color: '#a8a8b3'
-          }}>
-            <div className="pulse" style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#00d4ff'
-            }} />
-            <span>Search Results</span>
-            <span style={{ color: '#00d4ff', fontWeight: 600 }}>
-              {total} Matches
-            </span>
-          </div>
-        )}
-      </div>
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: tokens.colors.info,
+            animation: 'pulse 2s infinite'
+          }} />
+          <span>Search Results</span>
+          <span style={{ color: tokens.colors.info, fontWeight: tokens.typography.fontWeight.semibold }}>
+            {total} Matches
+          </span>
+        </div>
+      )}
 
       <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
         }
       `}</style>
     </div>
