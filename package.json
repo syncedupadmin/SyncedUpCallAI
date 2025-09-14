@@ -28,6 +28,8 @@
     "@types/pg": "^8.15.5",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "dotenv": "^17.2.2",
+    "madge": "^8.0.0",
     "tsx": "^4.15.7",
     "typescript": "^5.6.2"
   }

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { withinCancelWindow } from '@/src/server/lib/biz';
+import { withinCancelWindow } from '../../../server/lib/biz';
 
 type Row = {
   id: string;

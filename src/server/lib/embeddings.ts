@@ -23,6 +23,13 @@ export function hashText(text: string): string {
 }
 
 /**
+ * Generate SHA256 hash for any input string
+ */
+export function sha256(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+/**
  * Check if we should skip embedding generation
  */
 export async function shouldSkipEmbedding({

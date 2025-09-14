@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import CallsTable from './parts/CallsTable';
 import Pagination from '@/src/components/Pagination';
-import ProgressBar from '@/src/components/ProgressBar';
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
