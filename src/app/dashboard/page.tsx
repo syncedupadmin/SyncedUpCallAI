@@ -109,7 +109,7 @@ export default function DashboardPage() {
           value={statsLoading ? '...' : metrics.totalCalls.toLocaleString()}
           trend={metrics.weekChange !== 0 ? {
             value: Math.abs(metrics.weekChange),
-            direction: metrics.weekChange >= 0 ? 'up' : 'down'
+            isPositive: metrics.weekChange >= 0
           } : undefined}
           icon={<Phone size={24} />}
           loading={statsLoading}

@@ -61,4 +61,9 @@ export {
   Shield,
   Lock,
   Unlock,
+  Ban,
+  Smile,
+  Brain,
+  Type,
+  HelpCircle,
 } from 'lucide-react';
