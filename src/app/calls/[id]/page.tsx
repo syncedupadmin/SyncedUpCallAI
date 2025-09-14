@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import ProgressBar from '@/src/components/ProgressBar';
+import ProgressBar from '../../../components/ProgressBar';
 
 export default function CallDetailPage() {
   const params = useParams();

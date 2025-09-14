@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Pagination from '@/src/components/Pagination';
+import Pagination from '../../components/Pagination';
 import FiltersBar, { SelectFilter } from '@/src/ui/FiltersBar';
 import Badge from '@/src/ui/Badge';
 import EmptyState from '@/src/ui/EmptyState';

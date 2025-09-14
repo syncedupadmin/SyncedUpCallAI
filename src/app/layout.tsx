@@ -1,5 +1,5 @@
 import '@/src/styles/globals.css';
-import Navigation from '@/src/components/Navigation';
+import Navigation from '../components/Navigation';
 
 export const metadata = {
   title: 'SyncedUp Portal | AI Call Intelligence',

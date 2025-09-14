@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import ProgressBar from '@/src/components/ProgressBar';
+import ProgressBar from '../../components/ProgressBar';
 
 export default function BatchPage() {
   const [batchData, setBatchData] = useState<any>(null);
