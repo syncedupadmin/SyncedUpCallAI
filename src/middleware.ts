@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  // Handle admin authentication first
-  if (request.nextUrl.pathname.startsWith('/admin/super')) {
+  // Handle admin authentication for all admin pages
+  if (request.nextUrl.pathname.startsWith('/admin')) {
     // Create Supabase client first to check authentication
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
     // Check if user is admin using the database function
@@ -38,8 +38,8 @@ export async function middleware(request: NextRequest) {
     // Check for admin-auth cookie as additional verification
     const adminAuth = request.cookies.get('admin-auth')?.value;
     if (!adminAuth || adminAuth !== process.env.ADMIN_SECRET) {
-      // Admin user but no valid cookie, redirect to admin login
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      // Admin user but no valid cookie, redirect to regular login
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
     // Admin auth is valid, continue
