@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  // Disable in production unless explicitly enabled
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TEST_ENDPOINTS !== 'true') {
+    return NextResponse.json(
+      { ok: false, error: 'Test endpoints disabled in production' },
+      { status: 404 }
+    );
+  }
+
+  // Require admin authentication
+  if (!isAdminAuthenticated(req)) {
+    return unauthorizedResponse();
+  }
+
   try {
     // Generate test lead data
     const testLead = {

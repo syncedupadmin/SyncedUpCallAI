@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchCalls, getCircuitStatus } from '@/src/server/convoso/client';
 import { upsertConvosoCall, recordSyncStatus } from '@/src/server/db/convoso';
 import { ConvosoSyncStatus } from '@/src/server/convoso/types';
+import { isAdminAuthenticated } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +11,11 @@ export const dynamic = 'force-dynamic';
  * Protected endpoint to pull and ingest Convoso calls
  */
 export async function POST(req: NextRequest) {
-  // Security: Check for jobs secret
+  // Security: Check for jobs secret or admin auth
   const jobsSecret = req.headers.get('x-jobs-secret');
+  const hasAdminAuth = isAdminAuthenticated(req);
 
-  if (!jobsSecret || jobsSecret !== process.env.JOBS_SECRET) {
+  if (!hasAdminAuth && (!jobsSecret || jobsSecret !== process.env.JOBS_SECRET)) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401 }

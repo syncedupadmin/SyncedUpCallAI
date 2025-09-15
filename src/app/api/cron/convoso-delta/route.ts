@@ -3,6 +3,7 @@ import { db } from '@/src/server/db';
 import { fetchCalls, getCircuitStatus } from '@/src/server/convoso/client';
 import { upsertConvosoCall, recordSyncStatus } from '@/src/server/db/convoso';
 import { ConvosoSyncStatus } from '@/src/server/convoso/types';
+import { isAdminAuthenticated } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Vercel cron timeout
@@ -18,13 +19,15 @@ const MIN_INTERVAL_MS = 60000; // 60 seconds minimum between runs
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
 
-  // Verify this is called by Vercel Cron or has valid secret
+  // Verify this is called by Vercel Cron, has valid secret, or admin auth
   const vercelCronHeader = req.headers.get('x-vercel-cron');
   const cronSecret = req.headers.get('x-cron-secret');
+  const hasAdminAuth = isAdminAuthenticated(req);
 
   const authorized =
     !!vercelCronHeader ||
-    (cronSecret && cronSecret === process.env.CRON_SECRET);
+    (cronSecret && cronSecret === process.env.CRON_SECRET) ||
+    hasAdminAuth;
 
   if (!authorized) {
     console.warn('[Convoso Delta Cron] Unauthorized access attempt');

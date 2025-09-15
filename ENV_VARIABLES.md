@@ -41,6 +41,8 @@
 ### Optional Configuration
 - **HIPAA_MODE**: Enable HIPAA compliance mode (`true` or `false`, default: `false`)
 - **REDACTION**: Enable PII redaction (`true` or `false`, default: `false`)
+- **ENABLE_TEST_ENDPOINTS**: Enable test webhook endpoints in production (`true` or `false`, default: `false`)
+  - ⚠️ WARNING: Only enable for debugging. Test endpoints are automatically disabled in production unless this is set to `true`
 
 ## Setting Up Environment Variables
 

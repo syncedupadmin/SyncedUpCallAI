@@ -41,15 +41,11 @@ export default function SuperAdminPage() {
         ? '/api/cron/convoso-delta'
         : '/api/integrations/convoso/ingest';
 
+      // Use the admin cookie for authentication since we're already in the admin portal
       const headers: any = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Cookie': document.cookie // Pass along admin-auth cookie
       };
-
-      if (type === 'delta') {
-        headers['x-cron-secret'] = 'manual-trigger';
-      } else {
-        headers['x-jobs-secret'] = 'manual-trigger';
-      }
 
       const res = await fetch(endpoint, {
         method: type === 'delta' ? 'GET' : 'POST',
