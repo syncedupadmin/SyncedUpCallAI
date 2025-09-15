@@ -1,9 +1,15 @@
 import '@/src/styles/globals.css';
-import Navigation from '../components/Navigation';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata = {
-  title: 'SyncedUp Portal | AI Call Intelligence',
-  description: 'Advanced call analytics and intelligence platform',
+  title: 'SyncedUp AI | AI-Powered Call Intelligence',
+  description: 'Transform your call center with AI-powered insights, real-time transcription, and actionable analytics',
 };
 
 export default function RootLayout({
@@ -12,18 +18,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
-        <Navigation />
-        
-        <main style={{ 
-          position: 'relative',
-          zIndex: 10,
-          minHeight: 'calc(100vh - 65px)'
-        }}>
-          {children}
-        </main>
-        
+    <html lang="en" className={inter.className}>
+      <body className="antialiased">
+        {children}
       </body>
     </html>
   );

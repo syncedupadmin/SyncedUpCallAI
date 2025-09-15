@@ -13,14 +13,18 @@
     "backfill:meta": "node scripts/backfill-meta.cjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.57.4",
     "ajv": "^8.12.0",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.23.12",
     "lucide-react": "^0.544.0",
     "next": "^14.2.32",
     "pg": "^8.12.0",
     "pino": "^9.0.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-hot-toast": "^2.6.0",
     "swr": "^2.2.5",
     "zod": "^3.23.8"
   },
@@ -29,8 +33,11 @@
     "@types/pg": "^8.15.5",
     "@types/react": "18.3.24",
     "@types/react-dom": "^18.2.22",
+    "autoprefixer": "^10.4.21",
     "dotenv": "^17.2.2",
     "madge": "^8.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
     "tsx": "^4.15.7",
     "typescript": "5.9.2"
   }

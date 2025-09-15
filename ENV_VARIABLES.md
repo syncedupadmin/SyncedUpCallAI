@@ -9,12 +9,26 @@
 ### Database
 - **DIRECT_URL**: PostgreSQL connection string
   - Format: `postgresql://user:password@host:port/database?sslmode=require`
+- **DATABASE_URL**: PostgreSQL connection string (alias for DIRECT_URL)
+
+### Supabase (for Authentication)
+- **NEXT_PUBLIC_SUPABASE_URL**: Your Supabase project URL
+  - Example: `https://xxxxx.supabase.co`
+  - Get from: Supabase Dashboard > Settings > API
+- **NEXT_PUBLIC_SUPABASE_ANON_KEY**: Your Supabase anonymous key
+  - Get from: Supabase Dashboard > Settings > API > Project API keys > anon public
+- **SUPABASE_SERVICE_ROLE_KEY**: Your Supabase service role key (for server-side operations)
+  - Get from: Supabase Dashboard > Settings > API > Project API keys > service_role
 
 ### Security & Authentication
 - **ADMIN_SECRET**: Admin portal password (CRITICAL - CHANGE THIS!)
   - Used for accessing `/admin/super` portal
   - Also used for admin API authentication via `x-admin-secret` header
   - Example: Generate a strong password using: `openssl rand -base64 32`
+
+- **ADMIN_EMAIL**: Admin email address (default: `admin@syncedupsolutions.com`)
+  - Used for admin authentication and elevated privileges
+  - This user will have access to the super admin portal
 
 - **JOBS_SECRET**: Secret for job queue authentication
   - Used for background job processing
