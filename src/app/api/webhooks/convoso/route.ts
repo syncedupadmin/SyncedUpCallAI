@@ -205,11 +205,11 @@ export async function POST(req: NextRequest) {
         console.log('Lead-only data received, skipping call insert:', callId);
       }
       
-      // 5) Always capture the raw payload as an event, linked to the SAME callId
+      // 5) Always capture the raw payload as an event, using safe function that ensures call exists
       try {
-        await db.none(`
-          INSERT INTO call_events (call_id, type, payload, at)
-          VALUES ($1, $2, $3, NOW())
+        // Use the safe add_call_event function that ensures the call exists first
+        await db.one(`
+          SELECT public.add_call_event($1::uuid, $2::text, $3::jsonb, NOW()) as event_id
         `, [
           callId, // Use the same canonical ID
           isLeadOnly ? 'lead_webhook_received' : 'webhook_received',
