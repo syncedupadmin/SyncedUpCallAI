@@ -21,31 +21,82 @@ function verifyCronSecret(req: NextRequest): boolean {
   return authHeader === `Bearer ${cronSecret}`;
 }
 
-// Fetch recording from Convoso API
-async function fetchConvosoRecording(leadId: string): Promise<any> {
+// Fetch recording from Convoso API (with optional user email)
+async function fetchConvosoRecording(leadId: string, userEmail?: string): Promise<any> {
   const authToken = process.env.CONVOSO_AUTH_TOKEN;
-  
+
   if (!authToken) {
     throw new Error('CONVOSO_AUTH_TOKEN not configured');
   }
-  
+
   try {
-    // Fetch recordings for the lead
+    // Try the user recordings endpoint if we have an email
+    if (userEmail) {
+      console.log(`[PROCESS-RECORDINGS] Fetching recordings for user: ${userEmail}, lead: ${leadId}`);
+
+      const requestBody = {
+        auth_token: authToken,
+        user: userEmail,
+        limit: 100 // Limit to 100 recordings
+      };
+
+      const recordingsUrl = 'https://secure.convoso.com/api/users/get-recordings';
+      const recordingsResponse = await fetch(recordingsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+      if (!recordingsResponse.ok) {
+        console.warn(`User recordings API failed: ${recordingsResponse.status}, falling back to lead API`);
+      } else {
+        const recordingsData = await recordingsResponse.json();
+
+        // Extract recordings array
+        const recordings = Array.isArray(recordingsData) ? recordingsData :
+                          (recordingsData.recordings || recordingsData.data || []);
+
+        // Find recording for this specific lead_id
+        const recording = recordings.find((r: any) =>
+          r.lead_id === leadId ||
+          r.LeadID === leadId ||
+          r.callId?.includes(leadId)
+        );
+
+        if (recording) {
+          const recordingUrl = recording.recording_url ||
+                              recording.RecordingURL ||
+                              recording.url ||
+                              recording.file_name;
+
+          return {
+            recording_url: recordingUrl,
+            recordings_data: recording
+          };
+        }
+      }
+    }
+
+    // Fallback to original lead-based endpoint
+    console.log(`[PROCESS-RECORDINGS] Using lead endpoint for lead: ${leadId}`);
+
     const recordingsParams = new URLSearchParams({
       auth_token: authToken,
       lead_id: leadId,
       limit: '1'
     });
-    
-    const recordingsUrl = `https://api.convoso.com/v1/leads/get-recordings?${recordingsParams}`;
+
+    const recordingsUrl = `https://api.convoso.com/v1/lead/get-recordings?${recordingsParams}`;
     const recordingsResponse = await fetch(recordingsUrl);
-    
+
     if (!recordingsResponse.ok) {
       throw new Error(`Convoso API error: ${recordingsResponse.status}`);
     }
-    
+
     const recordingsData = await recordingsResponse.json();
-    
+
     // Extract recording URL from response
     let recordingUrl = null;
     if (recordingsData.recordings && recordingsData.recordings.length > 0) {
@@ -58,7 +109,7 @@ async function fetchConvosoRecording(leadId: string): Promise<any> {
         recordingUrl = recording.file_name;
       }
     }
-    
+
     return {
       recording_url: recordingUrl,
       recordings_data: recordingsData
@@ -120,9 +171,13 @@ async function fetchConvosoAgentInfo(callId: string, agentId?: string): Promise<
 async function processPendingRecording(recording: any): Promise<boolean> {
   try {
     console.log(`Processing recording for call ${recording.call_id}, lead ${recording.lead_id}`);
-    
-    // Fetch recording from Convoso
-    const recordingData = await fetchConvosoRecording(recording.lead_id);
+
+    // Extract agent email from metadata or agent_name if it's an email
+    const agentEmail = recording.metadata?.agent_email ||
+                      (recording.agent_name?.includes('@') ? recording.agent_name : null);
+
+    // Fetch recording from Convoso (with email if available)
+    const recordingData = await fetchConvosoRecording(recording.lead_id, agentEmail);
     
     // Fetch agent information if available
     let agentInfo = null;
