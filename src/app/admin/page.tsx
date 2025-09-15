@@ -177,17 +177,20 @@ export default function AdminPage() {
 
   return (
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
-      <h1 style={{ 
-        fontSize: 32, 
+      <h1 style={{
+        fontSize: 32,
         fontWeight: 700,
-        background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
+        background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
-        marginBottom: 32
+        marginBottom: 8
       }}>
         Operator Console
       </h1>
+      <p style={{ color: '#6b6b7c', fontSize: 14, marginBottom: 32 }}>
+        System operations and batch management
+      </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 24 }}>
         {/* Environment Status */}
