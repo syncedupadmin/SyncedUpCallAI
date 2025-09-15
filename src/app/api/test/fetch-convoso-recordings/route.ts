@@ -141,10 +141,11 @@ export async function POST(req: NextRequest) {
         // Save to database if not dry run
         if (!dry_run && recordingData.recording_url) {
           // Check if we have a call record for this lead_id
+          // Using source_ref column which should exist
           const existingCall = await db.oneOrNone(`
-            SELECT id, recording_url, lead_id
+            SELECT id, recording_url
             FROM calls
-            WHERE lead_id = $1 OR convoso_lead_id = $1
+            WHERE source_ref = $1
             LIMIT 1
           `, [recordingData.lead_id]);
 
@@ -167,18 +168,14 @@ export async function POST(req: NextRequest) {
             }
           } else {
             // Create new call record with recording
-            const callId = recording.call_id ||
-                          `convoso-${recordingData.lead_id}-${Date.now()}`;
-
+            // Using only columns that exist in the base schema
             await db.none(`
               INSERT INTO calls (
                 id,
                 source,
-                lead_id,
-                convoso_lead_id,
+                source_ref,
                 recording_url,
                 agent_name,
-                agent_email,
                 disposition,
                 campaign,
                 started_at,
@@ -189,24 +186,23 @@ export async function POST(req: NextRequest) {
                 gen_random_uuid(),
                 'convoso',
                 $1,
-                $1,
                 $2,
                 $3,
                 $4,
                 $5,
-                $6,
+                $6::timestamptz,
                 $7::timestamptz,
-                $8::timestamptz,
-                $9,
+                $8,
                 NOW()
               )
-              ON CONFLICT (lead_id) DO UPDATE
-              SET recording_url = EXCLUDED.recording_url
+              ON CONFLICT (source_ref) DO UPDATE
+              SET
+                recording_url = EXCLUDED.recording_url,
+                updated_at = NOW()
             `, [
-              recordingData.lead_id,
+              recordingData.lead_id,  // Using source_ref for lead_id
               recordingData.recording_url,
               recordingData.agent_name,
-              recordingData.agent_email,
               recordingData.disposition,
               recordingData.campaign,
               recordingData.start_time,

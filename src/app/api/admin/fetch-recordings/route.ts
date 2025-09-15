@@ -119,11 +119,11 @@ export async function POST(req: NextRequest) {
       // Save to database if requested
       if (save_to_db && recordingInfo.recording_url && recordingInfo.lead_id) {
         try {
-          // Check if call exists
+          // Check if call exists using source_ref
           const existingCall = await db.oneOrNone(`
             SELECT id, recording_url
             FROM calls
-            WHERE lead_id = $1 OR convoso_lead_id = $1
+            WHERE source_ref = $1
             LIMIT 1
           `, [recordingInfo.lead_id]);
 
@@ -139,13 +139,12 @@ export async function POST(req: NextRequest) {
 
             results.updated++;
           } else if (!existingCall) {
-            // Create new call record
+            // Create new call record using source_ref
             await db.none(`
               INSERT INTO calls (
                 id,
                 source,
-                lead_id,
-                convoso_lead_id,
+                source_ref,
                 recording_url,
                 agent_name,
                 disposition,
@@ -154,13 +153,12 @@ export async function POST(req: NextRequest) {
                 gen_random_uuid(),
                 'convoso',
                 $1,
-                $1,
                 $2,
                 $3,
                 $4,
                 NOW()
               )
-              ON CONFLICT (lead_id) DO UPDATE
+              ON CONFLICT (source_ref) DO UPDATE
               SET
                 recording_url = EXCLUDED.recording_url,
                 updated_at = NOW()
