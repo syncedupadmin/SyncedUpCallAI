@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Call Convoso API
-    const convosoUrl = 'https://secure.convoso.com/api/users/get-recordings';
+    // Call Convoso API (using correct domain)
+    const convosoUrl = 'https://api.convoso.com/v1/users/get-recordings';
     const requestBody = {
       auth_token: authToken,
       user: user_email

@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Prepare API request to Convoso
-    const convosoUrl = 'https://secure.convoso.com/api/users/get-recordings';
+    // Prepare API request to Convoso (using correct domain)
+    const convosoUrl = 'https://api.convoso.com/v1/users/get-recordings';
     const requestBody = {
       auth_token: authToken,
       user: user_email,
@@ -58,15 +58,37 @@ export async function POST(req: NextRequest) {
       limit: recordLimit
     });
 
-    // Call Convoso API
-    const response = await fetch(convosoUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
+    // Call Convoso API with detailed error handling
+    let response;
+    try {
+      console.log('[RECORDING FETCH TEST] Making request to:', convosoUrl);
+      console.log('[RECORDING FETCH TEST] Request body:', JSON.stringify(requestBody));
+
+      response = await fetch(convosoUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (fetchError: any) {
+      console.error('[RECORDING FETCH TEST] Fetch error details:', {
+        message: fetchError.message,
+        cause: fetchError.cause,
+        stack: fetchError.stack
+      });
+
+      return NextResponse.json({
+        ok: false,
+        error: 'Failed to connect to Convoso API',
+        details: {
+          message: fetchError.message,
+          url: convosoUrl,
+          hint: 'This might be a network issue or incorrect API URL'
+        }
+      }, { status: 500 });
+    }
 
     // Check response status
     if (!response.ok) {

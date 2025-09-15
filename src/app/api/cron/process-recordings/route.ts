@@ -40,7 +40,7 @@ async function fetchConvosoRecording(leadId: string, userEmail?: string): Promis
         limit: 100 // Limit to 100 recordings
       };
 
-      const recordingsUrl = 'https://secure.convoso.com/api/users/get-recordings';
+      const recordingsUrl = 'https://api.convoso.com/v1/users/get-recordings';
       const recordingsResponse = await fetch(recordingsUrl, {
         method: 'POST',
         headers: {
