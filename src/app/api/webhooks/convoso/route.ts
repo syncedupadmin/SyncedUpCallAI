@@ -50,37 +50,83 @@ async function queueRecordingFetch(callId: string, callData: any) {
 
 // Verify webhook signature (optional)
 function verifySignature(req: NextRequest, body: string): boolean {
+  // Check for x-webhook-secret header (used by /api/hooks/convoso)
+  const webhookSecretHeader = req.headers.get('x-webhook-secret');
+  const webhookSecret = process.env.CONVOSO_WEBHOOK_SECRET;
+
+  if (webhookSecretHeader) {
+    console.log('[WEBHOOK] x-webhook-secret header present, verifying...');
+    const isValid = webhookSecret && webhookSecretHeader === webhookSecret;
+    console.log('[WEBHOOK] x-webhook-secret validation:', isValid ? 'PASSED' : 'FAILED');
+    return isValid;
+  }
+
+  // Check for x-convoso-signature header (HMAC signature)
   const signature = req.headers.get('x-convoso-signature');
-  
+
   // If no signature header, allow the request (for testing)
   if (!signature) {
-    console.log('No signature provided, allowing request');
+    console.log('[WEBHOOK] No signature provided, allowing request');
     return true;
   }
-  
-  // If you have a webhook secret configured
-  const webhookSecret = process.env.CONVOSO_WEBHOOK_SECRET;
+
+  // If you have a webhook secret configured, verify HMAC
   if (webhookSecret) {
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(body)
       .digest('hex');
-    
-    return signature === expectedSignature;
+
+    const isValid = signature === expectedSignature;
+    console.log('[WEBHOOK] HMAC signature validation:', isValid ? 'PASSED' : 'FAILED');
+    return isValid;
   }
-  
-  // No secret configured, allow any request with signature header
+
+  // No secret configured, allow any request
+  console.log('[WEBHOOK] No webhook secret configured, allowing request');
   return true;
 }
 
 export async function POST(req: NextRequest) {
+  // Log ALL incoming webhook requests for debugging
+  console.log('[WEBHOOK] Incoming Convoso webhook request:', {
+    headers: {
+      'x-webhook-secret': req.headers.get('x-webhook-secret') ? 'present' : 'missing',
+      'x-convoso-signature': req.headers.get('x-convoso-signature') ? 'present' : 'missing',
+      'content-type': req.headers.get('content-type'),
+      'user-agent': req.headers.get('user-agent')
+    },
+    url: req.url,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+
   try {
     const bodyText = await req.text();
+
+    // Verify signature/authentication but don't block if it fails (log only)
+    const isAuthenticated = verifySignature(req, bodyText);
+    if (!isAuthenticated) {
+      console.warn('[WEBHOOK] Authentication failed but continuing to process');
+    }
+
     const body = JSON.parse(bodyText);
-    
+
+    console.log('[WEBHOOK] Parsed body:', {
+      lead_id: body.lead_id,
+      phone_number: body.phone_number,
+      agent_name: body.agent_name,
+      campaign: body.campaign,
+      disposition: body.disposition,
+      hasRecording: !!body.recording_url,
+      authenticated: isAuthenticated,
+      timestamp: new Date().toISOString()
+    });
+
     // Log the request for debugging
     console.log('Webhook received:', {
       type: body.disposition || body.duration ? 'call' : 'lead',
+      authenticated: isAuthenticated,
       body: body
     });
     
