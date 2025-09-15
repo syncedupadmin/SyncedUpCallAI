@@ -78,10 +78,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Admin user redirect logic
-  if (user?.email === 'admin@syncedupsolutions.com' && request.nextUrl.pathname === '/dashboard') {
-    return NextResponse.redirect(new URL('/admin/super', request.url));
-  }
+  // Admin user redirect logic - check if user has admin role
+  // This would need to be checked from the database profile
+  // For now, we'll rely on the admin-auth cookie for admin access
 
   // Redirect to dashboard if logged in and trying to access home or login/signup
   if ((request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') && user) {

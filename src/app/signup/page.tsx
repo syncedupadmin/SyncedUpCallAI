@@ -13,10 +13,10 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [formData, setFormData] = useState({
-    email: 'admin@syncedupsolutions.com',
+    email: '',
     password: '',
     confirmPassword: '',
-    name: 'Admin'
+    name: ''
   });
   const [error, setError] = useState('');
 
@@ -47,8 +47,7 @@ export default function SignupPage() {
         password: formData.password,
         options: {
           data: {
-            name: formData.name,
-            role: formData.email === 'admin@syncedupsolutions.com' ? 'admin' : 'user'
+            name: formData.name
           }
         }
       });
@@ -155,7 +154,7 @@ export default function SignupPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full pl-11 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition text-white placeholder-gray-500"
-                    placeholder="Admin"
+                    placeholder="John Doe"
                   />
                 </div>
               </div>
@@ -173,7 +172,7 @@ export default function SignupPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full pl-11 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition text-white placeholder-gray-500"
-                    placeholder="admin@syncedupsolutions.com"
+                    placeholder="you@example.com"
                   />
                 </div>
               </div>
@@ -241,14 +240,6 @@ export default function SignupPage() {
               </p>
             </div>
 
-            {/* Admin Notice */}
-            {formData.email === 'admin@syncedupsolutions.com' && (
-              <div className="mt-6 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                <p className="text-xs text-purple-400 text-center">
-                  Creating admin account with elevated privileges.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </motion.div>

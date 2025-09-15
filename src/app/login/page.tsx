@@ -12,7 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    email: 'admin@syncedupsolutions.com',
+    email: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -35,12 +35,9 @@ export default function LoginPage() {
       if (data?.user) {
         toast.success('Welcome back!');
 
-        // Check if user is admin
-        if (data.user.email === 'admin@syncedupsolutions.com') {
-          router.push('/admin/super');
-        } else {
-          router.push('/dashboard');
-        }
+        // Check if user has admin role (will be determined by database)
+        // For now, redirect everyone to dashboard
+        router.push('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
@@ -127,7 +124,7 @@ export default function LoginPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full pl-11 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition text-white placeholder-gray-500"
-                    placeholder="admin@syncedupsolutions.com"
+                    placeholder="you@example.com"
                   />
                 </div>
               </div>
@@ -194,14 +191,6 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Admin Notice */}
-            {formData.email === 'admin@syncedupsolutions.com' && (
-              <div className="mt-6 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                <p className="text-xs text-purple-400 text-center">
-                  Admin account detected. You'll be redirected to the admin portal after login.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </motion.div>

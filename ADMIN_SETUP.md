@@ -1,19 +1,30 @@
 # Admin Authentication Setup
 
-## Quick Setup
+## Setting Up Admin Users (No Hardcoding!)
 
-1. **Navigate to the signup page**: `/signup`
+### Method 1: Using Supabase SQL Editor
 
-2. **Create the admin account** with these credentials:
-   - Email: `admin@syncedupsolutions.com`
-   - Password: Choose a strong password (minimum 6 characters)
-   - Name: Admin (or your preferred name)
+1. **Run the admin setup SQL** in Supabase:
+   - Go to SQL Editor in your Supabase dashboard
+   - Run the contents of `supabase/admin-setup.sql`
 
-3. **Verify your email** (if email verification is enabled in Supabase)
+2. **Add your admin user**:
+   ```sql
+   -- Replace with your actual admin email
+   SELECT public.add_admin_user('your-email@example.com');
+   ```
 
-4. **Login** at `/login` with:
-   - Email: `admin@syncedupsolutions.com`
-   - Your chosen password
+3. **Create the account**:
+   - Sign up at `/signup` with the email you added
+   - Login at `/login` with your credentials
+
+### Method 2: Direct Database Update
+
+1. **Sign up first** at `/signup` with any email
+2. **Update role in Supabase**:
+   - Go to Table Editor → `profiles` table
+   - Find your user by email
+   - Change `role` from 'user' to 'admin'
 
 ## Features
 
@@ -22,8 +33,9 @@
 - View call analytics
 - Standard user features
 
-### Admin User (admin@syncedupsolutions.com)
-- Automatically redirected to `/admin/super` after login
+### Admin Users
+- Users with 'admin' role in the profiles table
+- Can access `/admin/super` portal
 - Full access to super admin portal
 - User management capabilities
 - System configuration access
