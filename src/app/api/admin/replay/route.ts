@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     // Check admin authentication
-    if (!isAdminAuthenticated(req)) {
+    const isAdmin = await isAdminAuthenticated(req);
+    if (!isAdmin) {
       return unauthorizedResponse();
     }
 

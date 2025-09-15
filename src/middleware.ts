@@ -5,13 +5,44 @@ import type { NextRequest } from 'next/server';
 export async function middleware(request: NextRequest) {
   // Handle admin authentication first
   if (request.nextUrl.pathname.startsWith('/admin/super')) {
-    const adminAuth = request.cookies.get('admin-auth')?.value;
+    // Create Supabase client first to check authentication
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value;
+          },
+          set() {},
+          remove() {},
+        },
+      }
+    );
 
-    // If no auth cookie or invalid, redirect to login
-    if (!adminAuth || adminAuth !== process.env.ADMIN_SECRET) {
+    // Check if user is authenticated and has admin role
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
-    // Admin auth is valid, continue with normal flow
+
+    // Check if user is admin using the database function
+    const { data: isAdmin } = await supabase.rpc('is_admin');
+
+    if (!isAdmin) {
+      // User is not an admin, redirect to regular dashboard
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    // Check for admin-auth cookie as additional verification
+    const adminAuth = request.cookies.get('admin-auth')?.value;
+    if (!adminAuth || adminAuth !== process.env.ADMIN_SECRET) {
+      // Admin user but no valid cookie, redirect to admin login
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+
+    // Admin auth is valid, continue
     return NextResponse.next();
   }
 

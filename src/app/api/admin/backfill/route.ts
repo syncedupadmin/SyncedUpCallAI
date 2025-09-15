@@ -15,7 +15,8 @@ interface BackfillOptions {
 
 export async function POST(req: NextRequest) {
   // Check admin authentication
-  if (!isAdminAuthenticated(req)) {
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
     return unauthorizedResponse();
   }
   try {
@@ -240,7 +241,8 @@ export async function POST(req: NextRequest) {
 // GET endpoint to check backfill status
 export async function GET(req: NextRequest) {
   // Check admin authentication
-  if (!isAdminAuthenticated(req)) {
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
     return unauthorizedResponse();
   }
 

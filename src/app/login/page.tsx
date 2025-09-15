@@ -33,11 +33,25 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data?.user) {
-        toast.success('Welcome back!');
+        // Check if user is an admin using the database function
+        const { data: isAdmin } = await supabase.rpc('is_admin');
 
-        // Check if user has admin role (will be determined by database)
-        // For now, redirect everyone to dashboard
-        router.push('/dashboard');
+        if (isAdmin) {
+          // Admin user - set the admin cookie via API
+          await fetch('/api/auth/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: formData.email,
+              password: formData.password
+            })
+          });
+          toast.success('Welcome back, Admin!');
+          router.push('/admin/super');
+        } else {
+          toast.success('Welcome back!');
+          router.push('/dashboard');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');

@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Require admin authentication
-  if (!isAdminAuthenticated(req)) {
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
     return unauthorizedResponse();
   }
 

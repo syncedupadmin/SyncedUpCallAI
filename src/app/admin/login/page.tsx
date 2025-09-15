@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Lock, AlertCircle } from 'lucide-react';
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,10 +17,10 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/admin/auth', {
+      const res = await fetch('/api/auth/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ email, password })
       });
 
       const data = await res.json();
@@ -28,7 +29,7 @@ export default function AdminLoginPage() {
         // Redirect to super admin portal
         router.push('/admin/super');
       } else {
-        setError(data.error || 'Invalid password');
+        setError(data.error || 'Invalid credentials');
       }
     } catch (err) {
       setError('Authentication failed');
@@ -78,11 +79,43 @@ export default function AdminLoginPage() {
             color: '#6b6b7c',
             fontSize: 14
           }}>
-            Enter your admin password to continue
+            Enter your admin credentials to continue
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{
+              display: 'block',
+              fontSize: 12,
+              color: '#a8a8b3',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
+              Admin Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your admin email"
+              required
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                background: 'rgba(10, 10, 15, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 8,
+                color: '#ffffff',
+                fontSize: 14,
+                outline: 'none',
+                transition: 'all 0.2s'
+              }}
+            />
+          </div>
+
           <div style={{ marginBottom: 20 }}>
             <label style={{
               display: 'block',
@@ -98,9 +131,8 @@ export default function AdminLoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder="Enter your password"
               required
-              autoFocus
               style={{
                 width: '100%',
                 padding: '12px 16px',
@@ -135,7 +167,7 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={loading || !email || !password}
             className="btn btn-primary"
             style={{
               width: '100%',
