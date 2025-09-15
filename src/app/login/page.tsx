@@ -34,11 +34,22 @@ export default function LoginPage() {
 
       if (data?.user) {
         // Check if user is an admin using the database function
-        const { data: isAdmin } = await supabase.rpc('is_admin');
+        console.log('Checking admin status for user:', data.user.email);
+        const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
+        console.log('Admin check result:', { isAdmin, adminError });
+
+        if (adminError) {
+          console.error('Error checking admin status:', adminError);
+          // Default to regular user if check fails
+          toast.success('Welcome back!');
+          router.push('/dashboard');
+          return;
+        }
 
         if (isAdmin) {
           // Admin user - set the admin cookie via API
-          await fetch('/api/auth/admin', {
+          console.log('User is admin, setting cookie...');
+          const cookieRes = await fetch('/api/auth/admin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -46,8 +57,18 @@ export default function LoginPage() {
               password: formData.password
             })
           });
-          toast.success('Welcome back, Admin!');
-          router.push('/admin/super');
+
+          const cookieData = await cookieRes.json();
+          console.log('Cookie response:', cookieData);
+
+          if (cookieRes.ok && cookieData.ok) {
+            toast.success('Welcome back, Admin!');
+            router.push('/admin/super');
+          } else {
+            console.error('Failed to set admin cookie:', cookieData);
+            toast.error('Admin authentication failed');
+            router.push('/dashboard');
+          }
         } else {
           toast.success('Welcome back!');
           router.push('/dashboard');
