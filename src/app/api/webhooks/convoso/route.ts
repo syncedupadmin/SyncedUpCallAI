@@ -56,7 +56,7 @@ function verifySignature(req: NextRequest, body: string): boolean {
 
   if (webhookSecretHeader) {
     console.log('[WEBHOOK] x-webhook-secret header present, verifying...');
-    const isValid = webhookSecret && webhookSecretHeader === webhookSecret;
+    const isValid = !!(webhookSecret && webhookSecretHeader === webhookSecret);
     console.log('[WEBHOOK] x-webhook-secret validation:', isValid ? 'PASSED' : 'FAILED');
     return isValid;
   }
