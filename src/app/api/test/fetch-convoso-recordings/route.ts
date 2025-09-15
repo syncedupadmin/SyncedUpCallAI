@@ -3,7 +3,7 @@ import { db } from '@/src/server/db';
 
 export const dynamic = 'force-dynamic';
 
-// Test endpoint to fetch recordings from Convoso API with 100-call limit
+// Test endpoint to fetch recordings from Convoso API
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
@@ -12,15 +12,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       user_email,
-      limit = 100, // Default to 100, max allowed
+      lead_id,
+      limit = 10, // Default to 10, max allowed 100
       dry_run = false // If true, fetch but don't save to DB
     } = body;
 
-    // Validate inputs
-    if (!user_email) {
+    // Validate inputs - need either user_email or lead_id
+    if (!user_email && !lead_id) {
       return NextResponse.json({
         ok: false,
-        error: 'user_email is required'
+        error: 'Either user_email or lead_id is required'
       }, { status: 400 });
     }
 
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[RECORDING FETCH TEST] Starting fetch:', {
       user_email,
+      lead_id,
       limit: recordLimit,
       dry_run,
       timestamp: new Date().toISOString()
@@ -44,87 +46,168 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Prepare API request to Convoso (using correct domain)
-    const convosoUrl = 'https://api.convoso.com/v1/users/get-recordings';
-    const requestBody = {
-      auth_token: authToken,
-      user: user_email,
-      limit: recordLimit // Add limit to API request if supported
-    };
+    let recordings = [];
+    let apiResponse = null;
 
-    console.log('[RECORDING FETCH TEST] Calling Convoso API:', {
-      url: convosoUrl,
-      user: user_email,
-      limit: recordLimit
-    });
+    // Method 1: Fetch by LEAD ID (documented GET endpoint)
+    if (lead_id) {
+      console.log(`[RECORDING FETCH TEST] Fetching by lead_id: ${lead_id}`);
 
-    // Call Convoso API with detailed error handling
-    let response;
-    try {
-      console.log('[RECORDING FETCH TEST] Making request to:', convosoUrl);
-      console.log('[RECORDING FETCH TEST] Request body:', JSON.stringify(requestBody));
-
-      response = await fetch(convosoUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-    } catch (fetchError: any) {
-      console.error('[RECORDING FETCH TEST] Fetch error details:', {
-        message: fetchError.message,
-        cause: fetchError.cause,
-        stack: fetchError.stack
+      const params = new URLSearchParams({
+        auth_token: authToken,
+        lead_id: lead_id,
+        limit: recordLimit.toString()
       });
 
-      return NextResponse.json({
-        ok: false,
-        error: 'Failed to connect to Convoso API',
-        details: {
-          message: fetchError.message,
-          url: convosoUrl,
-          hint: 'This might be a network issue or incorrect API URL'
+      const url = `https://api.convoso.com/v1/lead/get-recordings?${params}`;
+      console.log('[RECORDING FETCH TEST] GET request to:', url);
+
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[RECORDING FETCH TEST] Lead API error:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          });
+
+          return NextResponse.json({
+            ok: false,
+            error: `Convoso Lead API error: ${response.status} ${response.statusText}`,
+            details: errorText
+          }, { status: response.status });
         }
-      }, { status: 500 });
+
+        apiResponse = await response.json();
+
+        // Parse response according to documented format
+        if (apiResponse.success && apiResponse.data?.entries) {
+          recordings = apiResponse.data.entries.map((entry: any) => ({
+            recording_id: entry.recording_id,
+            lead_id: entry.lead_id,
+            recording_url: entry.url,
+            start_time: entry.start_time,
+            end_time: entry.end_time,
+            duration: entry.seconds,
+            source: 'lead_api'
+          }));
+        }
+
+      } catch (fetchError: any) {
+        console.error('[RECORDING FETCH TEST] Fetch error:', fetchError);
+        return NextResponse.json({
+          ok: false,
+          error: 'Failed to connect to Convoso API',
+          details: fetchError.message
+        }, { status: 500 });
+      }
     }
 
-    // Check response status
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[RECORDING FETCH TEST] Convoso API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      });
+    // Method 2: Try various user endpoints (based on screenshots)
+    else if (user_email) {
+      console.log(`[RECORDING FETCH TEST] Fetching by user_email: ${user_email}`);
 
-      return NextResponse.json({
-        ok: false,
-        error: `Convoso API error: ${response.status} ${response.statusText}`,
-        details: errorText
-      }, { status: response.status });
+      // Try different possible endpoints for user recordings
+      const endpoints = [
+        // Possible endpoints based on the screenshots
+        { url: 'https://api.convoso.com/api/users/get-recordings', method: 'POST' },
+        { url: 'https://api.convoso.com/v1/users/recordings', method: 'POST' },
+        { url: 'https://api.convoso.com/v1/user/recordings', method: 'GET' },
+      ];
+
+      for (const endpoint of endpoints) {
+        console.log(`[RECORDING FETCH TEST] Trying ${endpoint.method} ${endpoint.url}`);
+
+        try {
+          let response;
+
+          if (endpoint.method === 'POST') {
+            // POST with JSON body
+            response = await fetch(endpoint.url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                auth_token: authToken,
+                user: user_email,
+                limit: recordLimit
+              })
+            });
+          } else {
+            // GET with query params
+            const params = new URLSearchParams({
+              auth_token: authToken,
+              user: user_email,
+              limit: recordLimit.toString()
+            });
+            response = await fetch(`${endpoint.url}?${params}`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json'
+              }
+            });
+          }
+
+          if (response.ok) {
+            apiResponse = await response.json();
+            console.log('[RECORDING FETCH TEST] Success with endpoint:', endpoint.url);
+
+            // Try to parse various response formats
+            if (Array.isArray(apiResponse)) {
+              recordings = apiResponse;
+            } else if (apiResponse.recordings) {
+              recordings = apiResponse.recordings;
+            } else if (apiResponse.data?.entries) {
+              recordings = apiResponse.data.entries;
+            } else if (apiResponse.data) {
+              recordings = Array.isArray(apiResponse.data) ? apiResponse.data : [apiResponse.data];
+            }
+
+            // Normalize the recording format
+            recordings = recordings.map((r: any) => ({
+              recording_id: r.recording_id || r.id,
+              lead_id: r.lead_id || r.LeadID,
+              recording_url: r.url || r.recording_url || r.RecordingURL,
+              start_time: r.start_time || r.StartTime,
+              end_time: r.end_time || r.EndTime,
+              duration: r.seconds || r.duration || r.Duration,
+              source: 'user_api'
+            }));
+
+            break; // Found working endpoint
+          } else {
+            console.log(`[RECORDING FETCH TEST] Failed with ${response.status} for ${endpoint.url}`);
+          }
+
+        } catch (error: any) {
+          console.log(`[RECORDING FETCH TEST] Error with ${endpoint.url}:`, error.message);
+        }
+      }
+
+      if (recordings.length === 0) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Could not find working user recordings endpoint',
+          hint: 'None of the known endpoints returned recordings. The API might have changed.'
+        }, { status: 404 });
+      }
     }
-
-    // Parse response
-    const data = await response.json();
-    console.log('[RECORDING FETCH TEST] Convoso response received:', {
-      recordCount: Array.isArray(data) ? data.length :
-                   (data.recordings ? data.recordings.length : 0),
-      hasData: !!data
-    });
-
-    // Extract recordings array (API might return array or object with recordings property)
-    const recordings = Array.isArray(data) ? data :
-                      (data.recordings || data.data || []);
 
     // Limit recordings to our maximum
     const limitedRecordings = recordings.slice(0, recordLimit);
 
     console.log('[RECORDING FETCH TEST] Processing recordings:', {
       total: recordings.length,
-      processing: limitedRecordings.length,
-      limited: recordings.length > recordLimit
+      processing: limitedRecordings.length
     });
 
     // Process and save recordings (if not dry run)
@@ -133,43 +216,21 @@ export async function POST(req: NextRequest) {
       saved: 0,
       updated: 0,
       errors: 0,
-      recordings: [] as any[]
+      recordings: limitedRecordings
     };
 
-    for (const recording of limitedRecordings) {
-      try {
-        // Extract relevant fields from Convoso recording data
-        const recordingData = {
-          lead_id: recording.lead_id || recording.LeadID,
-          call_id: recording.call_id || recording.CallID,
-          recording_url: recording.recording_url || recording.RecordingURL || recording.url,
-          agent_name: recording.agent_name || recording.AgentName,
-          agent_email: recording.agent_email || recording.AgentEmail || user_email,
-          duration: recording.duration || recording.Duration,
-          start_time: recording.start_time || recording.StartTime,
-          end_time: recording.end_time || recording.EndTime,
-          disposition: recording.disposition || recording.Disposition,
-          campaign: recording.campaign || recording.Campaign
-        };
+    if (!dry_run) {
+      for (const recording of limitedRecordings) {
+        if (!recording.recording_url || !recording.lead_id) continue;
 
-        // Add to results for response
-        results.recordings.push({
-          lead_id: recordingData.lead_id,
-          recording_url: recordingData.recording_url,
-          agent: recordingData.agent_name,
-          duration: recordingData.duration
-        });
-
-        // Save to database if not dry run
-        if (!dry_run && recordingData.recording_url) {
+        try {
           // Check if we have a call record for this lead_id
-          // Using source_ref column which should exist
           const existingCall = await db.oneOrNone(`
             SELECT id, recording_url
             FROM calls
             WHERE source_ref = $1
             LIMIT 1
-          `, [recordingData.lead_id]);
+          `, [recording.lead_id.toString()]);
 
           if (existingCall) {
             // Update existing call with recording URL
@@ -180,26 +241,22 @@ export async function POST(req: NextRequest) {
                   recording_url = $2,
                   updated_at = NOW()
                 WHERE id = $1
-              `, [existingCall.id, recordingData.recording_url]);
+              `, [existingCall.id, recording.recording_url]);
 
               results.updated++;
               console.log('[RECORDING FETCH TEST] Updated call with recording:', {
                 call_id: existingCall.id,
-                lead_id: recordingData.lead_id
+                lead_id: recording.lead_id
               });
             }
           } else {
             // Create new call record with recording
-            // Using only columns that exist in the base schema
             await db.none(`
               INSERT INTO calls (
                 id,
                 source,
                 source_ref,
                 recording_url,
-                agent_name,
-                disposition,
-                campaign,
                 started_at,
                 ended_at,
                 duration_sec,
@@ -209,12 +266,9 @@ export async function POST(req: NextRequest) {
                 'convoso',
                 $1,
                 $2,
-                $3,
-                $4,
+                $3::timestamptz,
+                $4::timestamptz,
                 $5,
-                $6::timestamptz,
-                $7::timestamptz,
-                $8,
                 NOW()
               )
               ON CONFLICT (source_ref) DO UPDATE
@@ -222,38 +276,23 @@ export async function POST(req: NextRequest) {
                 recording_url = EXCLUDED.recording_url,
                 updated_at = NOW()
             `, [
-              recordingData.lead_id,  // Using source_ref for lead_id
-              recordingData.recording_url,
-              recordingData.agent_name,
-              recordingData.disposition,
-              recordingData.campaign,
-              recordingData.start_time,
-              recordingData.end_time,
-              recordingData.duration
+              recording.lead_id.toString(),
+              recording.recording_url,
+              recording.start_time,
+              recording.end_time,
+              recording.duration
             ]);
 
             results.saved++;
             console.log('[RECORDING FETCH TEST] Created new call with recording:', {
-              lead_id: recordingData.lead_id
+              lead_id: recording.lead_id
             });
           }
 
-          // Remove from pending_recordings if exists
-          await db.none(`
-            UPDATE pending_recordings
-            SET
-              processed = true,
-              processed_at = NOW(),
-              error_message = NULL
-            WHERE lead_id = $1 AND processed = false
-          `, [recordingData.lead_id]);
+        } catch (dbError: any) {
+          console.error('[RECORDING FETCH TEST] DB error:', dbError.message);
+          results.errors++;
         }
-      } catch (recordError: any) {
-        console.error('[RECORDING FETCH TEST] Error processing recording:', {
-          error: recordError.message,
-          recording
-        });
-        results.errors++;
       }
     }
 
@@ -263,10 +302,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       message: dry_run ? 'Dry run completed (no data saved)' : 'Recordings fetched and saved',
-      user_email,
+      method: lead_id ? 'lead_id' : 'user_email',
+      query_value: lead_id || user_email,
       limit: recordLimit,
       dry_run,
       results,
+      api_response: {
+        success: apiResponse?.success,
+        total: apiResponse?.data?.total || recordings.length
+      },
       execution_time_ms: elapsed,
       timestamp: new Date().toISOString()
     });
@@ -289,11 +333,9 @@ export async function GET(req: NextRequest) {
     const recentRecordings = await db.manyOrNone(`
       SELECT
         id,
-        lead_id,
-        convoso_lead_id,
+        source_ref as lead_id,
         recording_url,
         agent_name,
-        agent_email,
         created_at,
         updated_at
       FROM calls
@@ -325,18 +367,28 @@ export async function GET(req: NextRequest) {
       })),
       instructions: {
         endpoint: 'POST /api/test/fetch-convoso-recordings',
-        required_params: {
-          user_email: 'Agent email address'
+        methods: {
+          by_lead: {
+            description: 'Fetch recordings for a specific lead',
+            required: { lead_id: 'Lead ID from Convoso' },
+            optional: { limit: 'Max 100', dry_run: 'Test without saving' }
+          },
+          by_user: {
+            description: 'Fetch all recordings for a user (experimental)',
+            required: { user_email: 'Agent email address' },
+            optional: { limit: 'Max 100', dry_run: 'Test without saving' }
+          }
         },
-        optional_params: {
-          limit: 'Max recordings to fetch (default 100, max 100)',
-          dry_run: 'If true, fetch but do not save (default false)'
-        },
-        example: {
-          user_email: 'agent@example.com',
-          limit: 10,
-          dry_run: true
-        }
+        examples: [
+          {
+            method: 'By Lead ID',
+            body: { lead_id: '12345', limit: 10, dry_run: true }
+          },
+          {
+            method: 'By User Email',
+            body: { user_email: 'agent@example.com', limit: 10, dry_run: true }
+          }
+        ]
       }
     });
 

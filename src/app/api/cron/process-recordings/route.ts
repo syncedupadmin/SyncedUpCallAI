@@ -79,17 +79,23 @@ async function fetchConvosoRecording(leadId: string, userEmail?: string): Promis
       }
     }
 
-    // Fallback to original lead-based endpoint
+    // Fallback to original lead-based endpoint (using GET with query params)
     console.log(`[PROCESS-RECORDINGS] Using lead endpoint for lead: ${leadId}`);
 
     const recordingsParams = new URLSearchParams({
       auth_token: authToken,
       lead_id: leadId,
-      limit: '1'
+      limit: '10'  // Get up to 10 recordings for this lead
     });
 
+    // Note: Using /v1/lead/get-recordings (singular "lead", not "leads")
     const recordingsUrl = `https://api.convoso.com/v1/lead/get-recordings?${recordingsParams}`;
-    const recordingsResponse = await fetch(recordingsUrl);
+    const recordingsResponse = await fetch(recordingsUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
 
     if (!recordingsResponse.ok) {
       throw new Error(`Convoso API error: ${recordingsResponse.status}`);
@@ -97,16 +103,17 @@ async function fetchConvosoRecording(leadId: string, userEmail?: string): Promis
 
     const recordingsData = await recordingsResponse.json();
 
-    // Extract recording URL from response
+    // Extract recording URL from response (using correct format from docs)
     let recordingUrl = null;
-    if (recordingsData.recordings && recordingsData.recordings.length > 0) {
-      const recording = recordingsData.recordings[0];
-      // Handle different formats of recording URLs
-      if (recording.recording_url) {
-        recordingUrl = recording.recording_url;
-      } else if (recording.file_name) {
-        // Format: "convoso_8183376356_8_1403237496-all.wav"
-        recordingUrl = recording.file_name;
+    if (recordingsData.success && recordingsData.data?.entries?.length > 0) {
+      const recording = recordingsData.data.entries[0];
+      // The URL field contains the recording file path
+      recordingUrl = recording.url;
+
+      // If it's just a filename, we might need to construct full URL
+      if (recordingUrl && !recordingUrl.startsWith('http')) {
+        // This might need a base URL from Convoso
+        console.log(`[PROCESS-RECORDINGS] Recording filename: ${recordingUrl}`);
       }
     }
 

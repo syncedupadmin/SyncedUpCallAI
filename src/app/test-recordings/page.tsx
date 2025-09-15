@@ -6,12 +6,18 @@ export default function TestRecordingsPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [email, setEmail] = useState('');
+  const [leadId, setLeadId] = useState('');
   const [limit, setLimit] = useState(10);
   const [dryRun, setDryRun] = useState(true);
+  const [method, setMethod] = useState<'email' | 'lead'>('lead');
 
   const fetchRecordings = async () => {
-    if (!email) {
+    if (method === 'email' && !email) {
       alert('Please enter an agent email');
+      return;
+    }
+    if (method === 'lead' && !leadId) {
+      alert('Please enter a lead ID');
       return;
     }
 
@@ -19,14 +25,21 @@ export default function TestRecordingsPage() {
     setResult(null);
 
     try {
+      const requestBody: any = {
+        limit: limit,
+        dry_run: dryRun
+      };
+
+      if (method === 'email') {
+        requestBody.user_email = email;
+      } else {
+        requestBody.lead_id = leadId;
+      }
+
       const response = await fetch('/api/test/fetch-convoso-recordings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_email: email,
-          limit: limit,
-          dry_run: dryRun
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
@@ -68,13 +81,11 @@ export default function TestRecordingsPage() {
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
-            Agent Email (required):
+            Method:
           </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="agent@example.com"
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value as 'email' | 'lead')}
             style={{
               width: '100%',
               padding: '8px',
@@ -82,8 +93,51 @@ export default function TestRecordingsPage() {
               border: '1px solid #ccc',
               borderRadius: '4px'
             }}
-          />
+          >
+            <option value="lead">By Lead ID (Recommended)</option>
+            <option value="email">By User Email (Experimental)</option>
+          </select>
         </div>
+
+        {method === 'lead' ? (
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>
+              Lead ID (required):
+            </label>
+            <input
+              type="text"
+              value={leadId}
+              onChange={(e) => setLeadId(e.target.value)}
+              placeholder="Enter Convoso Lead ID"
+              style={{
+                width: '100%',
+                padding: '8px',
+                fontSize: '14px',
+                border: '1px solid #ccc',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>
+              Agent Email (required):
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="agent@example.com"
+              style={{
+                width: '100%',
+                padding: '8px',
+                fontSize: '14px',
+                border: '1px solid #ccc',
+                borderRadius: '4px'
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
@@ -120,14 +174,14 @@ export default function TestRecordingsPage() {
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={fetchRecordings}
-            disabled={loading || !email}
+            disabled={loading || (method === 'email' ? !email : !leadId)}
             style={{
               padding: '10px 20px',
-              background: loading || !email ? '#ccc' : '#4CAF50',
+              background: loading || (method === 'email' ? !email : !leadId) ? '#ccc' : '#4CAF50',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: loading || !email ? 'not-allowed' : 'pointer',
+              cursor: loading || (method === 'email' ? !email : !leadId) ? 'not-allowed' : 'pointer',
               fontSize: '16px'
             }}
           >
