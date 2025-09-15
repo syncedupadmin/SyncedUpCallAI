@@ -41,24 +41,19 @@ export async function middleware(request: NextRequest) {
 
     if (!isAdmin) {
       // User is not an admin, redirect to regular dashboard
+      console.log('User is not admin, redirecting to dashboard');
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // Check for admin-auth cookie as additional verification
+    // If user is admin, allow access regardless of cookie
+    // The cookie is just an additional security layer
+    console.log('User is admin, allowing access');
+
+    // Optionally check for admin-auth cookie for extra security
+    // But don't block if it's missing - it will be set on next login
     const adminAuth = request.cookies.get('admin-auth')?.value;
-    if (!adminAuth || adminAuth !== process.env.ADMIN_SECRET) {
-      // Admin user but no valid cookie
-      // Try to set it if they're truly an admin
-      console.log('Admin user missing cookie, attempting to validate...');
-
-      // For now, let's be more lenient and just check if they're admin
-      // The cookie will be set on login
-      if (isAdmin) {
-        // Allow access even without cookie if they're a verified admin
-        return NextResponse.next();
-      }
-
-      return NextResponse.redirect(new URL('/login', request.url));
+    if (!adminAuth) {
+      console.log('Admin cookie missing, but user is verified admin - allowing access');
     }
 
     // Admin auth is valid, continue
