@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
@@ -13,6 +14,10 @@ interface BackfillOptions {
 }
 
 export async function POST(req: NextRequest) {
+  // Check admin authentication
+  if (!isAdminAuthenticated(req)) {
+    return unauthorizedResponse();
+  }
   try {
     const body: BackfillOptions = await req.json();
     const { type, startDate, endDate, limit = 100, force = false } = body;
@@ -234,6 +239,11 @@ export async function POST(req: NextRequest) {
 
 // GET endpoint to check backfill status
 export async function GET(req: NextRequest) {
+  // Check admin authentication
+  if (!isAdminAuthenticated(req)) {
+    return unauthorizedResponse();
+  }
+
   try {
     // Get recent backfill events
     const events = await db.manyOrNone(`

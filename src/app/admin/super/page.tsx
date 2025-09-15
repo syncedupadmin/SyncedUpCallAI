@@ -6,17 +6,73 @@ export default function SuperAdminPage() {
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [leadData, setLeadData] = useState<any[]>([]);
   const [callData, setCallData] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'webhooks' | 'leads' | 'calls' | 'test'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'webhooks' | 'leads' | 'calls' | 'test' | 'convoso'>('overview');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>({});
   const [testResult, setTestResult] = useState<any>(null);
   const [testLoading, setTestLoading] = useState(false);
+  const [convosoStatus, setConvosoStatus] = useState<any>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
+    fetchConvosoStatus();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchConvosoStatus();
+    }, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const fetchConvosoStatus = async () => {
+    try {
+      const res = await fetch('/api/integrations/convoso/status');
+      const data = await res.json();
+      setConvosoStatus(data);
+    } catch (error) {
+      console.error('Error fetching Convoso status:', error);
+    }
+  };
+
+  const triggerManualSync = async (type: 'delta' | 'full') => {
+    setSyncLoading(true);
+    try {
+      const endpoint = type === 'delta'
+        ? '/api/cron/convoso-delta'
+        : '/api/integrations/convoso/ingest';
+
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+
+      if (type === 'delta') {
+        headers['x-cron-secret'] = 'manual-trigger';
+      } else {
+        headers['x-jobs-secret'] = 'manual-trigger';
+      }
+
+      const res = await fetch(endpoint, {
+        method: type === 'delta' ? 'GET' : 'POST',
+        headers,
+        ...(type === 'full' && {
+          body: JSON.stringify({
+            pages: 5,
+            perPage: 100
+          })
+        })
+      });
+
+      const result = await res.json();
+      alert(`Sync ${res.ok ? 'completed' : 'failed'}: ${JSON.stringify(result)}`);
+
+      // Refresh status
+      fetchConvosoStatus();
+    } catch (error: any) {
+      alert(`Sync failed: ${error.message}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -193,6 +249,7 @@ export default function SuperAdminPage() {
           { key: 'leads', label: 'Leads', icon: '👥' },
           { key: 'calls', label: 'Calls', icon: '📞' },
           { key: 'test', label: 'Test Tools', icon: '🧪' },
+          { key: 'convoso', label: 'Convoso', icon: '🔄' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -658,6 +715,223 @@ export default function SuperAdminPage() {
     "agent_name": "Test Agent"
   }'`}
                   </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'convoso' && (
+          <div style={{ padding: 24 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 24 }}>Convoso Integration</h2>
+
+            {/* Status Overview */}
+            {convosoStatus && (
+              <div style={{
+                padding: 20,
+                background: 'rgba(0, 212, 255, 0.05)',
+                border: '1px solid rgba(0, 212, 255, 0.2)',
+                borderRadius: 8,
+                marginBottom: 24
+              }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#00d4ff' }}>
+                  System Status
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                  {/* Circuit Breaker Status */}
+                  <div style={{
+                    padding: 12,
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: 6
+                  }}>
+                    <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 4 }}>Circuit Breaker</div>
+                    <div style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: convosoStatus.circuitBreaker?.state === 'closed' ? '#10b981' : '#ef4444'
+                    }}>
+                      {convosoStatus.circuitBreaker?.state?.toUpperCase() || 'UNKNOWN'}
+                    </div>
+                    {convosoStatus.circuitBreaker?.failures > 0 && (
+                      <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>
+                        Failures: {convosoStatus.circuitBreaker.failures}/5
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Last Sync Time */}
+                  <div style={{
+                    padding: 12,
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: 6
+                  }}>
+                    <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 4 }}>Last Sync</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>
+                      {convosoStatus.lastSync ? format(new Date(convosoStatus.lastSync), 'MMM dd, HH:mm:ss') : 'Never'}
+                    </div>
+                  </div>
+
+                  {/* Total Synced */}
+                  <div style={{
+                    padding: 12,
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: 6
+                  }}>
+                    <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 4 }}>Total Synced</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>
+                      {convosoStatus.totalSynced?.toLocaleString() || 0} calls
+                    </div>
+                  </div>
+
+                  {/* Current Heartbeat */}
+                  <div style={{
+                    padding: 12,
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: 6
+                  }}>
+                    <div style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 4 }}>Heartbeat</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>
+                      {convosoStatus.heartbeat ? format(new Date(convosoStatus.heartbeat), 'HH:mm:ss') : 'No heartbeat'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Sync Controls */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                Manual Sync Controls
+              </h3>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Delta Sync */}
+                <div style={{
+                  padding: 20,
+                  background: 'rgba(16, 185, 129, 0.05)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  borderRadius: 8
+                }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#10b981' }}>
+                    Delta Sync
+                  </h4>
+                  <p style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 16 }}>
+                    Sync recent calls from the last 24-48 hours
+                  </p>
+                  <button
+                    onClick={() => triggerManualSync('delta')}
+                    disabled={syncLoading}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      width: '100%'
+                    }}
+                  >
+                    {syncLoading ? 'Syncing...' : 'Run Delta Sync'}
+                  </button>
+                </div>
+
+                {/* Full Sync */}
+                <div style={{
+                  padding: 20,
+                  background: 'rgba(124, 58, 237, 0.05)',
+                  border: '1px solid rgba(124, 58, 237, 0.2)',
+                  borderRadius: 8
+                }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#7c3aed' }}>
+                    Full Sync
+                  </h4>
+                  <p style={{ fontSize: 12, color: '#6b6b7c', marginBottom: 16 }}>
+                    Full historical sync (5 pages, 100 calls per page)
+                  </p>
+                  <button
+                    onClick={() => triggerManualSync('full')}
+                    disabled={syncLoading}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                      width: '100%'
+                    }}
+                  >
+                    {syncLoading ? 'Syncing...' : 'Run Full Sync'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync History */}
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                Recent Sync History
+              </h3>
+
+              <div style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                borderRadius: 8,
+                overflow: 'hidden'
+              }}>
+                {convosoStatus?.syncHistory && convosoStatus.syncHistory.length > 0 ? (
+                  convosoStatus.syncHistory.map((sync: any, i: number) => (
+                    <div key={i} style={{
+                      padding: 16,
+                      borderBottom: i < convosoStatus.syncHistory.length - 1 ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <span style={{
+                          padding: '2px 8px',
+                          background: sync.success ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          color: sync.success ? '#10b981' : '#ef4444',
+                          marginRight: 8
+                        }}>
+                          {sync.success ? 'SUCCESS' : 'FAILED'}
+                        </span>
+                        <span style={{ fontSize: 13, color: '#a8a8b3' }}>
+                          {sync.type === 'delta' ? 'Delta Sync' : 'Full Sync'} - {sync.count || 0} calls
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, color: '#6b6b7c' }}>
+                        {sync.timestamp ? format(new Date(sync.timestamp), 'MMM dd, HH:mm:ss') : 'Unknown'}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: 32, textAlign: 'center', color: '#6b6b7c' }}>
+                    No sync history available
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Configuration Info */}
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                Configuration
+              </h3>
+
+              <div style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                padding: 16,
+                borderRadius: 8,
+                fontFamily: 'monospace',
+                fontSize: 12
+              }}>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ color: '#6b6b7c' }}>API Endpoint: </span>
+                  <span style={{ color: '#00d4ff' }}>https://portal.convoso.com/rest/v1</span>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ color: '#6b6b7c' }}>Cron Schedule: </span>
+                  <span style={{ color: '#10b981' }}>Every 10 minutes</span>
+                </div>
+                <div>
+                  <span style={{ color: '#6b6b7c' }}>Circuit Breaker: </span>
+                  <span style={{ color: '#7c3aed' }}>5 failures trigger, 60s cooldown</span>
                 </div>
               </div>
             </div>

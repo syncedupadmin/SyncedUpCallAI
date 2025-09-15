@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    // Check auth header
-    const authHeader = req.headers.get('x-jobs-secret');
-    if (authHeader !== process.env.JOBS_SECRET) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    // Check admin authentication
+    if (!isAdminAuthenticated(req)) {
+      return unauthorizedResponse();
     }
 
     const body = await req.json();

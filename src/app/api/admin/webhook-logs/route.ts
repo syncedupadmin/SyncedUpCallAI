@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // Check admin authentication
+  if (!isAdminAuthenticated(req)) {
+    return unauthorizedResponse();
+  }
+
   try {
     // Get webhook logs from call_events table
     const logs = await db.manyOrNone(`

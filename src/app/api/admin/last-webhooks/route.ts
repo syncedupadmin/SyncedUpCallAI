@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { parsePaginationParams, createPaginatedResponse } from '@/src/lib/pagination';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // Check admin authentication
+  if (!isAdminAuthenticated(req)) {
+    return unauthorizedResponse();
+  }
+
   const { searchParams } = new URL(req.url);
   const { limit, offset } = parsePaginationParams(searchParams);
-  
+
   try {
     // Get total count
     const countResult = await db.query(`
