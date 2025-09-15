@@ -1,12 +1,16 @@
 import { createBrowserClient } from '@supabase/ssr'
 
 export function createClient() {
-  // Using the Supabase URL from the database connection
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sbvxvheirbjwfbqjreor.supabase.co'
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-  if (!supabaseAnonKey) {
-    console.warn('Supabase Anon Key not configured - auth features will not work')
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Supabase configuration missing. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.')
+    // Return a dummy client that won't work but won't crash the app
+    return createBrowserClient(
+      'https://placeholder.supabase.co',
+      'placeholder-key'
+    )
   }
 
   return createBrowserClient(

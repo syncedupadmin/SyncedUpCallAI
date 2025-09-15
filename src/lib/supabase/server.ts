@@ -4,13 +4,16 @@ import { cookies } from 'next/headers'
 export async function createClient() {
   const cookieStore = await cookies()
 
-  // Using the Supabase URL from the database connection
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sbvxvheirbjwfbqjreor.supabase.co'
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Supabase configuration missing. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.')
+  }
+
   return createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey || 'placeholder-key',
     {
       cookies: {
         get(name: string) {
