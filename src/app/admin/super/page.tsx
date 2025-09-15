@@ -175,24 +175,72 @@ export default function SuperAdminPage() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      // Call the admin auth endpoint to clear the cookie
+      await fetch('/api/auth/admin', {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      // Redirect to home or login page
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Force redirect even if the API call fails
+      window.location.href = '/';
+    }
+  };
+
   return (
     <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1600, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 40 }}>
-        <h1 style={{ 
-          fontSize: 32, 
-          fontWeight: 700,
-          background: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          marginBottom: 8
-        }}>
-          Super Admin Portal
-        </h1>
-        <p style={{ color: '#6b6b7c', fontSize: 14 }}>
-          Complete control over Convoso webhook integration and data management
-        </p>
+      <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{
+            fontSize: 32,
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            marginBottom: 8
+          }}>
+            Super Admin Portal
+          </h1>
+          <p style={{ color: '#6b6b7c', fontSize: 14 }}>
+            Complete control over Convoso webhook integration and data management
+          </p>
+        </div>
+        <button
+          onClick={handleSignOut}
+          className="btn"
+          style={{
+            padding: '10px 20px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 8,
+            color: '#ef4444',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+          }}
+        >
+          <span>🚪</span>
+          Sign Out
+        </button>
       </div>
 
       {/* Stats Grid */}
