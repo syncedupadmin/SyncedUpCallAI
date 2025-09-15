@@ -74,6 +74,20 @@ export default function CallDetailPage() {
     }
   };
 
+  // Highlight search query in transcript - define before useMemo
+  const highlightText = (text: string, query: string) => {
+    if (!query || query.length < 2) return text;
+
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, i) =>
+      regex.test(part) ?
+        `<mark style="background: #fbbf24; color: #000; padding: 2px 0">${part}</mark>` :
+        part
+    ).join('');
+  };
+
   // Process transcript with search highlighting - must be before conditional returns
   const processedTranscript = useMemo(() => {
     if (!data?.transcript?.text) return '';
@@ -138,19 +152,6 @@ export default function CallDetailPage() {
     return '#ef4444';
   };
 
-  // Highlight search query in transcript
-  const highlightText = (text: string, query: string) => {
-    if (!query || query.length < 2) return text;
-    
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
-    
-    return parts.map((part, i) => 
-      regex.test(part) ? 
-        `<mark style="background: #fbbf24; color: #000; padding: 2px 0">${part}</mark>` : 
-        part
-    ).join('');
-  };
 
 
   return (
