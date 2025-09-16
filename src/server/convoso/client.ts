@@ -166,7 +166,9 @@ export async function fetchCalls(opts: {
     params.append('end_date', to.split('T')[0]); // Extract date part
   }
 
-  const url = `${baseUrl}/lead/get-recordings?${params}`;
+  // Note: The endpoint is /leads/get-recordings (plural) not /lead/get-recordings
+  // This is based on actual testing that shows the plural version works
+  const url = `${baseUrl}/leads/get-recordings?${params}`;
 
   // Retry logic with circuit breaker
   const maxAttempts = 3;

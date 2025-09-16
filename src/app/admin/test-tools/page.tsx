@@ -30,6 +30,12 @@ export default function TestToolsPage() {
       category: 'Convoso'
     },
     {
+      name: '📤 Upload Lead IDs',
+      description: 'Upload CSV/TXT file with lead IDs to fetch recordings',
+      path: '/admin/upload-leads',
+      category: 'Convoso'
+    },
+    {
       name: '🎙️ Recording Fetch Test',
       description: 'Test fetching recordings from Convoso (legacy, max 100)',
       path: '/test-recordings',

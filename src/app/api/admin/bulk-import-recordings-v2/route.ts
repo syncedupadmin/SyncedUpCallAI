@@ -16,7 +16,7 @@ function createSSEResponse(stream: ReadableStream) {
   });
 }
 
-// Bulk import recordings from Convoso with date range and disposition filtering
+// Bulk import calls/recordings from Convoso with date range and disposition filtering
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController;
@@ -57,11 +57,12 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      console.log('[BULK IMPORT] Starting import:', {
+      console.log('[BULK IMPORT V2] Starting import:', {
         start_date,
         end_date,
         dispositions: dispositions.length,
         dry_run,
+        limit,
         timestamp: new Date().toISOString()
       });
 
@@ -72,9 +73,8 @@ export async function POST(req: NextRequest) {
         total: 0
       });
 
-      // Get Convoso auth token
-      const authToken = process.env.CONVOSO_AUTH_TOKEN;
-      if (!authToken) {
+      // Check for auth token
+      if (!process.env.CONVOSO_AUTH_TOKEN) {
         sendProgress({
           status: 'error',
           message: 'CONVOSO_AUTH_TOKEN not configured',
@@ -85,74 +85,81 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // Fetch recordings from Convoso
-      // The API might expect different date formats
-      console.log('[BULK IMPORT] Date parameters:', {
-        start_date,
-        end_date,
-        dispositions: dispositions.join(',')
-      });
+      let allCalls = [];
+      let page = 1;
+      const perPage = 100; // API max per page
+      let totalFetched = 0;
 
-      const params = new URLSearchParams({
-        auth_token: authToken,
-        start_date: start_date,
-        end_date: end_date
-      });
+      try {
+        // Fetch first page to get total
+        console.log('[BULK IMPORT V2] Fetching first page...');
+        const firstPage = await fetchCalls({
+          from: start_date,
+          to: end_date,
+          page: 1,
+          perPage
+        });
 
-      // Add limit if specified
-      if (limit) {
-        params.append('limit', limit.toString());
-      }
+        allCalls = firstPage.data;
+        totalFetched = firstPage.data.length;
+        const totalAvailable = firstPage.total;
+        const totalPages = firstPage.total_pages;
 
-      // Try different endpoint variations based on what we've learned
-      const endpoints = [
-        `https://api.convoso.com/v1/lead/get-recordings?${params}`,  // Singular 'lead'
-        `https://api.convoso.com/v1/leads/get-recordings?${params}`, // Plural 'leads'
-        `https://api.convoso.com/api/recordings?${params}`,          // Alternative path
-      ];
+        console.log('[BULK IMPORT V2] First page results:', {
+          records: firstPage.data.length,
+          total: totalAvailable,
+          totalPages: totalPages
+        });
 
-      let url = endpoints[0];
-      console.log('[BULK IMPORT] Trying endpoint:', url);
+        sendProgress({
+          status: 'fetching',
+          message: `Found ${totalAvailable} calls. Processing page 1 of ${totalPages}...`,
+          current: totalFetched,
+          total: limit || totalAvailable
+        });
 
-      sendProgress({
-        status: 'fetching',
-        message: 'Fetching recordings from Convoso...',
-        current: 0,
-        total: 0
-      });
+        // Calculate how many pages to fetch
+        let pagesToFetch = totalPages;
+        if (limit && limit < totalAvailable) {
+          pagesToFetch = Math.ceil(limit / perPage);
+        }
 
-      let response;
-      let successfulEndpoint = null;
+        // Fetch remaining pages
+        for (page = 2; page <= pagesToFetch && (!limit || allCalls.length < limit); page++) {
+          console.log(`[BULK IMPORT V2] Fetching page ${page} of ${pagesToFetch}...`);
 
-      // Try each endpoint until one works
-      for (const endpoint of endpoints) {
-        try {
-          console.log('[BULK IMPORT] Attempting:', endpoint);
-          response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json'
-            }
+          sendProgress({
+            status: 'fetching',
+            message: `Fetching page ${page} of ${pagesToFetch}...`,
+            current: allCalls.length,
+            total: limit || totalAvailable
           });
 
-          if (response.ok) {
-            successfulEndpoint = endpoint;
-            console.log('[BULK IMPORT] Success with endpoint:', endpoint);
-            break;
-          } else {
-            console.log(`[BULK IMPORT] Failed with ${response.status} for ${endpoint}`);
-          }
-        } catch (err) {
-          console.log(`[BULK IMPORT] Error with ${endpoint}:`, err);
-        }
-      }
+          const pageData = await fetchCalls({
+            from: start_date,
+            to: end_date,
+            page,
+            perPage
+          });
 
-      if (!response || !response.ok) {
-        const errorText = response ? await response.text() : 'No successful endpoint found';
-        console.error('[BULK IMPORT] All endpoints failed:', errorText);
+          allCalls = [...allCalls, ...pageData.data];
+          totalFetched += pageData.data.length;
+
+          // Stop if we've reached the limit
+          if (limit && allCalls.length >= limit) {
+            allCalls = allCalls.slice(0, limit);
+            break;
+          }
+
+          // Small delay between pages to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+      } catch (error: any) {
+        console.error('[BULK IMPORT V2] Error fetching from Convoso:', error);
         sendProgress({
           status: 'error',
-          message: `Could not connect to Convoso API. Check date format or credentials.`,
+          message: `Failed to fetch from Convoso: ${error.message}`,
           current: 0,
           total: 0
         });
@@ -160,67 +167,25 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      const apiResponse = await response.json();
-      let recordings = [];
-
-      // Parse response - try multiple formats
-      console.log('[BULK IMPORT] API Response structure:', {
-        hasSuccess: 'success' in apiResponse,
-        hasData: 'data' in apiResponse,
-        hasEntries: apiResponse.data?.entries ? true : false,
-        isArray: Array.isArray(apiResponse),
-        keys: Object.keys(apiResponse).slice(0, 10)
-      });
-
-      if (apiResponse.success && apiResponse.data?.entries) {
-        recordings = apiResponse.data.entries;
-      } else if (apiResponse.success && apiResponse.data && Array.isArray(apiResponse.data)) {
-        recordings = apiResponse.data;
-      } else if (apiResponse.data && Array.isArray(apiResponse.data)) {
-        recordings = apiResponse.data;
-      } else if (Array.isArray(apiResponse)) {
-        recordings = apiResponse;
-      } else if (apiResponse.recordings) {
-        recordings = apiResponse.recordings;
-      } else if (apiResponse.calls) {
-        recordings = apiResponse.calls;
-      }
-
-      console.log('[BULK IMPORT] Extracted recordings:', recordings.length);
-
-      console.log('[BULK IMPORT] Found recordings:', recordings.length);
-
-      // Log sample recording structure if we have any
-      if (recordings.length > 0) {
-        console.log('[BULK IMPORT] Sample recording structure:', {
-          firstRecord: recordings[0],
-          keys: Object.keys(recordings[0])
-        });
-      } else {
-        console.log('[BULK IMPORT] No recordings found. Response was:', {
-          success: apiResponse.success,
-          message: apiResponse.message,
-          error: apiResponse.error,
-          total: apiResponse.total
-        });
-      }
+      console.log('[BULK IMPORT V2] Total calls fetched:', allCalls.length);
 
       // Filter by disposition if specified
+      let filteredCalls = allCalls;
       if (dispositions.length > 0) {
-        recordings = recordings.filter((r: any) => {
-          const recordingDispo = r.disposition || r.call_disposition || '';
-          return dispositions.includes(recordingDispo);
+        filteredCalls = allCalls.filter((call: any) => {
+          const callDispo = call.disposition || '';
+          return dispositions.includes(callDispo);
         });
-        console.log('[BULK IMPORT] After disposition filter:', recordings.length);
+        console.log(`[BULK IMPORT V2] After disposition filter: ${filteredCalls.length} (from ${allCalls.length})`);
       }
 
       sendProgress({
         status: 'processing',
-        message: `Processing ${recordings.length} recordings...`,
+        message: `Processing ${filteredCalls.length} calls...`,
         current: 0,
-        total: recordings.length,
+        total: filteredCalls.length,
         stats: {
-          total: recordings.length,
+          total: filteredCalls.length,
           byAgent: {},
           byDisposition: {},
           byDuration: {
@@ -232,9 +197,9 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // Process recordings
+      // Process calls
       const stats = {
-        total: recordings.length,
+        total: filteredCalls.length,
         saved: 0,
         updated: 0,
         errors: 0,
@@ -248,13 +213,13 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      for (let i = 0; i < recordings.length; i++) {
-        const recording = recordings[i];
+      for (let i = 0; i < filteredCalls.length; i++) {
+        const call = filteredCalls[i];
 
         // Update statistics
-        const agent = recording.agent_name || recording.User || 'Unknown';
-        const disposition = recording.disposition || recording.call_disposition || 'Unknown';
-        const duration = recording.seconds || recording.duration || 0;
+        const agent = call.agent || 'Unknown';
+        const disposition = call.disposition || 'Unknown';
+        const duration = call.duration_sec || 0;
 
         stats.byAgent[agent] = (stats.byAgent[agent] || 0) + 1;
         stats.byDisposition[disposition] = (stats.byDisposition[disposition] || 0) + 1;
@@ -264,13 +229,13 @@ export async function POST(req: NextRequest) {
         else if (duration < 120) stats.byDuration.under2min++;
         else stats.byDuration.over2min++;
 
-        // Send progress update every 10 recordings
-        if (i % 10 === 0) {
+        // Send progress update every 10 calls
+        if (i % 10 === 0 || i === filteredCalls.length - 1) {
           sendProgress({
             status: 'processing',
-            message: `Processing recording ${i + 1} of ${recordings.length}...`,
+            message: `Processing call ${i + 1} of ${filteredCalls.length}...`,
             current: i + 1,
-            total: recordings.length,
+            total: filteredCalls.length,
             stats
           });
         }
@@ -279,23 +244,21 @@ export async function POST(req: NextRequest) {
         if (dry_run) continue;
 
         try {
-          // Extract recording data
+          // Extract call data
           const callData = {
-            lead_id: recording.lead_id || recording.LeadID,
-            recording_id: recording.recording_id || recording.id,
-            recording_url: recording.url || recording.recording_url || recording.RecordingURL,
-            agent_id: recording.agent_id || recording.UserID,
-            agent_name: recording.agent_name || recording.User || recording.user,
-            phone_number: recording.phone_number || recording.PhoneNumber,
-            campaign: recording.campaign || recording.Campaign,
-            disposition: recording.disposition || recording.Disposition,
-            direction: recording.direction || 'outbound',
-            duration: recording.seconds || recording.duration || recording.Duration,
-            started_at: recording.start_time || recording.StartTime,
-            ended_at: recording.end_time || recording.EndTime
+            call_id: call.id,
+            lead_id: call.lead_id,
+            recording_url: call.recording_url,
+            agent_id: call.agent_id,
+            agent_name: call.agent,
+            phone_number: call.lead_phone,
+            campaign: call.campaign,
+            disposition: call.disposition,
+            direction: call.direction || 'outbound',
+            duration: call.duration_sec,
+            started_at: call.started_at,
+            ended_at: call.ended_at
           };
-
-          if (!callData.recording_url || !callData.lead_id) continue;
 
           // Generate fingerprint for matching
           let recordingFingerprint: string | null = null;
@@ -309,15 +272,12 @@ export async function POST(req: NextRequest) {
           const existingCall = await db.oneOrNone(`
             SELECT id, recording_url, lead_id
             FROM calls
-            WHERE lead_id = $1
-              AND (
-                recording_fingerprint = $2
-                OR (started_at = $3::timestamptz AND agent_name = $4)
-              )
+            WHERE (source_ref = $1 OR id::text = $1)
+              OR (lead_id = $2 AND started_at = $3::timestamptz AND agent_name = $4)
             LIMIT 1
           `, [
+            callData.call_id,
             callData.lead_id,
-            recordingFingerprint,
             callData.started_at,
             callData.agent_name
           ]);
@@ -338,7 +298,7 @@ export async function POST(req: NextRequest) {
             }
           } else {
             // Create new call record
-            const callId = await db.one(`
+            await db.none(`
               INSERT INTO calls (
                 id,
                 source,
@@ -352,6 +312,7 @@ export async function POST(req: NextRequest) {
                 duration_sec,
                 recording_url,
                 agent_name,
+                agent_id,
                 recording_fingerprint,
                 recording_match_confidence,
                 metadata,
@@ -372,12 +333,12 @@ export async function POST(req: NextRequest) {
                 $11,
                 $12,
                 $13,
+                $14,
                 NOW()
               )
               ON CONFLICT (id) DO NOTHING
-              RETURNING id
             `, [
-              callData.recording_id || callData.lead_id,
+              callData.call_id,
               callData.lead_id,
               callData.campaign,
               callData.disposition,
@@ -387,20 +348,21 @@ export async function POST(req: NextRequest) {
               callData.duration,
               callData.recording_url,
               callData.agent_name,
+              callData.agent_id,
               recordingFingerprint,
-              'exact',
+              callData.recording_url ? 'exact' : null,
               JSON.stringify({
                 imported_at: new Date().toISOString(),
-                import_type: 'bulk',
-                raw_data: recording
+                import_type: 'bulk_v2',
+                raw_data: call.raw || call
               })
             ]);
 
-            if (callId) stats.saved++;
+            stats.saved++;
           }
 
         } catch (error: any) {
-          console.error('[BULK IMPORT] Error processing recording:', error.message);
+          console.error('[BULK IMPORT V2] Error processing call:', error.message);
           stats.errors++;
         }
       }
@@ -408,20 +370,22 @@ export async function POST(req: NextRequest) {
       // Final progress update
       sendProgress({
         status: 'complete',
-        message: `Import completed! Saved: ${stats.saved}, Updated: ${stats.updated}, Errors: ${stats.errors}`,
-        current: recordings.length,
-        total: recordings.length,
+        message: dry_run
+          ? `Dry run completed! Found ${stats.total} calls matching criteria.`
+          : `Import completed! Saved: ${stats.saved}, Updated: ${stats.updated}, Errors: ${stats.errors}`,
+        current: filteredCalls.length,
+        total: filteredCalls.length,
         stats
       });
 
-      console.log('[BULK IMPORT] Import completed:', {
+      console.log('[BULK IMPORT V2] Import completed:', {
         ...stats,
         dry_run,
         timestamp: new Date().toISOString()
       });
 
     } catch (error: any) {
-      console.error('[BULK IMPORT] Fatal error:', error);
+      console.error('[BULK IMPORT V2] Fatal error:', error);
       sendProgress({
         status: 'error',
         message: error.message || 'Import failed',
@@ -447,8 +411,6 @@ export async function GET(req: NextRequest) {
         COUNT(DISTINCT agent_name) as unique_agents,
         COUNT(recording_url) as calls_with_recordings,
         COUNT(CASE WHEN recording_match_confidence = 'exact' THEN 1 END) as exact_matches,
-        COUNT(CASE WHEN recording_match_confidence = 'fuzzy' THEN 1 END) as fuzzy_matches,
-        COUNT(CASE WHEN recording_match_confidence = 'probable' THEN 1 END) as probable_matches,
         MIN(started_at) as earliest_call,
         MAX(started_at) as latest_call
       FROM calls
@@ -468,46 +430,33 @@ export async function GET(req: NextRequest) {
       LIMIT 20
     `);
 
-    // Get agent breakdown
-    const agents = await db.manyOrNone(`
-      SELECT
-        agent_name,
-        COUNT(*) as call_count,
-        COUNT(recording_url) as recordings_count
-      FROM calls
-      WHERE source = 'convoso'
-        AND agent_name IS NOT NULL
-      GROUP BY agent_name
-      ORDER BY call_count DESC
-      LIMIT 20
-    `);
-
     return NextResponse.json({
       ok: true,
-      message: 'Bulk import endpoint ready',
+      message: 'Bulk import V2 endpoint ready',
+      description: 'This version uses the Convoso client fetchCalls function',
       database_stats: stats,
       top_dispositions: dispositions,
-      top_agents: agents,
       instructions: {
-        endpoint: 'POST /api/admin/bulk-import-recordings',
+        endpoint: 'POST /api/admin/bulk-import-recordings-v2',
         parameters: {
           start_date: 'YYYY-MM-DD format',
           end_date: 'YYYY-MM-DD format',
           dispositions: 'Array of disposition codes to filter (optional)',
           dry_run: 'Boolean - preview without saving (optional)',
-          limit: 'Maximum recordings to import (optional, no limit by default)'
+          limit: 'Maximum calls to import (optional)'
         },
         example: {
           start_date: '2025-01-01',
           end_date: '2025-01-15',
           dispositions: ['SALE', 'NI', 'INST'],
-          dry_run: false
+          dry_run: true,
+          limit: 100
         }
       }
     });
 
   } catch (error: any) {
-    console.error('[BULK IMPORT] Status check error:', error);
+    console.error('[BULK IMPORT V2] Status check error:', error);
     return NextResponse.json({
       ok: false,
       error: error.message

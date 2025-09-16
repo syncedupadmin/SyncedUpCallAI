@@ -145,7 +145,7 @@ export default function PullRecordingsPage() {
     });
 
     try {
-      const response = await fetch('/api/admin/bulk-import-recordings', {
+      const response = await fetch('/api/admin/bulk-import-recordings-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
