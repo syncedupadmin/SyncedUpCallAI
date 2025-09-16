@@ -120,7 +120,8 @@ export async function POST(req: NextRequest) {
       disposition: body.disposition,
       hasRecording: !!body.recording_url,
       authenticated: isAuthenticated,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      allFields: Object.keys(body).join(', ')
     });
 
     // Log the request for debugging
@@ -257,6 +258,16 @@ export async function POST(req: NextRequest) {
 
       // 4) Only insert into calls table when it's actually call data (not lead-only)
       if (!isLeadOnly) {
+        console.log('[WEBHOOK] About to insert call with data:', {
+          callId,
+          source: 'convoso',
+          agent_name: callData.agent_name,
+          phone_number: callData.phone_number,
+          campaign: callData.campaign,
+          disposition: callData.disposition,
+          agentId
+        });
+
         await db.none(`
           INSERT INTO calls (
             id,
@@ -292,7 +303,7 @@ export async function POST(req: NextRequest) {
             updated_at = NOW()
         `, [
           callId, // Use the canonical ID
-          'convoso',
+          'convoso', // ALWAYS use 'convoso' as source
           callData.convoso_call_id || callId,
           callData.campaign || null,
           callData.disposition || null,
