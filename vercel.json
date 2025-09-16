@@ -1,7 +1,11 @@
 {
   "crons": [
     {
-      "path": "/api/cron/process-recordings",
+      "path": "/api/cron/process-recordings-v3",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/process-transcription-queue",
       "schedule": "*/1 * * * *"
     },
     {

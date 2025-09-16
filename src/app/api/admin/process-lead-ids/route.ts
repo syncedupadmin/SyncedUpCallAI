@@ -222,10 +222,21 @@ export async function POST(req: NextRequest) {
                           updated_at = NOW()
                         WHERE id = $1
                       `, [existingCall.id, callData.recording_url]);
+
+                      // Queue for transcription since we just added the recording
+                      try {
+                        await db.none(`
+                          SELECT queue_transcription($1, $2, $3, $4)
+                        `, [existingCall.id, callData.recording_url, 5, 'lead_upload']);
+
+                        console.log(`[LEAD PROCESSOR] Queued transcription for updated call ${existingCall.id}`);
+                      } catch (queueError) {
+                        console.error(`[LEAD PROCESSOR] Failed to queue transcription:`, queueError);
+                      }
                     }
                   } else {
                     // Create new call record
-                    await db.none(`
+                    const newCallResult = await db.one(`
                       INSERT INTO calls (
                         id,
                         source,
@@ -262,6 +273,7 @@ export async function POST(req: NextRequest) {
                         NOW()
                       )
                       ON CONFLICT (id) DO NOTHING
+                      RETURNING id
                     `, [
                       callData.recording_id || `lead-${leadId}-${Date.now()}`,
                       leadId,
@@ -281,6 +293,19 @@ export async function POST(req: NextRequest) {
                         raw_data: recording
                       })
                     ]);
+
+                    // Queue the new call for transcription if it has a recording
+                    if (newCallResult && newCallResult.id && callData.recording_url) {
+                      try {
+                        await db.none(`
+                          SELECT queue_transcription($1, $2, $3, $4)
+                        `, [newCallResult.id, callData.recording_url, 5, 'lead_upload']);
+
+                        console.log(`[LEAD PROCESSOR] Queued transcription for call ${newCallResult.id}`);
+                      } catch (queueError) {
+                        console.error(`[LEAD PROCESSOR] Failed to queue transcription:`, queueError);
+                      }
+                    }
                   }
 
                 } catch (dbError: any) {

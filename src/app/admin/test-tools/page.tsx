@@ -32,7 +32,7 @@ export default function TestToolsPage() {
     {
       name: '📤 Upload Lead IDs',
       description: 'Upload CSV/TXT file with lead IDs to fetch recordings',
-      path: '/admin/upload-leads',
+      path: '/admin/super/upload-leads',
       category: 'Convoso'
     },
     {

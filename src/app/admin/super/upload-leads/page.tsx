@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface UploadStats {
@@ -23,6 +23,7 @@ interface ProgressUpdate {
 export default function UploadLeadsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [leadIds, setLeadIds] = useState<string[]>([]);
   const [previewLeads, setPreviewLeads] = useState<string[]>([]);
@@ -32,11 +33,15 @@ export default function UploadLeadsPage() {
     current: 0,
     total: 0
   });
-  const [batchSize, setBatchSize] = useState(50);
-  const [delayMs, setDelayMs] = useState(100);
-  const [dryRun, setDryRun] = useState(false);
-  const [skipExisting, setSkipExisting] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [batchSize, setBatchSize] = useState<number>(50);
+  const [delayMs, setDelayMs] = useState<number>(100);
+  const [dryRun, setDryRun] = useState<boolean>(false);
+  const [skipExisting, setSkipExisting] = useState<boolean>(true);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -194,6 +199,11 @@ export default function UploadLeadsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Prevent hydration errors by not rendering until mounted
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -202,7 +212,7 @@ export default function UploadLeadsPage() {
           <div className="flex items-center justify-between py-6">
             <div className="flex items-center">
               <button
-                onClick={() => router.push('/admin/test-tools')}
+                onClick={() => router.back()}
                 className="mr-4 rounded-lg p-2 hover:bg-gray-100"
               >
                 ←

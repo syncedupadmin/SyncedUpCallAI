@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { sleep } from '@/src/server/lib/retry';
 import { BatchProgressTracker } from '@/src/lib/sse';
+import { logInfo } from '@/src/lib/log';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,14 +25,18 @@ export async function GET(req: NextRequest) {
 
   const { rows } = await db.query(`
     with eligible as (
-      select c.id, c.recording_url
+      select c.id, c.recording_url, c.duration_sec, c.created_at
       from calls c
       left join transcripts t on t.call_id = c.id
-      where c.started_at > now() - interval '2 days'
+      left join transcription_queue tq on tq.call_id = c.id
+      where c.started_at > now() - interval '7 days'  -- Extended from 2 to 7 days
         and c.duration_sec >= 10
         and c.recording_url is not null
         and t.call_id is null
-      order by c.started_at desc
+        and (tq.call_id is null or tq.status = 'failed')  -- Not already in queue or failed
+      order by
+        c.created_at desc,  -- Prioritize recent calls
+        c.duration_sec desc  -- Then longer calls (likely more important)
       limit 10
     )
     select * from eligible
@@ -48,37 +53,39 @@ export async function GET(req: NextRequest) {
 
   for (const r of rows) {
     try {
-      const resp = await fetch(`${process.env.APP_URL}/api/jobs/transcribe`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId: r.id, recordingUrl: r.recording_url })
+      // Add to transcription queue instead of directly calling transcribe
+      // Priority based on recency and duration
+      const hoursSinceCreation = Math.floor((Date.now() - new Date(r.created_at).getTime()) / (1000 * 60 * 60));
+      const priority = Math.max(0, 5 - hoursSinceCreation); // Recent calls get higher priority
+
+      await db.none(`
+        SELECT queue_transcription($1, $2, $3, $4)
+      `, [r.id, r.recording_url, priority, 'batch']);
+
+      posted++;
+      completed++; // Count as completed since we queued it
+
+      // Update progress
+      BatchProgressTracker.updateProgress(newBatchId, {
+        posted,
+        completed,
+        failed
       });
-      
-      if (resp.ok) {
-        posted++;
-        const result = await resp.json();
-        if (result.ok) {
-          completed++;
-        }
-        // Update progress
-        BatchProgressTracker.updateProgress(newBatchId, { 
-          posted, 
-          completed,
-          failed 
-        });
-      } else {
-        failed++;
-        console.error(`Batch transcribe failed for ${r.id}:`, await resp.text());
-        BatchProgressTracker.updateProgress(newBatchId, { failed });
-      }
-      
-      // Add delay between requests to avoid overwhelming ASR services
+
+      logInfo({
+        event_type: 'batch_transcription_queued',
+        call_id: r.id,
+        priority,
+        source: 'batch'
+      });
+
+      // Small delay between queuing
       if (rows.indexOf(r) < rows.length - 1) {
-        await sleep(200);
+        await sleep(50);
       }
     } catch (error) {
       failed++;
-      console.error(`Batch transcribe error for ${r.id}:`, error);
+      console.error(`Batch queue error for ${r.id}:`, error);
       BatchProgressTracker.updateProgress(newBatchId, { failed });
     }
   }
