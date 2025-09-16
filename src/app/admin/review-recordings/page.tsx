@@ -103,7 +103,7 @@ export default function ReviewRecordingsPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Review Unmatched Recordings</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-900">Review Unmatched Recordings</h1>
 
       {loading ? (
         <div className="text-center py-8">Loading...</div>
@@ -111,7 +111,7 @@ export default function ReviewRecordingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Unmatched Recordings List */}
           <div className="border rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4">
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">
               Unmatched Recordings ({recordings.length})
             </h2>
 
@@ -124,7 +124,7 @@ export default function ReviewRecordingsPage() {
                     selectedRecording === recording.id ? 'bg-blue-50 border-blue-500' : ''
                   }`}
                 >
-                  <div className="font-medium">Lead: {recording.lead_id}</div>
+                  <div className="font-medium text-gray-900">Lead: {recording.lead_id}</div>
                   <div className="text-sm text-gray-600">
                     Recording ID: {recording.recording_id}
                   </div>
@@ -146,7 +146,7 @@ export default function ReviewRecordingsPage() {
 
           {/* Available Calls for Selected Lead */}
           <div className="border rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4">
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">
               Available Calls {calls.length > 0 && `(${calls.length})`}
             </h2>
 
@@ -160,7 +160,7 @@ export default function ReviewRecordingsPage() {
                       selectedCall === call.id ? 'bg-green-50 border-green-500' : ''
                     }`}
                   >
-                    <div className="font-medium">
+                    <div className="font-medium text-gray-900">
                       Agent: {call.agent_name || 'Unknown'}
                     </div>
                     <div className="text-sm text-gray-600">
@@ -201,7 +201,7 @@ export default function ReviewRecordingsPage() {
 
       {/* Summary Stats */}
       <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-        <h3 className="font-semibold mb-2">Matching Stats</h3>
+        <h3 className="font-semibold mb-2 text-gray-900">Matching Stats</h3>
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div>
             <span className="text-gray-600">Unmatched: </span>

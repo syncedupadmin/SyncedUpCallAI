@@ -207,7 +207,7 @@ export default function UploadLeadsPage() {
               >
                 ←
               </button>
-              <h1 className="text-2xl font-semibold">Upload Lead IDs</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">Upload Lead IDs</h1>
             </div>
           </div>
         </div>
@@ -219,7 +219,7 @@ export default function UploadLeadsPage() {
 
           {/* File Upload Section */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">Upload File</h2>
+            <h2 className="text-lg font-medium mb-4 text-gray-900">Upload File</h2>
 
             <div
               className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition"
@@ -280,7 +280,7 @@ export default function UploadLeadsPage() {
 
           {/* Processing Options */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">Processing Options</h2>
+            <h2 className="text-lg font-medium mb-4 text-gray-900">Processing Options</h2>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -364,7 +364,7 @@ export default function UploadLeadsPage() {
           {/* Progress Display */}
           {(isProcessing || progress.status !== 'idle') && (
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium mb-4">Processing Progress</h2>
+              <h2 className="text-lg font-medium mb-4 text-gray-900">Processing Progress</h2>
 
               <div className="space-y-4">
                 {/* Status Message */}
@@ -379,7 +379,7 @@ export default function UploadLeadsPage() {
                     <span className="text-2xl">❌</span>
                   )}
                   <div>
-                    <div className="font-medium">{progress.message}</div>
+                    <div className="font-medium text-gray-900">{progress.message}</div>
                     {progress.current_lead && (
                       <div className="text-sm text-gray-600">
                         Processing: {progress.current_lead}

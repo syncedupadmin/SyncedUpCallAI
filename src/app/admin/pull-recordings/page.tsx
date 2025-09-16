@@ -216,7 +216,7 @@ export default function PullRecordingsPage() {
               >
                 ←
               </button>
-              <h1 className="text-2xl font-semibold">Pull Historical Recordings</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">Pull Historical Recordings</h1>
             </div>
           </div>
         </div>
@@ -227,7 +227,7 @@ export default function PullRecordingsPage() {
         <div className="space-y-6">
           {/* Date Range Selection */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">Date Range</h2>
+            <h2 className="text-lg font-medium mb-4 text-gray-900">Date Range</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -257,7 +257,7 @@ export default function PullRecordingsPage() {
           {/* Disposition Selection */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-medium">Dispositions to Include</h2>
+              <h2 className="text-lg font-medium text-gray-900">Dispositions to Include</h2>
               <div className="space-x-2">
                 <button
                   onClick={selectAllHuman}
