@@ -7,7 +7,8 @@
       "WebFetch(domain:help.convoso.com)",
       "Bash(npx supabase db dump:*)",
       "Bash(curl:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(grep:*)"
     ]
   },
   "outputStyle": "default"

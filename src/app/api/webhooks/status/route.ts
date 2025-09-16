@@ -3,7 +3,7 @@ import { db } from '@/src/server/db';
 
 export const dynamic = 'force-dynamic';
 
-// GET endpoint to check webhook system status
+// GET endpoint to check webhook system status (per spec)
 export async function GET(req: NextRequest) {
   try {
     const now = new Date();

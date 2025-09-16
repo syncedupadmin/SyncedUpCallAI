@@ -248,6 +248,28 @@ export const db = {
     } catch (error) {
       console.error('Error closing database pool:', error);
     }
+  },
+
+  // Upsert helper for conflict resolution
+  upsert: async (table: string, data: Record<string, any>, conflict: string) => {
+    const keys = Object.keys(data);
+    const values = Object.values(data);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const updateSet = keys
+      .filter(k => k !== conflict)
+      .map(k => `${k} = EXCLUDED.${k}`)
+      .join(', ');
+
+    const query = `
+      INSERT INTO ${table} (${keys.join(', ')})
+      VALUES (${placeholders})
+      ON CONFLICT (${conflict})
+      DO UPDATE SET ${updateSet}
+      RETURNING *
+    `;
+
+    const result = await executeQuery(() => getPool().query(query, values));
+    return result.rows[0];
   }
 };
 

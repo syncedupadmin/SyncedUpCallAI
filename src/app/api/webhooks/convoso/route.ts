@@ -1,447 +1,107 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
-import crypto from 'crypto';
+import { logInfo, logError } from '@/src/lib/log';
 
 export const dynamic = 'force-dynamic';
 
-// Queue recording fetch for later processing
-async function queueRecordingFetch(callId: string, callData: any) {
-  // Skip if pending_recordings table doesn't exist
-  return;
-  
-  /* Disabled until migration is run
-  try {
-    // Schedule for 2 minutes from now
-    const scheduledFor = new Date(Date.now() + 2 * 60 * 1000);
-    
-    await db.none(`
-      INSERT INTO pending_recordings (
-        call_id,
-        lead_id,
-        convoso_call_id,
-        agent_id,
-        agent_name,
-        campaign,
-        scheduled_for,
-        metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (call_id) DO UPDATE SET
-        scheduled_for = EXCLUDED.scheduled_for,
-        attempts = 0,
-        processed = FALSE,
-        updated_at = NOW()
-    `, [
-      callId,
-      callData.lead_id,
-      callData.convoso_call_id,
-      callData.agent_id,
-      callData.agent_name,
-      callData.campaign,
-      scheduledFor,
-      JSON.stringify(callData)
-    ]);
-    
-    console.log(`Queued recording fetch for call ${callId} at ${scheduledFor.toISOString()}`);
-  } catch (error) {
-    console.error('Error queueing recording fetch:', error);
+// Validate webhook secret
+function validateWebhook(req: NextRequest): boolean {
+  const secret = req.headers.get('x-webhook-secret');
+  if (secret && process.env.WEBHOOK_SECRET) {
+    return secret === process.env.WEBHOOK_SECRET;
   }
-  */
-}
-
-// Verify webhook signature (optional)
-function verifySignature(req: NextRequest, body: string): boolean {
-  // Check for x-webhook-secret header (used by /api/hooks/convoso)
-  const webhookSecretHeader = req.headers.get('x-webhook-secret');
-  const webhookSecret = process.env.CONVOSO_WEBHOOK_SECRET;
-
-  if (webhookSecretHeader) {
-    console.log('[WEBHOOK] x-webhook-secret header present, verifying...');
-    const isValid = !!(webhookSecret && webhookSecretHeader === webhookSecret);
-    console.log('[WEBHOOK] x-webhook-secret validation:', isValid ? 'PASSED' : 'FAILED');
-    return isValid;
-  }
-
-  // Check for x-convoso-signature header (HMAC signature)
-  const signature = req.headers.get('x-convoso-signature');
-
-  // If no signature header, allow the request (for testing)
-  if (!signature) {
-    console.log('[WEBHOOK] No signature provided, allowing request');
-    return true;
-  }
-
-  // If you have a webhook secret configured, verify HMAC
-  if (webhookSecret) {
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(body)
-      .digest('hex');
-
-    const isValid = signature === expectedSignature;
-    console.log('[WEBHOOK] HMAC signature validation:', isValid ? 'PASSED' : 'FAILED');
-    return isValid;
-  }
-
-  // No secret configured, allow any request
-  console.log('[WEBHOOK] No webhook secret configured, allowing request');
+  // Allow if no secret configured (for testing)
   return true;
 }
 
 export async function POST(req: NextRequest) {
-  // Log ALL incoming webhook requests for debugging
-  console.log('[WEBHOOK] Incoming Convoso webhook request:', {
-    headers: {
-      'x-webhook-secret': req.headers.get('x-webhook-secret') ? 'present' : 'missing',
-      'x-convoso-signature': req.headers.get('x-convoso-signature') ? 'present' : 'missing',
-      'content-type': req.headers.get('content-type'),
-      'user-agent': req.headers.get('user-agent')
-    },
-    url: req.url,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
-
   try {
-    const bodyText = await req.text();
-
-    // Verify signature/authentication but don't block if it fails (log only)
-    const isAuthenticated = verifySignature(req, bodyText);
-    if (!isAuthenticated) {
-      console.warn('[WEBHOOK] Authentication failed but continuing to process');
+    // Validate webhook
+    if (!validateWebhook(req)) {
+      logError('Invalid webhook secret');
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = JSON.parse(bodyText);
+    // Parse body
+    const body = await req.json();
 
-    console.log('[WEBHOOK] Parsed body:', {
-      lead_id: body.lead_id,
-      phone_number: body.phone_number,
-      agent_name: body.agent_name,
-      campaign: body.campaign,
-      disposition: body.disposition,
-      hasRecording: !!body.recording_url,
-      authenticated: isAuthenticated,
-      timestamp: new Date().toISOString(),
-      allFields: Object.keys(body).join(', ')
-    });
-
-    // Log the request for debugging
-    console.log('Webhook received:', {
-      type: body.disposition || body.duration ? 'call' : 'lead',
-      authenticated: isAuthenticated,
-      body: body
-    });
-    
-    // 1) Derive ONE canonical callId and stick to it
-    const callId = 
-      body.call_id || 
-      body.convoso_call_id || 
-      body.CallID ||
-      body.id || 
-      crypto.randomUUID();
-    
-    // 2) Determine if this is lead-only data (no call information)
-    const isLeadOnly = 
-      !body.disposition && 
-      !body.duration && 
-      !body.duration_sec &&
-      !body.recording_url && 
-      !body.call_id && 
-      !body.convoso_call_id &&
-      !body.CallID &&
-      !body.call_duration;
-    
-    // Extract data from the webhook payload
-    const callData = {
-      call_id: callId, // Use the canonical ID
-      lead_id: body.lead_id || body.LeadID || body.lead?.id,
-      convoso_call_id: body.convoso_call_id || body.CallID || body.call_id,
-      agent_id: body.agent_id || body.UserID || body.user_id || body.agent?.id,
-      agent_name: body.agent_name || body.user || body.User || body.agent?.name || body.agent,
-      agent_email: body.agent_email || body.user_email || body.agent?.email,
-      phone_number: body.phone_number || body.customer_phone || body.phone || body.PhoneNumber ||
-                    body.lead_phone || body.customer_number || body.contact_phone ||
-                    body.to_number || body.from_number || body.lead?.phone || body.lead?.phone_number ||
-                    body.contact?.phone || body.customer?.phone,
-      campaign: body.campaign || body.campaign_name || body.Campaign,
-      disposition: body.disposition || body.call_disposition || body.Disposition,
-      direction: body.direction || body.call_direction || body.Direction || 'outbound',
-      duration: body.duration || body.duration_sec || body.call_duration || body.Duration,
-      recording_url: body.recording_url || body.recording || body.call_recording || body.RecordingURL,
-      started_at: body.started_at || body.start_time || body.call_start || body.StartTime,
-      ended_at: body.ended_at || body.end_time || body.call_end || body.EndTime,
-      notes: body.notes || body.call_notes || body.Notes,
-      // Store the complete raw webhook data
-      raw_data: body
+    // Map lead data according to spec
+    const leadData = {
+      lead_id: body.lead_id ?? body.id ?? null,
+      phone_number: body.phone_number ?? body.phone ?? null,
+      first_name: body.first_name ?? null,
+      last_name: body.last_name ?? null,
+      email: body.email ?? null,
+      list_id: body.list_id ?? null,
+      address: body.address1 ?? body.address ?? null,
+      city: body.city ?? null,
+      state: body.state ?? null
     };
 
-    // Define disposition types for filtering
-    const SYSTEM_DISPOSITIONS = [
-      'AA', 'AFAX', 'AH', 'AHXFER', 'AM', 'ANONY', 'B', 'BCHU', 'BLEND',
-      'CALLHU', 'CG', 'CGD', 'CGO', 'CGT', 'CIDB', 'CIDROP', 'CSED', 'CSI',
-      'DC', 'DELETE'
-    ];
-
-    const HUMAN_DISPOSITIONS = [
-      'NOTA', 'HU', 'A', 'N', 'INST', 'WRONG', 'NI', 'SALE', 'CNA', 'AP',
-      'FI', 'MEDI', 'LT', 'NQ', 'PD', 'CARE', 'DONC', 'NOCON', 'NOTQUD',
-      'ACAXFR', 'VERCOM', 'VERINC', 'VERDEC', 'ACAELI', 'ACATHA', 'ACAWAP'
-    ];
-
-    // Skip system dispositions to reduce webhook load by ~93%
-    if (callData.disposition && SYSTEM_DISPOSITIONS.includes(callData.disposition)) {
-      console.log('[WEBHOOK] Skipping system disposition:', {
-        disposition: callData.disposition,
-        lead_id: callData.lead_id,
-        timestamp: new Date().toISOString()
-      });
-
-      // Optionally log to a lightweight table for statistics
-      try {
-        await db.none(`
-          INSERT INTO call_events (call_id, type, payload, at)
-          VALUES (gen_random_uuid(), 'system_disposition_skipped', $1, NOW())
-        `, [JSON.stringify({ disposition: callData.disposition, lead_id: callData.lead_id })]);
-      } catch (e) {
-        // Ignore logging errors
-      }
-
-      return NextResponse.json({
-        ok: true,
-        message: 'System disposition webhook ignored',
-        disposition: callData.disposition,
-        type: 'system'
+    // Check if this looks like call data (warn but continue)
+    const hasCallFields = !!(body.agent_name && body.disposition && body.duration);
+    if (hasCallFields) {
+      logInfo({
+        event_type: 'lead_webhook_warning',
+        message: 'Received call fields in lead webhook',
+        lead_id: leadData.lead_id,
+        has_agent: !!body.agent_name,
+        has_disposition: !!body.disposition,
+        source: 'convoso'
       });
     }
 
-    // Log human disposition for tracking
-    if (callData.disposition && HUMAN_DISPOSITIONS.includes(callData.disposition)) {
-      console.log('[WEBHOOK] Processing human disposition:', {
-        disposition: callData.disposition,
-        lead_id: callData.lead_id,
-        agent: callData.agent_name,
-        timestamp: new Date().toISOString()
-      });
-    }
+    // Upsert contact if we have a lead_id
+    if (leadData.lead_id) {
+      await db.upsert('contacts', leadData, 'lead_id');
 
-    // Generate recording fingerprint for matching
-    let recordingFingerprint: string | null = null;
-    if (callData.lead_id && callData.agent_name && callData.started_at) {
-      // Normalize timestamp to seconds precision for matching
-      const startTime = new Date(callData.started_at).toISOString().split('.')[0];
-      const duration = callData.duration || 0;
-      recordingFingerprint = `${callData.lead_id}_${callData.agent_name}_${startTime}_${duration}`.toLowerCase();
-      console.log('[WEBHOOK] Generated recording fingerprint:', recordingFingerprint);
-    }
-    
-    // Store in database with error handling
-    try {
-      // 3) Upsert agent if we have agent info
-      let agentId: string | null = null;
-      if (callData.agent_id || callData.agent_name) {
+      // Queue recording fetch if no recording_url present
+      if (!body.recording_url) {
         try {
-          const agentResult = await db.oneOrNone(`
-            INSERT INTO agents (id, ext_ref, name, team, active)
-            VALUES (gen_random_uuid(), $1, $2, 'convoso', true)
-            ON CONFLICT (ext_ref) DO UPDATE SET
-              name = COALESCE(EXCLUDED.name, agents.name),
-              active = true
-            RETURNING id
-          `, [
-            callData.agent_id || callData.agent_name,
-            callData.agent_name || callData.agent_id
-          ]);
-          agentId = agentResult?.id ?? null;
-        } catch (agentError) {
-          console.log('Could not create/update agent:', agentError);
+          await db.none(`
+            INSERT INTO pending_recordings (lead_id, attempts, created_at)
+            VALUES ($1, 0, NOW())
+            ON CONFLICT DO NOTHING
+          `, [leadData.lead_id]);
+        } catch (err) {
+          logError('Failed to queue recording', err, { lead_id: leadData.lead_id });
         }
       }
-
-      // 4) Only insert into calls table when it's actually call data (not lead-only)
-      if (!isLeadOnly) {
-        console.log('[WEBHOOK] About to insert call with data:', {
-          callId,
-          source: 'convoso',
-          agent_name: callData.agent_name,
-          phone_number: callData.phone_number,
-          campaign: callData.campaign,
-          disposition: callData.disposition,
-          agentId
-        });
-
-        await db.none(`
-          INSERT INTO calls (
-            id,
-            source,
-            source_ref,
-            campaign,
-            disposition,
-            direction,
-            started_at,
-            ended_at,
-            duration_sec,
-            recording_url,
-            agent_id,
-            agent_name,
-            agent_email,
-            lead_id,
-            phone_number,
-            metadata,
-            recording_fingerprint,
-            recording_match_confidence
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-          ON CONFLICT (id) DO UPDATE SET
-            recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
-            disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
-            duration_sec = COALESCE(EXCLUDED.duration_sec, calls.duration_sec),
-            ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
-            agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
-            agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
-            agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
-            phone_number = COALESCE(EXCLUDED.phone_number, calls.phone_number),
-            metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
-            recording_fingerprint = COALESCE(EXCLUDED.recording_fingerprint, calls.recording_fingerprint),
-            updated_at = NOW()
-        `, [
-          callId, // Use the canonical ID
-          'convoso', // ALWAYS use 'convoso' as source
-          callData.convoso_call_id || callId,
-          callData.campaign || null,
-          callData.disposition || null,
-          callData.direction,
-          callData.started_at || new Date().toISOString(),
-          callData.ended_at || new Date().toISOString(),
-          callData.duration || null,
-          callData.recording_url || null,
-          agentId,
-          callData.agent_name || null,
-          callData.agent_email || null,
-          callData.lead_id || null,
-          callData.phone_number || null,
-          JSON.stringify({
-            ...callData.raw_data,
-            recording_fingerprint: recordingFingerprint,
-            webhook_received_at: new Date().toISOString(),
-            timestamp_precision: 'second'
-          }),
-          recordingFingerprint,
-          callData.recording_url ? 'exact' : null  // If recording comes with webhook, it's exact match
-        ]);
-        
-        console.log('Call saved successfully:', callId);
-        
-        // Queue recording fetch if no recording URL present
-        if (!callData.recording_url) {
-          await queueRecordingFetch(callId, callData);
-        }
-      } else {
-        console.log('Lead-only data received, skipping call insert:', callId);
-      }
-      
-      // 5) Always capture the raw payload as an event, using safe function that ensures call exists
-      try {
-        // Use the safe add_call_event function that ensures the call exists first
-        await db.one(`
-          SELECT public.add_call_event($1::uuid, $2::text, $3::jsonb, NOW()) as event_id
-        `, [
-          callId, // Use the same canonical ID
-          isLeadOnly ? 'lead_webhook_received' : 'webhook_received',
-          JSON.stringify({
-            agent_name: callData.agent_name,
-            agent_email: callData.agent_email,
-            lead_id: callData.lead_id,
-            convoso_call_id: callData.convoso_call_id,
-            phone_number: callData.phone_number,
-            raw_data: callData.raw_data
-          })
-        ]);
-      } catch (metaError) {
-        console.log('Could not store event metadata:', metaError);
-      }
-      
-    } catch (dbError: any) {
-      console.error('Database error:', dbError);
-      // Continue even if database fails - don't break the webhook
     }
-    
-    // Return success to Convoso with the canonical callId
-    return NextResponse.json({
-      ok: true,
-      message: isLeadOnly ? 'Lead data processed successfully' : 'Webhook processed successfully',
-      call_id: callId,
-      type: isLeadOnly ? 'lead' : 'call'
+
+    // Log the event
+    logInfo({
+      event_type: 'lead',
+      lead_id: leadData.lead_id,
+      has_recording: !!body.recording_url,
+      phone_number: leadData.phone_number,
+      source: 'convoso'
     });
-    
+
+    return NextResponse.json({ ok: true, type: 'lead' });
+
   } catch (error: any) {
-    console.error('Webhook error:', error);
-    
-    // Return success even on errors to prevent Convoso from retrying
-    return NextResponse.json({
-      ok: true,
-      message: 'Webhook received',
-      error: error.message
-    });
+    logError('Lead webhook failed', error);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 }
 
-// Handle GET requests to show recent calls and pending recordings
+// GET endpoint for status check
 export async function GET(req: NextRequest) {
   try {
-    // Get recent calls
-    const recentCalls = await db.manyOrNone(`
-      SELECT 
-        c.id,
-        c.source,
-        c.campaign,
-        c.disposition,
-        c.agent_id,
-        a.name as agent_name,
-        c.recording_url,
-        c.started_at
-      FROM calls c
-      LEFT JOIN agents a ON a.id = c.agent_id
-      WHERE c.source = 'convoso'
-      ORDER BY c.started_at DESC 
-      LIMIT 10
+    const recentContacts = await db.manyOrNone(`
+      SELECT COUNT(*) as count
+      FROM contacts
+      WHERE created_at > NOW() - INTERVAL '24 hours'
     `);
-    
-    // Get pending recordings (only if table exists)
-    let pendingRecordings = [];
-    try {
-      pendingRecordings = await db.manyOrNone(`
-        SELECT 
-          pr.id,
-          pr.call_id,
-          pr.lead_id,
-          pr.agent_name,
-          pr.scheduled_for,
-          pr.attempts,
-          pr.processed,
-          pr.error_message
-        FROM pending_recordings pr
-        WHERE pr.processed = FALSE
-        ORDER BY pr.scheduled_for ASC
-        LIMIT 10
-      `);
-    } catch (error) {
-      console.log('pending_recordings table not found');
-    }
-    
+
     return NextResponse.json({
       ok: true,
-      message: 'Convoso webhook endpoint status',
-      timestamp: new Date().toISOString(),
-      recent_calls: recentCalls,
-      pending_recordings: pendingRecordings,
-      stats: {
-        total_recent_calls: recentCalls.length,
-        pending_recordings_count: pendingRecordings.length
-      }
+      endpoint: '/api/webhooks/convoso',
+      type: 'lead/contact webhook',
+      recent_contacts: recentContacts[0]?.count || 0
     });
   } catch (error: any) {
-    console.error('Error fetching status:', error);
-    return NextResponse.json({
-      ok: false,
-      error: error.message
-    }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 }
