@@ -326,7 +326,7 @@ export default function UploadLeadsPage() {
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   disabled={isProcessing}
                 />
-                <span className="text-sm font-medium">Dry Run (preview without saving)</span>
+                <span className="text-sm font-medium text-gray-700">Dry Run (preview without saving)</span>
               </label>
 
               <label className="flex items-center space-x-2">
@@ -337,7 +337,7 @@ export default function UploadLeadsPage() {
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   disabled={isProcessing}
                 />
-                <span className="text-sm font-medium">Skip Existing Leads</span>
+                <span className="text-sm font-medium text-gray-700">Skip Existing Leads</span>
               </label>
             </div>
 
