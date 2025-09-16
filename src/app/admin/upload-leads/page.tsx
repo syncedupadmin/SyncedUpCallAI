@@ -32,8 +32,8 @@ export default function UploadLeadsPage() {
     current: 0,
     total: 0
   });
-  const [batchSize, setBatchSize] = useState(25);
-  const [delayMs, setDelayMs] = useState(500);
+  const [batchSize, setBatchSize] = useState(50);
+  const [delayMs, setDelayMs] = useState(100);
   const [dryRun, setDryRun] = useState(false);
   const [skipExisting, setSkipExisting] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -293,10 +293,10 @@ export default function UploadLeadsPage() {
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   disabled={isProcessing}
                 >
-                  <option value={10}>10 leads per batch</option>
-                  <option value={25}>25 leads per batch</option>
-                  <option value={50}>50 leads per batch</option>
-                  <option value={100}>100 leads per batch</option>
+                  <option value={10}>10 leads per batch (Slowest)</option>
+                  <option value={25}>25 leads per batch (Moderate)</option>
+                  <option value={50}>50 leads per batch (Fast)</option>
+                  <option value={100}>100 leads per batch (Fastest)</option>
                 </select>
               </div>
 

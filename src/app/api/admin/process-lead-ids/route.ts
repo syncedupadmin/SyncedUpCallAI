@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
       const body = await req.json();
       const {
         lead_ids = [],
-        batch_size = 25,
-        delay_ms = 500,
+        batch_size = 50,
+        delay_ms = 100,
         dry_run = false,
         skip_existing = true
       } = body;
@@ -302,9 +302,9 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Add delay between batches
+        // Add small delay between batches (removed the 2x multiplier)
         if (i + batch_size < lead_ids.length && delay_ms > 0) {
-          await new Promise(resolve => setTimeout(resolve, delay_ms * 2));
+          await new Promise(resolve => setTimeout(resolve, delay_ms));
         }
       }
 
