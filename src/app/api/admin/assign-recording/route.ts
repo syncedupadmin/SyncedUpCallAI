@@ -34,44 +34,41 @@ export async function POST(req: NextRequest) {
       }, { status: 404 });
     }
 
-    // Begin transaction
-    await db.tx(async t => {
-      // Update the call with the recording
-      await t.none(`
-        UPDATE calls
-        SET
-          recording_url = $1,
-          recording_matched_at = NOW(),
-          recording_match_confidence = 'manual',
-          metadata = jsonb_set(
-            COALESCE(metadata, '{}'::jsonb),
-            '{recording_match}',
-            $2::jsonb
-          ),
-          updated_at = NOW()
-        WHERE id = $3
-      `, [
-        recording.recording_url,
-        JSON.stringify({
-          recording_id: recording.conv_recording_id,
-          match_reason: 'Manual assignment by admin',
-          matched_at: new Date().toISOString(),
-          matched_by: 'admin'
-        }),
-        call_id
-      ]);
+    // Update the call with the recording
+    await db.none(`
+      UPDATE calls
+      SET
+        recording_url = $1,
+        recording_matched_at = NOW(),
+        recording_match_confidence = 'manual',
+        metadata = jsonb_set(
+          COALESCE(metadata, '{}'::jsonb),
+          '{recording_match}',
+          $2::jsonb
+        ),
+        updated_at = NOW()
+      WHERE id = $3
+    `, [
+      recording.recording_url,
+      JSON.stringify({
+        recording_id: recording.conv_recording_id,
+        match_reason: 'Manual assignment by admin',
+        matched_at: new Date().toISOString(),
+        matched_by: 'admin'
+      }),
+      call_id
+    ]);
 
-      // Mark the unmatched recording as reviewed
-      await t.none(`
-        UPDATE unmatched_recordings
-        SET
-          reviewed = TRUE,
-          reviewed_at = NOW(),
-          assigned_to_call_id = $1,
-          updated_at = NOW()
-        WHERE id = $2
-      `, [call_id, recording_id]);
-    });
+    // Mark the unmatched recording as reviewed
+    await db.none(`
+      UPDATE unmatched_recordings
+      SET
+        reviewed = TRUE,
+        reviewed_at = NOW(),
+        assigned_to_call_id = $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `, [call_id, recording_id]);
 
     console.log(`[MANUAL MATCH] Assigned recording ${recording.conv_recording_id} to call ${call_id}`);
 
