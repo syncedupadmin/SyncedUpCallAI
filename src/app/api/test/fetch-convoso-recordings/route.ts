@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         limit: recordLimit.toString()
       });
 
-      const url = `https://api.convoso.com/v1/lead/get-recordings?${params}`;
+      const url = `https://api.convoso.com/v1/leads/get-recordings?${params}`;
       console.log('[RECORDING FETCH TEST] GET request to:', url);
 
       try {

@@ -88,8 +88,8 @@ async function fetchConvosoRecording(leadId: string, userEmail?: string): Promis
       limit: '10'  // Get up to 10 recordings for this lead
     });
 
-    // Note: Using /v1/lead/get-recordings (singular "lead", not "leads")
-    const recordingsUrl = `https://api.convoso.com/v1/lead/get-recordings?${recordingsParams}`;
+    // Note: Using /v1/leads/get-recordings (plural "leads")
+    const recordingsUrl = `https://api.convoso.com/v1/leads/get-recordings?${recordingsParams}`;
     const recordingsResponse = await fetch(recordingsUrl, {
       method: 'GET',
       headers: {
