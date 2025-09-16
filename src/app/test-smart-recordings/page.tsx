@@ -67,8 +67,8 @@ export default function TestSmartRecordingsPage() {
   };
 
   return (
-    <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '28px', marginBottom: '30px' }}>
+    <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto', background: 'white', color: 'black', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '28px', marginBottom: '30px', color: 'black' }}>
         🎯 Smart Recording Matching Test
       </h1>
 
@@ -79,7 +79,7 @@ export default function TestSmartRecordingsPage() {
         marginBottom: '30px',
         color: '#000'
       }}>
-        <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Test Smart Matching Algorithm</h2>
+        <h2 style={{ fontSize: '20px', marginBottom: '20px', color: 'black' }}>Test Smart Matching Algorithm</h2>
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>

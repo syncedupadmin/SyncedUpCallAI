@@ -65,8 +65,8 @@ export default function TestRecordingsPage() {
   };
 
   return (
-    <div style={{ padding: '40px', maxWidth: '1000px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '28px', marginBottom: '30px' }}>
+    <div style={{ padding: '40px', maxWidth: '1000px', margin: '0 auto', background: 'white', color: 'black', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '28px', marginBottom: '30px', color: 'black' }}>
         🎙️ Convoso Recording Fetch Test
       </h1>
 

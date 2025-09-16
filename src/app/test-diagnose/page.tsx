@@ -38,13 +38,14 @@ export default function DiagnosePage() {
   };
 
   return (
-    <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '28px', marginBottom: '30px' }}>
+    <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto', background: 'white', color: 'black', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '28px', marginBottom: '30px', color: 'black' }}>
         🔍 Convoso API Diagnostic Tool
       </h1>
 
       <div style={{
         background: '#f0f0f0',
+        color: 'black',
         padding: '20px',
         borderRadius: '8px',
         marginBottom: '30px',
