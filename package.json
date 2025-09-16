@@ -13,6 +13,7 @@
     "backfill:meta": "node scripts/backfill-meta.cjs"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.57.4",
     "ajv": "^8.12.0",

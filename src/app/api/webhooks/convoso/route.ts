@@ -170,6 +170,55 @@ export async function POST(req: NextRequest) {
       raw_data: body
     };
 
+    // Define disposition types for filtering
+    const SYSTEM_DISPOSITIONS = [
+      'AA', 'AFAX', 'AH', 'AHXFER', 'AM', 'ANONY', 'B', 'BCHU', 'BLEND',
+      'CALLHU', 'CG', 'CGD', 'CGO', 'CGT', 'CIDB', 'CIDROP', 'CSED', 'CSI',
+      'DC', 'DELETE'
+    ];
+
+    const HUMAN_DISPOSITIONS = [
+      'NOTA', 'HU', 'A', 'N', 'INST', 'WRONG', 'NI', 'SALE', 'CNA', 'AP',
+      'FI', 'MEDI', 'LT', 'NQ', 'PD', 'CARE', 'DONC', 'NOCON', 'NOTQUD',
+      'ACAXFR', 'VERCOM', 'VERINC', 'VERDEC', 'ACAELI', 'ACATHA', 'ACAWAP'
+    ];
+
+    // Skip system dispositions to reduce webhook load by ~93%
+    if (callData.disposition && SYSTEM_DISPOSITIONS.includes(callData.disposition)) {
+      console.log('[WEBHOOK] Skipping system disposition:', {
+        disposition: callData.disposition,
+        lead_id: callData.lead_id,
+        timestamp: new Date().toISOString()
+      });
+
+      // Optionally log to a lightweight table for statistics
+      try {
+        await db.none(`
+          INSERT INTO call_events (call_id, type, payload, at)
+          VALUES (gen_random_uuid(), 'system_disposition_skipped', $1, NOW())
+        `, [JSON.stringify({ disposition: callData.disposition, lead_id: callData.lead_id })]);
+      } catch (e) {
+        // Ignore logging errors
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: 'System disposition webhook ignored',
+        disposition: callData.disposition,
+        type: 'system'
+      });
+    }
+
+    // Log human disposition for tracking
+    if (callData.disposition && HUMAN_DISPOSITIONS.includes(callData.disposition)) {
+      console.log('[WEBHOOK] Processing human disposition:', {
+        disposition: callData.disposition,
+        lead_id: callData.lead_id,
+        agent: callData.agent_name,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Generate recording fingerprint for matching
     let recordingFingerprint: string | null = null;
     if (callData.lead_id && callData.agent_name && callData.started_at) {

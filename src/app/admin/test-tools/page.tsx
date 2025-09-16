@@ -24,6 +24,12 @@ export default function TestToolsPage() {
       category: 'Convoso'
     },
     {
+      name: '📅 Pull Historical Recordings',
+      description: 'Bulk import recordings by date range with disposition filtering (NO LIMITS)',
+      path: '/admin/pull-recordings',
+      category: 'Convoso'
+    },
+    {
       name: '🎙️ Recording Fetch Test',
       description: 'Test fetching recordings from Convoso (legacy, max 100)',
       path: '/test-recordings',
@@ -174,6 +180,12 @@ export default function TestToolsPage() {
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">⚡ Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
+          <a
+            href="/admin/pull-recordings"
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
+          >
+            📅 Pull Historical Recordings
+          </a>
           <a
             href="/test-smart-recordings"
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
