@@ -48,8 +48,7 @@ export default function DiagnosePage() {
         color: 'black',
         padding: '20px',
         borderRadius: '8px',
-        marginBottom: '30px',
-        color: '#000'
+        marginBottom: '30px'
       }}>
         <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Test API Endpoints</h2>
 
