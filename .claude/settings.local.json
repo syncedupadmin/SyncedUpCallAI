@@ -8,7 +8,15 @@
       "Bash(npx supabase db dump:*)",
       "Bash(curl:*)",
       "Bash(python:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(while read dir)",
+      "Bash(do if [ ! -f \"$dir/route.ts\" ])",
+      "Bash([ ! -f \"$dir/route.js\" ])",
+      "Bash(then echo \"Missing route file in: $dir\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(npm run build:*)"
     ]
   },
   "outputStyle": "default"
