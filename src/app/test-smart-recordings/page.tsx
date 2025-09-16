@@ -82,7 +82,7 @@ export default function TestSmartRecordingsPage() {
         <h2 style={{ fontSize: '20px', marginBottom: '20px', color: 'black' }}>Test Smart Matching Algorithm</h2>
 
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'black' }}>
             Lead ID (required):
           </label>
           <input
@@ -101,7 +101,7 @@ export default function TestSmartRecordingsPage() {
         </div>
 
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'black' }}>
             Limit (max 10):
           </label>
           <input
@@ -121,7 +121,7 @@ export default function TestSmartRecordingsPage() {
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'black' }}>
             <input
               type="checkbox"
               checked={dryRun}
@@ -174,12 +174,12 @@ export default function TestSmartRecordingsPage() {
           borderRadius: '8px',
           color: '#000'
         }}>
-          <h3 style={{ fontSize: '18px', marginBottom: '15px' }}>
+          <h3 style={{ fontSize: '18px', marginBottom: '15px', color: 'black' }}>
             {result.ok ? '✅ Results' : '❌ Error'}
           </h3>
 
           {result.message && (
-            <p style={{ marginBottom: '10px' }}>{result.message}</p>
+            <p style={{ marginBottom: '10px', color: 'black' }}>{result.message}</p>
           )}
 
           {result.statistics && (
@@ -305,11 +305,11 @@ export default function TestSmartRecordingsPage() {
         borderRadius: '8px',
         color: '#0d47a1'
       }}>
-        <h3 style={{ fontSize: '16px', marginBottom: '10px' }}>
+        <h3 style={{ fontSize: '16px', marginBottom: '10px', color: 'black' }}>
           🧠 Smart Matching Algorithm
         </h3>
         <div style={{ fontSize: '14px' }}>
-          <p style={{ marginBottom: '10px' }}>
+          <p style={{ marginBottom: '10px', color: 'black' }}>
             This system uses a 3-layer confidence scoring algorithm:
           </p>
           <ul style={{ paddingLeft: '20px' }}>
@@ -318,7 +318,7 @@ export default function TestSmartRecordingsPage() {
             <li><strong>Probable Match (80%):</strong> Timestamps within 30 seconds</li>
             <li><strong>No Match:</strong> Goes to manual review queue</li>
           </ul>
-          <p style={{ marginTop: '10px', fontWeight: 'bold' }}>
+          <p style={{ marginTop: '10px', fontWeight: 'bold', color: 'black' }}>
             Target: 98%+ automatic matching accuracy, 0% wrong agent attribution
           </p>
         </div>
