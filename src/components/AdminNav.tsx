@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Shield,
-  User
+  User,
+  Wrench
 } from 'lucide-react';
 
 interface NavItem {
@@ -53,6 +54,12 @@ const navItems: NavItem[] = [
     href: '/admin/users',
     icon: Users,
     description: 'User management'
+  },
+  {
+    name: 'Test Tools',
+    href: '/admin/test-tools',
+    icon: Wrench,
+    description: 'Development & testing'
   }
 ];
 
