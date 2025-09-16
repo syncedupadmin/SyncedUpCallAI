@@ -325,7 +325,9 @@ export default function AdminCallsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredCalls.map((call) => (
+                filteredCalls.map((call, index) => {
+                  console.log(`Rendering call ${index}:`, call);
+                  return (
                   <tr
                     key={call.id}
                     className="hover:bg-gray-800/30 transition"
@@ -333,9 +335,28 @@ export default function AdminCallsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2 text-sm text-gray-300">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        {call.started_at ? format(new Date(call.started_at), 'MMM dd, yyyy') : 'N/A'}
+                        {(() => {
+                          try {
+                            if (!call.started_at) return 'N/A';
+                            const date = new Date(call.started_at);
+                            if (isNaN(date.getTime())) return 'Invalid Date';
+                            return format(date, 'MMM dd, yyyy');
+                          } catch (e) {
+                            console.error('Date format error:', e, call.started_at);
+                            return 'Error';
+                          }
+                        })()}
                         <Clock className="w-4 h-4 text-gray-500 ml-2" />
-                        {call.started_at ? format(new Date(call.started_at), 'HH:mm') : 'N/A'}
+                        {(() => {
+                          try {
+                            if (!call.started_at) return 'N/A';
+                            const date = new Date(call.started_at);
+                            if (isNaN(date.getTime())) return '--:--';
+                            return format(date, 'HH:mm');
+                          } catch (e) {
+                            return '--:--';
+                          }
+                        })()}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -403,7 +424,8 @@ export default function AdminCallsPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
