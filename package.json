@@ -37,6 +37,7 @@
     "autoprefixer": "^10.4.21",
     "dotenv": "^17.2.2",
     "madge": "^8.0.0",
+    "node-fetch": "^3.3.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.15.7",

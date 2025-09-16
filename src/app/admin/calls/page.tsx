@@ -321,7 +321,21 @@ export default function AdminCallsPage() {
               {filteredCalls.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                    No calls found (Raw calls: {calls.length}, Filtered: {filteredCalls.length})
+                    {loading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Loading calls...
+                      </div>
+                    ) : calls.length === 0 ? (
+                      <div>
+                        <p className="text-lg mb-2">No calls available</p>
+                        <p className="text-sm text-gray-600">
+                          This may be due to authentication or no data in the system.
+                        </p>
+                      </div>
+                    ) : (
+                      `No calls found matching filters (Total: ${calls.length})`
+                    )}
                   </td>
                 </tr>
               ) : (

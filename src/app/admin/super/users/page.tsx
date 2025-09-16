@@ -420,7 +420,9 @@ export default function SuperAdminUsersPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2 text-sm text-gray-300">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        {format(new Date(user.created_at), 'MMM dd, yyyy')}
+                        {user.created_at
+                          ? format(new Date(user.created_at), 'MMM dd, yyyy')
+                          : 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
