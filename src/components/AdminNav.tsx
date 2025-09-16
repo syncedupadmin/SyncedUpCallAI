@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createClient } from '@/src/lib/supabase/client';
 import {
   LayoutDashboard,
   Terminal,
@@ -14,7 +15,9 @@ import {
   X,
   Shield,
   User,
-  Wrench
+  Wrench,
+  Crown,
+  Upload
 } from 'lucide-react';
 
 interface NavItem {
@@ -22,57 +25,105 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   description?: string;
+  level?: 'admin' | 'super_admin' | 'both';
 }
-
-const navItems: NavItem[] = [
-  {
-    name: 'Dashboard',
-    href: '/admin/super',
-    icon: LayoutDashboard,
-    description: 'Main admin dashboard'
-  },
-  {
-    name: 'Operator Console',
-    href: '/admin',
-    icon: Terminal,
-    description: 'System operations'
-  },
-  {
-    name: 'Calls',
-    href: '/admin/calls',
-    icon: Phone,
-    description: 'View all calls'
-  },
-  {
-    name: 'Analytics',
-    href: '/admin/analytics',
-    icon: BarChart3,
-    description: 'System analytics'
-  },
-  {
-    name: 'Users',
-    href: '/admin/users',
-    icon: Users,
-    description: 'User management'
-  },
-  {
-    name: 'Test Tools',
-    href: '/admin/test-tools',
-    icon: Wrench,
-    description: 'Development & testing'
-  }
-];
 
 export default function AdminNav() {
   const [user, setUser] = useState<any>(null);
+  const [userLevel, setUserLevel] = useState<string>('admin');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
   const pathname = usePathname();
   const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
     checkAuthStatus();
   }, []);
+
+  useEffect(() => {
+    // Set navigation items based on user level
+    const operatorItems: NavItem[] = [
+      {
+        name: 'Dashboard',
+        href: '/admin',
+        icon: LayoutDashboard,
+        description: 'Operator dashboard'
+      },
+      {
+        name: 'Agents',
+        href: '/admin/users',
+        icon: Users,
+        description: 'Agent management'
+      },
+      {
+        name: 'Calls',
+        href: '/admin/calls',
+        icon: Phone,
+        description: 'View all calls'
+      },
+      {
+        name: 'Analytics',
+        href: '/admin/analytics',
+        icon: BarChart3,
+        description: 'System analytics'
+      },
+      {
+        name: 'Test Tools',
+        href: '/admin/test-tools',
+        icon: Wrench,
+        description: 'Development & testing'
+      }
+    ];
+
+    const superAdminItems: NavItem[] = [
+      {
+        name: 'Super Dashboard',
+        href: '/admin/super',
+        icon: Crown,
+        description: 'Super admin dashboard'
+      },
+      {
+        name: 'User Management',
+        href: '/admin/super/users',
+        icon: Shield,
+        description: 'All users & admins'
+      },
+      {
+        name: 'Upload Leads',
+        href: '/admin/super/upload-leads',
+        icon: Upload,
+        description: 'Bulk lead upload'
+      },
+      {
+        name: 'Operator Console',
+        href: '/admin',
+        icon: Terminal,
+        description: 'Switch to operator view'
+      },
+      {
+        name: 'Calls',
+        href: '/admin/calls',
+        icon: Phone,
+        description: 'View all calls'
+      },
+      {
+        name: 'Analytics',
+        href: '/admin/analytics',
+        icon: BarChart3,
+        description: 'System analytics'
+      },
+      {
+        name: 'Test Tools',
+        href: '/admin/test-tools',
+        icon: Wrench,
+        description: 'Development & testing'
+      }
+    ];
+
+    setNavItems(userLevel === 'super_admin' ? superAdminItems : operatorItems);
+  }, [userLevel]);
 
   const checkAuthStatus = async () => {
     try {
@@ -85,6 +136,12 @@ export default function AdminNav() {
         const data = await res.json();
         if (data.authenticated && data.isAdmin) {
           setUser(data.user);
+
+          // Get user level from Supabase
+          const { data: levelData } = await supabase.rpc('get_user_level');
+          if (levelData) {
+            setUserLevel(levelData);
+          }
         }
       }
     } catch (error) {
@@ -137,9 +194,17 @@ export default function AdminNav() {
           {/* Logo and Desktop Navigation */}
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <Shield className="w-8 h-8 text-red-500" />
-              <span className="ml-2 text-xl font-bold bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-                Admin Portal
+              {userLevel === 'super_admin' ? (
+                <Crown className="w-8 h-8 text-purple-500" />
+              ) : (
+                <Shield className="w-8 h-8 text-orange-500" />
+              )}
+              <span className={`ml-2 text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${
+                userLevel === 'super_admin'
+                  ? 'from-purple-500 to-pink-500'
+                  : 'from-orange-500 to-red-500'
+              }`}>
+                {userLevel === 'super_admin' ? 'Super Admin' : 'Operator Portal'}
               </span>
             </div>
 
@@ -156,7 +221,9 @@ export default function AdminNav() {
                       href={item.href}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                         active
-                          ? 'bg-gradient-to-r from-red-500/20 to-orange-500/20 text-white border border-red-500/30'
+                          ? userLevel === 'super_admin'
+                            ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
+                            : 'bg-gradient-to-r from-orange-500/20 to-red-500/20 text-white border border-orange-500/30'
                           : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                       }`}
                     >
@@ -177,7 +244,7 @@ export default function AdminNav() {
                 <div className="text-sm">
                   <div className="text-gray-300">{user.email}</div>
                   <div className="text-xs text-gray-500 uppercase tracking-wider">
-                    {user.role || 'Admin'}
+                    {userLevel === 'super_admin' ? 'Super Admin' : 'Operator'}
                   </div>
                 </div>
               </div>
@@ -185,7 +252,11 @@ export default function AdminNav() {
 
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 hover:text-red-300 transition-all"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                userLevel === 'super_admin'
+                  ? 'bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:text-purple-300'
+                  : 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:text-orange-300'
+              }`}
             >
               <LogOut className="w-4 h-4" />
               <span className="text-sm font-medium">Sign Out</span>
@@ -223,7 +294,9 @@ export default function AdminNav() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium transition-all ${
                     active
-                      ? 'bg-gradient-to-r from-red-500/20 to-orange-500/20 text-white border border-red-500/30'
+                      ? userLevel === 'super_admin'
+                        ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
+                        : 'bg-gradient-to-r from-orange-500/20 to-red-500/20 text-white border border-orange-500/30'
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
                 >
@@ -246,7 +319,7 @@ export default function AdminNav() {
                 <div>
                   <div className="text-sm text-gray-300">{user.email}</div>
                   <div className="text-xs text-gray-500 uppercase tracking-wider">
-                    {user.role || 'Admin'}
+                    {userLevel === 'super_admin' ? 'Super Admin' : 'Operator'}
                   </div>
                 </div>
               </div>
@@ -254,7 +327,11 @@ export default function AdminNav() {
 
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 hover:text-red-300 transition-all"
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-all ${
+                userLevel === 'super_admin'
+                  ? 'bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:text-purple-300'
+                  : 'bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:text-orange-300'
+              }`}
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Sign Out</span>

@@ -1,17 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
-import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
+import { createClient } from '@/src/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  // Check admin authentication
-  const isAdmin = await isAdminAuthenticated(req);
-  if (!isAdmin) {
-    return unauthorizedResponse();
-  }
-
   try {
+    // Simple check - just verify user is authenticated and is admin
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Not authenticated',
+        data: []
+      }, { status: 401 });
+    }
+
+    // Check if user is admin using the is_admin function
+    const { data: isAdmin } = await supabase.rpc('is_admin');
+
+    if (!isAdmin) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Not an admin',
+        data: []
+      }, { status: 403 });
+    }
+
+    // Fetch calls
     const calls = await db.manyOrNone(`
       SELECT
         c.id,
@@ -30,28 +48,26 @@ export async function GET(req: NextRequest) {
         c.lead_id,
         c.created_at,
         c.updated_at,
-        a.name as agent_full_name,
-        ce.payload->>'agent_name' as webhook_agent_name,
-        ce.payload->>'phone_number' as webhook_phone_number
+        a.name as agent_full_name
       FROM calls c
       LEFT JOIN agents a ON a.id = c.agent_id
-      LEFT JOIN call_events ce ON ce.call_id = c.id AND ce.type = 'webhook_received'
-      -- Show all calls, not just convoso
+      -- Show all calls
       WHERE 1=1
       ORDER BY c.created_at DESC
-      LIMIT 500
+      LIMIT 200
     `);
 
-    // Enhance with data from multiple sources
+    // Enhance with agent names
     const enhancedCalls = calls.map(call => ({
       ...call,
-      agent_name: call.agent_name || call.agent_full_name || call.webhook_agent_name,
-      phone_number: call.phone_number || call.webhook_phone_number
+      agent_name: call.agent_name || call.agent_full_name || 'Unknown',
+      phone_number: call.phone_number || 'Unknown'
     }));
 
     return NextResponse.json({
       ok: true,
-      data: enhancedCalls
+      data: enhancedCalls,
+      count: enhancedCalls.length
     });
   } catch (error: any) {
     console.error('Error fetching calls:', error);

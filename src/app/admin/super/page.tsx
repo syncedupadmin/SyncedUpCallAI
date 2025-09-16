@@ -72,6 +72,10 @@ export default function SuperAdminPage() {
 
   const fetchData = async () => {
     try {
+      // Fetch accurate stats from dedicated endpoint
+      const statsRes = await fetch('/api/admin/stats');
+      const statsData = await statsRes.json();
+
       // Fetch webhook logs
       const logsRes = await fetch('/api/admin/webhook-logs');
       const logs = await logsRes.json();
@@ -87,24 +91,50 @@ export default function SuperAdminPage() {
       const calls = await callsRes.json();
       setCallData(calls.data || []);
 
-      // Calculate stats
-      const now = new Date();
-      const today = new Date(now.setHours(0, 0, 0, 0));
-      const todayLogs = logs.data?.filter((log: any) => new Date(log.created_at) >= today) || [];
-      const todayLeads = leads.data?.filter((lead: any) => new Date(lead.created_at) >= today) || [];
-      const todayCalls = calls.data?.filter((call: any) => new Date(call.started_at) >= today) || [];
+      // Use stats from the dedicated endpoint for accurate counts
+      if (statsData.ok && statsData.stats) {
+        setStats({
+          totalWebhooks: statsData.stats.total.webhooks,
+          todayWebhooks: statsData.stats.today.webhooks,
+          totalLeads: leads.data?.length || 0,
+          todayLeads: leads.data?.filter((lead: any) => {
+            const leadDate = new Date(lead.created_at);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return leadDate >= today;
+          }).length || 0,
+          totalCalls: statsData.stats.total.calls,
+          todayCalls: statsData.stats.today.calls,
+          lastWebhook: logs.data?.[0]?.created_at,
+          lastLead: leads.data?.[0]?.created_at,
+          lastCall: calls.data?.[0]?.created_at || calls.data?.[0]?.started_at,
+        });
+      } else {
+        // Fallback to calculated stats if endpoint fails
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayLogs = logs.data?.filter((log: any) => new Date(log.created_at) >= today) || [];
+        const todayLeads = leads.data?.filter((lead: any) => new Date(lead.created_at) >= today) || [];
+        const todayCalls = calls.data?.filter((call: any) => {
+          let dateToCheck = call.created_at;
+          if (call.started_at && new Date(call.started_at).getFullYear() > 1970) {
+            dateToCheck = call.started_at;
+          }
+          return dateToCheck && new Date(dateToCheck) >= today;
+        }) || [];
 
-      setStats({
-        totalWebhooks: logs.data?.length || 0,
-        todayWebhooks: todayLogs.length,
-        totalLeads: leads.data?.length || 0,
-        todayLeads: todayLeads.length,
-        totalCalls: calls.data?.length || 0,
-        todayCalls: todayCalls.length,
-        lastWebhook: logs.data?.[0]?.created_at,
-        lastLead: leads.data?.[0]?.created_at,
-        lastCall: calls.data?.[0]?.started_at,
-      });
+        setStats({
+          totalWebhooks: logs.data?.length || 0,
+          todayWebhooks: todayLogs.length,
+          totalLeads: leads.data?.length || 0,
+          todayLeads: todayLeads.length,
+          totalCalls: calls.data?.length || 0,
+          todayCalls: todayCalls.length,
+          lastWebhook: logs.data?.[0]?.created_at,
+          lastLead: leads.data?.[0]?.created_at,
+          lastCall: calls.data?.[0]?.created_at || calls.data?.[0]?.started_at,
+        });
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     }

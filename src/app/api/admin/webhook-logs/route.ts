@@ -14,20 +14,23 @@ export async function GET(req: NextRequest) {
   try {
     // Get webhook logs from call_events table
     const logs = await db.manyOrNone(`
-      SELECT 
+      SELECT
         ce.id,
         ce.call_id,
         ce.type,
         ce.payload,
         ce.at as created_at,
+        ce.created_at as actual_created_at,
         c.source,
         c.campaign,
         c.disposition
       FROM call_events ce
       LEFT JOIN calls c ON c.id = ce.call_id
-      WHERE ce.type = 'webhook_received'
-      ORDER BY ce.at DESC
-      LIMIT 100
+      -- Show all call events, not just webhooks
+      WHERE ce.type IN ('webhook_received', 'call_created', 'system_disposition_skipped')
+        OR ce.type IS NOT NULL
+      ORDER BY COALESCE(ce.at, ce.created_at) DESC
+      LIMIT 500
     `);
 
     // Transform logs for display

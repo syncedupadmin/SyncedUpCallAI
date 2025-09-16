@@ -7,21 +7,13 @@ import { createClient } from '@/src/lib/supabase/server';
  */
 export async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
   try {
-    // First check for admin cookie as a quick validation
-    const cookieAuth = req.cookies.get('admin-auth')?.value;
-    const adminSecret = req.headers.get('x-admin-secret');
-
     // Allow header-based auth for API access (e.g., cron jobs)
+    const adminSecret = req.headers.get('x-admin-secret');
     if (adminSecret && process.env.ADMIN_SECRET) {
       return adminSecret === process.env.ADMIN_SECRET;
     }
 
-    // For UI access, require both cookie AND database role
-    if (!cookieAuth || cookieAuth !== process.env.ADMIN_SECRET) {
-      return false;
-    }
-
-    // Now verify the user actually has admin role in database
+    // Check if user is authenticated and has admin role
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -29,18 +21,26 @@ export async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
       return false;
     }
 
-    // Check if user has admin role in profiles table
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    // Check if user is an admin using the is_admin() function
+    const { data: isAdmin, error } = await supabase
+      .rpc('is_admin');
 
-    if (error || !profile || profile.role !== 'admin') {
-      return false;
+    if (error) {
+      console.error('Error calling is_admin:', error);
+      // Fallback to checking profiles table
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile || profile.role !== 'admin') {
+        return false;
+      }
+      return true;
     }
 
-    return true;
+    return isAdmin === true;
   } catch (error) {
     console.error('Error checking admin authentication:', error);
     return false;

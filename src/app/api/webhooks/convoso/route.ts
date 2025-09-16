@@ -270,10 +270,11 @@ export async function POST(req: NextRequest) {
             agent_name,
             agent_email,
             lead_id,
+            phone_number,
             metadata,
             recording_fingerprint,
             recording_match_confidence
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           ON CONFLICT (id) DO UPDATE SET
             recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
             disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
@@ -282,6 +283,7 @@ export async function POST(req: NextRequest) {
             agent_id = COALESCE(EXCLUDED.agent_id, calls.agent_id),
             agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
             agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
+            phone_number = COALESCE(EXCLUDED.phone_number, calls.phone_number),
             metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
             recording_fingerprint = COALESCE(EXCLUDED.recording_fingerprint, calls.recording_fingerprint),
             updated_at = NOW()
@@ -300,6 +302,7 @@ export async function POST(req: NextRequest) {
           callData.agent_name || null,
           callData.agent_email || null,
           callData.lead_id || null,
+          callData.phone_number || null,
           JSON.stringify({
             ...callData.raw_data,
             recording_fingerprint: recordingFingerprint,

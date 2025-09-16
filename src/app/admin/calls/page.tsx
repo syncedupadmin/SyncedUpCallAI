@@ -29,6 +29,8 @@ interface Call {
   agent_id: string;
   agent_name?: string;
   phone_number?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default function AdminCallsPage() {
@@ -48,11 +50,37 @@ export default function AdminCallsPage() {
   const fetchCalls = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/calls');
+      console.log('DEBUG - Fetching calls...');
+
+      // Try the simpler endpoint first
+      const response = await fetch('/api/admin/calls-simple');
       const data = await response.json();
 
-      if (data.ok || data.data) {
+      console.log('DEBUG - Full API response:', data);
+      console.log('Calls API response:', {
+        ok: data.ok,
+        count: data.data?.length,
+        sample: data.data?.[0]
+      });
+
+      if (data.ok) {
+        console.log('DEBUG - Setting calls data:', data.data);
         setCalls(data.data || []);
+        console.log(`Set ${data.data?.length || 0} calls to state`);
+      } else {
+        console.log('Primary endpoint failed, trying fallback...');
+        // Fallback to original endpoint
+        const fallbackResponse = await fetch('/api/admin/calls');
+        const fallbackData = await fallbackResponse.json();
+
+        console.log('Fallback response:', {
+          ok: fallbackData.ok,
+          count: fallbackData.data?.length
+        });
+
+        if (fallbackData.ok || fallbackData.data) {
+          setCalls(fallbackData.data || []);
+        }
       }
     } catch (error) {
       console.error('Error fetching calls:', error);
@@ -71,6 +99,10 @@ export default function AdminCallsPage() {
   const getFilteredCalls = () => {
     let filtered = calls;
 
+    console.log('DEBUG - Starting filter with calls:', calls.length);
+    console.log('DEBUG - First few calls:', calls.slice(0, 3));
+    console.log('DEBUG - Filters:', { searchTerm, filter, dateFilter });
+
     // Text search
     if (searchTerm) {
       filtered = filtered.filter(call =>
@@ -78,37 +110,63 @@ export default function AdminCallsPage() {
         call.agent_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         call.campaign?.toLowerCase().includes(searchTerm.toLowerCase())
       );
+      console.log('DEBUG - After search filter:', filtered.length);
     }
 
     // Direction filter
     if (filter !== 'all') {
       filtered = filtered.filter(call => call.direction === filter);
+      console.log('DEBUG - After direction filter:', filtered.length);
     }
 
     // Date filter
     if (dateFilter !== 'all' && filtered.length > 0) {
+      console.log('DEBUG - Applying date filter:', dateFilter);
       const now = new Date();
-      const today = new Date(now.setHours(0, 0, 0, 0));
-      const weekAgo = new Date(now.setDate(now.getDate() - 7));
-      const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      console.log('DEBUG - Date ranges:', { today, weekAgo, monthAgo });
 
       filtered = filtered.filter(call => {
-        if (!call.started_at) return false;
-        const callDate = new Date(call.started_at);
+        // Use created_at if started_at is invalid or missing
+        let dateToUse = call.created_at;
+        if (call.started_at) {
+          const startedDate = new Date(call.started_at);
+          if (startedDate.getFullYear() > 1970) {
+            dateToUse = call.started_at;
+          }
+        }
 
+        if (!dateToUse) {
+          console.log('DEBUG - No date found for call:', call.id);
+          return false;
+        }
+        const callDate = new Date(dateToUse);
+        console.log('DEBUG - Call date:', callDate, 'for call:', call.id);
+
+        let result = true;
         switch (dateFilter) {
           case 'today':
-            return callDate >= today;
+            result = callDate >= today;
+            break;
           case 'week':
-            return callDate >= weekAgo;
+            result = callDate >= weekAgo;
+            break;
           case 'month':
-            return callDate >= monthAgo;
+            result = callDate >= monthAgo;
+            break;
           default:
-            return true;
+            result = true;
         }
+        console.log('DEBUG - Date filter result for call', call.id, ':', result);
+        return result;
       });
+      console.log('DEBUG - After date filter:', filtered.length);
     }
 
+    console.log('DEBUG - Final filtered calls:', filtered.length);
     return filtered;
   };
 
@@ -214,6 +272,19 @@ export default function AdminCallsPage() {
         </div>
       </div>
 
+      {/* Debug Info */}
+      <div className="mb-4 p-4 bg-yellow-900/20 border border-yellow-600 rounded-lg">
+        <h3 className="text-yellow-400 font-bold mb-2">Debug Info</h3>
+        <div className="text-sm text-yellow-200">
+          <div>Calls in state: {calls.length}</div>
+          <div>Filtered calls: {filteredCalls.length}</div>
+          <div>Loading: {loading.toString()}</div>
+          <div>Search term: "{searchTerm}"</div>
+          <div>Direction filter: {filter}</div>
+          <div>Date filter: {dateFilter}</div>
+        </div>
+      </div>
+
       {/* Calls Table */}
       <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-800 overflow-hidden">
         <div className="overflow-x-auto">
@@ -250,7 +321,7 @@ export default function AdminCallsPage() {
               {filteredCalls.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                    No calls found
+                    No calls found (Raw calls: {calls.length}, Filtered: {filteredCalls.length})
                   </td>
                 </tr>
               ) : (
