@@ -20,34 +20,50 @@ export async function middleware(request: NextRequest) {
       }
     );
 
-    // Check if user is authenticated and has admin role
+    // Check if user is authenticated
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Check if user is admin using the database function
-    const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
+    // Get user's access level
+    const { data: userLevel, error: levelError } = await supabase.rpc('get_user_level');
 
     // Log for debugging
     console.log('Admin check in middleware:', {
       path: request.nextUrl.pathname,
       user: user?.email,
-      isAdmin,
-      adminError,
+      userLevel,
+      levelError,
       hasAdminCookie: !!request.cookies.get('admin-auth')?.value
     });
 
-    if (!isAdmin) {
-      // User is not an admin, redirect to regular dashboard
-      console.log('User is not admin, redirecting to dashboard');
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+    // Check access based on path
+    if (request.nextUrl.pathname.startsWith('/admin/super')) {
+      // Super admin pages require super_admin level
+      if (userLevel !== 'super_admin') {
+        console.log('User is not super admin, checking if regular admin');
+        if (userLevel === 'admin') {
+          // Regular admin trying to access super admin page
+          console.log('Regular admin redirecting to operator console');
+          return NextResponse.redirect(new URL('/admin', request.url));
+        } else {
+          // Regular user trying to access super admin page
+          console.log('Regular user redirecting to dashboard');
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+      }
+    } else {
+      // Regular admin pages require at least admin level
+      if (userLevel !== 'admin' && userLevel !== 'super_admin') {
+        console.log('User is not admin, redirecting to dashboard');
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
     }
 
-    // If user is admin, allow access regardless of cookie
-    // The cookie is just an additional security layer
-    console.log('User is admin, allowing access');
+    // User has appropriate access level
+    console.log(`User has ${userLevel} access, allowing access to ${request.nextUrl.pathname}`);
 
     // Optionally check for admin-auth cookie for extra security
     // But don't block if it's missing - it will be set on next login
@@ -123,13 +139,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Admin user redirect logic - check if user has admin role
-  // This would need to be checked from the database profile
-  // For now, we'll rely on the admin-auth cookie for admin access
-
-  // Redirect to dashboard if logged in and trying to access home or login/signup
+  // Redirect logged-in users from public pages to their appropriate portal
   if ((request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    // Get user's level to redirect to appropriate portal
+    const { data: userLevel } = await supabase.rpc('get_user_level');
+
+    switch(userLevel) {
+      case 'super_admin':
+        return NextResponse.redirect(new URL('/admin/super', request.url));
+      case 'admin':
+        return NextResponse.redirect(new URL('/admin', request.url));
+      default:
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
   }
 
   return response;

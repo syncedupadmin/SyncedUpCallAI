@@ -33,45 +33,77 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data?.user) {
-        // Check if user is an admin using the database function
-        console.log('Checking admin status for user:', data.user.email);
-        const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
-        console.log('Admin check result:', { isAdmin, adminError });
+        // Check user's access level using the database function
+        console.log('Checking access level for user:', data.user.email);
+        const { data: userLevel, error: levelError } = await supabase.rpc('get_user_level');
+        console.log('User level result:', { userLevel, levelError });
 
-        if (adminError) {
-          console.error('Error checking admin status:', adminError);
+        if (levelError) {
+          console.error('Error checking user level:', levelError);
           // Default to regular user if check fails
           toast.success('Welcome back!');
           router.push('/dashboard');
           return;
         }
 
-        if (isAdmin) {
-          // Admin user - set the admin cookie via API
-          console.log('User is admin, setting cookie...');
-          const cookieRes = await fetch('/api/auth/admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: formData.email,
-              password: formData.password
-            })
-          });
+        // Route based on user level
+        switch(userLevel) {
+          case 'super_admin':
+            // Super admin user - set the admin cookie and route to super admin portal
+            console.log('User is super admin, setting cookie...');
+            const superAdminCookieRes = await fetch('/api/auth/admin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: formData.email,
+                password: formData.password
+              })
+            });
 
-          const cookieData = await cookieRes.json();
-          console.log('Cookie response:', cookieData);
+            const superAdminCookieData = await superAdminCookieRes.json();
+            console.log('Cookie response:', superAdminCookieData);
 
-          if (cookieRes.ok && cookieData.ok) {
-            toast.success('Welcome back, Admin!');
-            router.push('/admin/super');
-          } else {
-            console.error('Failed to set admin cookie:', cookieData);
-            toast.error('Admin authentication failed');
+            if (superAdminCookieRes.ok && superAdminCookieData.ok) {
+              toast.success('Welcome back, Super Admin!');
+              router.push('/admin/super');
+            } else {
+              console.error('Failed to set admin cookie:', superAdminCookieData);
+              toast.error('Admin authentication failed');
+              router.push('/dashboard');
+            }
+            break;
+
+          case 'admin':
+            // Regular admin (operator) - set cookie and route to operator console
+            console.log('User is operator admin, setting cookie...');
+            const adminCookieRes = await fetch('/api/auth/admin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: formData.email,
+                password: formData.password
+              })
+            });
+
+            const adminCookieData = await adminCookieRes.json();
+            console.log('Cookie response:', adminCookieData);
+
+            if (adminCookieRes.ok && adminCookieData.ok) {
+              toast.success('Welcome back, Operator!');
+              router.push('/admin');
+            } else {
+              console.error('Failed to set admin cookie:', adminCookieData);
+              toast.error('Admin authentication failed');
+              router.push('/dashboard');
+            }
+            break;
+
+          case 'user':
+          default:
+            // Regular user - route to dashboard
+            toast.success('Welcome back!');
             router.push('/dashboard');
-          }
-        } else {
-          toast.success('Welcome back!');
-          router.push('/dashboard');
+            break;
         }
       }
     } catch (err: any) {
