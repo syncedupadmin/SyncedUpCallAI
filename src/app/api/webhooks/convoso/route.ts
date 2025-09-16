@@ -157,7 +157,10 @@ export async function POST(req: NextRequest) {
       agent_id: body.agent_id || body.UserID || body.user_id || body.agent?.id,
       agent_name: body.agent_name || body.user || body.User || body.agent?.name || body.agent,
       agent_email: body.agent_email || body.user_email || body.agent?.email,
-      phone_number: body.phone_number || body.customer_phone || body.phone || body.PhoneNumber,
+      phone_number: body.phone_number || body.customer_phone || body.phone || body.PhoneNumber ||
+                    body.lead_phone || body.customer_number || body.contact_phone ||
+                    body.to_number || body.from_number || body.lead?.phone || body.lead?.phone_number ||
+                    body.contact?.phone || body.customer?.phone,
       campaign: body.campaign || body.campaign_name || body.Campaign,
       disposition: body.disposition || body.call_disposition || body.Disposition,
       direction: body.direction || body.call_direction || body.Direction || 'outbound',

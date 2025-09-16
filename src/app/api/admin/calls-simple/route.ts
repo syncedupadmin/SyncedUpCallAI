@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // Fetch calls with better data population
+    // Fetch calls with real data
     const calls = await db.manyOrNone(`
       SELECT
         c.id,
@@ -43,11 +43,12 @@ export async function GET(req: NextRequest) {
         c.duration_sec,
         c.recording_url,
         c.agent_id,
-        COALESCE(c.agent_name, a.name, 'Test Agent') as agent_name,
-        COALESCE(c.phone_number, ct.phone_e164, ct.primary_phone, '555-0000') as phone_number,
+        COALESCE(c.agent_name, a.name) as agent_name,
+        COALESCE(c.phone_number, ct.phone_e164, ct.primary_phone) as phone_number,
         c.lead_id,
         c.created_at,
-        c.updated_at
+        c.updated_at,
+        c.metadata
       FROM calls c
       LEFT JOIN agents a ON a.id = c.agent_id
       LEFT JOIN contacts ct ON ct.id = c.contact_id
@@ -57,15 +58,32 @@ export async function GET(req: NextRequest) {
       LIMIT 200
     `);
 
-    // Enhance with fallback values for display
-    const enhancedCalls = calls.map(call => ({
-      ...call,
-      agent_name: call.agent_name || 'Test Agent',
-      phone_number: call.phone_number || '555-0000',
-      // Ensure dates are valid
-      started_at: call.started_at || call.created_at,
-      ended_at: call.ended_at || call.created_at
-    }));
+    // Enhance calls with metadata extraction for missing phone numbers
+    const enhancedCalls = calls.map(call => {
+      // Try to extract phone from metadata if main field is empty
+      let phone = call.phone_number;
+      if (!phone && call.metadata) {
+        try {
+          const meta = typeof call.metadata === 'string' ? JSON.parse(call.metadata) : call.metadata;
+          phone = meta.phone_number || meta.customer_phone || meta.phone ||
+                 meta.lead_phone || meta.to_number || meta.from_number ||
+                 meta.lead?.phone || meta.customer?.phone || null;
+        } catch (e) {
+          // Ignore JSON parse errors
+        }
+      }
+
+      return {
+        ...call,
+        agent_name: call.agent_name || null,
+        phone_number: phone || null,
+        // Ensure dates are valid
+        started_at: call.started_at || call.created_at,
+        ended_at: call.ended_at || call.created_at,
+        // Ensure direction has a value
+        direction: call.direction || 'outbound'
+      };
+    });
 
     return NextResponse.json({
       ok: true,
