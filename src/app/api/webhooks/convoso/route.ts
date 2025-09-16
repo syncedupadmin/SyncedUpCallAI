@@ -169,6 +169,16 @@ export async function POST(req: NextRequest) {
       // Store the complete raw webhook data
       raw_data: body
     };
+
+    // Generate recording fingerprint for matching
+    let recordingFingerprint: string | null = null;
+    if (callData.lead_id && callData.agent_name && callData.started_at) {
+      // Normalize timestamp to seconds precision for matching
+      const startTime = new Date(callData.started_at).toISOString().split('.')[0];
+      const duration = callData.duration || 0;
+      recordingFingerprint = `${callData.lead_id}_${callData.agent_name}_${startTime}_${duration}`.toLowerCase();
+      console.log('[WEBHOOK] Generated recording fingerprint:', recordingFingerprint);
+    }
     
     // Store in database with error handling
     try {
@@ -211,8 +221,10 @@ export async function POST(req: NextRequest) {
             agent_name,
             agent_email,
             lead_id,
-            metadata
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            metadata,
+            recording_fingerprint,
+            recording_match_confidence
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           ON CONFLICT (id) DO UPDATE SET
             recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
             disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
@@ -222,6 +234,7 @@ export async function POST(req: NextRequest) {
             agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
             agent_email = COALESCE(EXCLUDED.agent_email, calls.agent_email),
             metadata = COALESCE(EXCLUDED.metadata, calls.metadata),
+            recording_fingerprint = COALESCE(EXCLUDED.recording_fingerprint, calls.recording_fingerprint),
             updated_at = NOW()
         `, [
           callId, // Use the canonical ID
@@ -238,7 +251,14 @@ export async function POST(req: NextRequest) {
           callData.agent_name || null,
           callData.agent_email || null,
           callData.lead_id || null,
-          JSON.stringify(callData.raw_data)
+          JSON.stringify({
+            ...callData.raw_data,
+            recording_fingerprint: recordingFingerprint,
+            webhook_received_at: new Date().toISOString(),
+            timestamp_precision: 'second'
+          }),
+          recordingFingerprint,
+          callData.recording_url ? 'exact' : null  // If recording comes with webhook, it's exact match
         ]);
         
         console.log('Call saved successfully:', callId);
