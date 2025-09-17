@@ -266,7 +266,8 @@ async function processAgents(rows: any[]): Promise<UploadResult> {
       }
 
       // Check if user exists in auth
-      const { data: authUser } = await supabase.auth.admin.getUserByEmail(row.email);
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      const authUser = authUsers.users.find(user => user.email === row.email);
 
       let userId: string;
 
@@ -289,7 +290,7 @@ async function processAgents(rows: any[]): Promise<UploadResult> {
 
         userId = newUser.user.id;
       } else {
-        userId = authUser.user.id;
+        userId = authUser.id;
       }
 
       // Check for existing profile
