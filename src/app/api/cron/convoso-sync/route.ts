@@ -19,16 +19,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Check if user is admin
-    const { data: isAdmin } = await supabase
-      .from('admin_users')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
+    // Check if user is super admin using the RPC function
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
 
-    if (!isAdmin) {
+    if (!isSuperAdmin) {
       return NextResponse.json(
-        { error: 'Admin access required' },
+        { error: 'Super admin access required' },
         { status: 403 }
       );
     }
@@ -65,14 +61,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: isAdmin } = await supabase
-    .from('admin_users')
-    .select('id')
-    .eq('user_id', user.id)
-    .single();
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
 
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+  if (!isSuperAdmin) {
+    return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
   }
 
   try {

@@ -58,12 +58,15 @@ export class ConvosoSyncService {
         limit: '500'
       });
 
-      const response = await fetch(
-        `${CONVOSO_API_BASE}/reports/call-log?${params.toString()}`
-      );
+      const url = `${CONVOSO_API_BASE}/calllog/search?${params.toString()}`;
+      console.log(`[Convoso Sync] Calling API: ${url}`);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(`Convoso API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`[Convoso Sync] API error: ${response.status} - ${errorText}`);
+        throw new Error(`Convoso API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
