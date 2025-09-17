@@ -511,6 +511,40 @@ export async function POST(req: NextRequest) {
       failed: result.failed
     });
 
+    // If this was a calls upload, queue recordings fetch for calls with lead_id
+    if (type === 'calls' && result.created > 0) {
+      try {
+        // Queue recording fetch for newly created calls that have lead_id
+        const queueResult = await db.manyOrNone(`
+          INSERT INTO pending_recordings (
+            call_id, lead_id, attempts, created_at, scheduled_for, retry_phase, last_error
+          )
+          SELECT
+            c.call_id,
+            c.lead_id,
+            0,
+            NOW(),
+            NOW(), -- Schedule immediately
+            'quick',
+            'bulk_upload_auto_queue'
+          FROM calls c
+          WHERE c.source = 'bulk_upload'
+            AND c.lead_id IS NOT NULL
+            AND c.recording_url IS NULL
+            AND c.created_at > NOW() - INTERVAL '1 minute'
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        `);
+
+        if (queueResult.length > 0) {
+          console.log(`[BULK UPLOAD] Auto-queued ${queueResult.length} calls for recording fetch`);
+        }
+      } catch (queueError: any) {
+        console.error('[BULK UPLOAD] Failed to auto-queue recordings:', queueError);
+        // Don't fail the upload, just log the error
+      }
+    }
+
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('[BULK UPLOAD] Error:', error);
