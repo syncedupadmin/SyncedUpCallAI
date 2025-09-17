@@ -47,8 +47,8 @@ export default function BulkUploadPage() {
   // CSV Template structures
   const templates = {
     calls: {
-      headers: ['call_id', 'phone_number', 'agent_name', 'disposition', 'duration_sec', 'started_at', 'ended_at', 'campaign', 'recording_url'],
-      sample: ['CALL-001', '555-0123', 'John Agent', 'INTERESTED', '180', '2024-12-16 10:00:00', '2024-12-16 10:03:00', 'Campaign A', 'https://example.com/recording.mp3']
+      headers: ['lead_id', 'call_id', 'phone_number', 'agent_name', 'disposition', 'duration_sec', 'started_at', 'ended_at', 'campaign', 'recording_url'],
+      sample: ['CONVOSO-123', 'CALL-001', '555-0123', 'John Agent', 'INTERESTED', '180', '2024-12-16 10:00:00', '2024-12-16 10:03:00', 'Campaign A', 'https://example.com/recording.mp3']
     },
     leads: {
       headers: ['lead_id', 'first_name', 'last_name', 'email', 'phone_number', 'address', 'city', 'state', 'zip', 'status'],
@@ -139,34 +139,58 @@ export default function BulkUploadPage() {
 
   const validateData = (data: any[], headers: string[]) => {
     const errors: ValidationError[] = [];
-    const requiredFields = templates[selectedType].headers.slice(0, 3); // First 3 fields are required
 
     data.forEach((row) => {
-      requiredFields.forEach(field => {
-        if (!row[field] || row[field].toString().trim() === '') {
+      // Type-specific validation
+      if (selectedType === 'calls') {
+        // For calls, require either lead_id OR call_id (not both required)
+        if (!row.lead_id && !row.call_id) {
           errors.push({
             row: row._row,
-            field,
-            message: `${field} is required`
+            field: 'lead_id/call_id',
+            message: 'Either lead_id or call_id is required'
           });
         }
-      });
 
-      // Type-specific validation
-      if (selectedType === 'calls' && row.duration_sec && isNaN(Number(row.duration_sec))) {
-        errors.push({
-          row: row._row,
-          field: 'duration_sec',
-          message: 'Duration must be a number'
-        });
+        // Validate duration if provided
+        if (row.duration_sec && isNaN(Number(row.duration_sec))) {
+          errors.push({
+            row: row._row,
+            field: 'duration_sec',
+            message: 'Duration must be a number'
+          });
+        }
       }
 
-      if (selectedType === 'leads' && row.email && !row.email.includes('@')) {
-        errors.push({
-          row: row._row,
-          field: 'email',
-          message: 'Invalid email format'
-        });
+      if (selectedType === 'leads') {
+        // For leads, require lead_id OR (email OR phone_number)
+        if (!row.lead_id && !row.email && !row.phone_number) {
+          errors.push({
+            row: row._row,
+            field: 'lead_id/email/phone',
+            message: 'Either lead_id, email, or phone_number is required'
+          });
+        }
+
+        // Validate email format if provided
+        if (row.email && !row.email.includes('@')) {
+          errors.push({
+            row: row._row,
+            field: 'email',
+            message: 'Invalid email format'
+          });
+        }
+      }
+
+      if (selectedType === 'agents') {
+        // For agents, email is required
+        if (!row.email || row.email.toString().trim() === '') {
+          errors.push({
+            row: row._row,
+            field: 'email',
+            message: 'Email is required for agents'
+          });
+        }
       }
     });
 

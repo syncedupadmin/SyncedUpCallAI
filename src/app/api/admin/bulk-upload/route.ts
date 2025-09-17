@@ -62,11 +62,11 @@ async function processCalls(rows: any[]): Promise<UploadResult> {
       try {
         result.processed++;
 
-        // Validate required fields
-        if (!row.phone_number && !row.call_id) {
+        // Validate required fields - need either lead_id OR call_id
+        if (!row.lead_id && !row.call_id) {
           result.failed++;
           if (result.errors.length < 10) {
-            result.errors.push(`Row ${row._row}: Missing phone_number or call_id`);
+            result.errors.push(`Row ${row._row}: Missing lead_id or call_id`);
           }
           continue;
         }
@@ -87,6 +87,7 @@ async function processCalls(rows: any[]): Promise<UploadResult> {
         const callData = {
           call_id: row.call_id || `BULK-${Date.now()}-${row._row}`,
           source_ref: row.call_id,
+          lead_id: row.lead_id || null,
           phone_number: row.phone_number || null,
           agent_name: row.agent_name || null,
           disposition: row.disposition || null,
@@ -110,13 +111,14 @@ async function processCalls(rows: any[]): Promise<UploadResult> {
     if (toInsert.length > 0) {
       try {
         const values = toInsert.map((call, idx) =>
-          `($${idx * 11 + 1}, $${idx * 11 + 2}, $${idx * 11 + 3}, $${idx * 11 + 4}, $${idx * 11 + 5}, $${idx * 11 + 6}, $${idx * 11 + 7}, $${idx * 11 + 8}, $${idx * 11 + 9}, $${idx * 11 + 10}, $${idx * 11 + 11})`
+          `($${idx * 12 + 1}, $${idx * 12 + 2}, $${idx * 12 + 3}, $${idx * 12 + 4}, $${idx * 12 + 5}, $${idx * 12 + 6}, $${idx * 12 + 7}, $${idx * 12 + 8}, $${idx * 12 + 9}, $${idx * 12 + 10}, $${idx * 12 + 11}, $${idx * 12 + 12})`
         ).join(',');
 
         const params = toInsert.flatMap(call => [
           'bulk_upload',
           call.call_id,
           call.source_ref,
+          call.lead_id,
           call.phone_number,
           call.agent_name,
           call.disposition,
@@ -129,11 +131,12 @@ async function processCalls(rows: any[]): Promise<UploadResult> {
 
         const query = `
           INSERT INTO calls (
-            source, call_id, source_ref, phone_number, agent_name, disposition,
+            source, call_id, source_ref, lead_id, phone_number, agent_name, disposition,
             duration_sec, started_at, ended_at, campaign, recording_url
           ) VALUES ${values}
           ON CONFLICT (call_id)
           DO UPDATE SET
+            lead_id = COALESCE(EXCLUDED.lead_id, calls.lead_id),
             phone_number = COALESCE(EXCLUDED.phone_number, calls.phone_number),
             agent_name = COALESCE(EXCLUDED.agent_name, calls.agent_name),
             disposition = COALESCE(EXCLUDED.disposition, calls.disposition),
