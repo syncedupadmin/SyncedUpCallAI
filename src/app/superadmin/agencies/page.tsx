@@ -340,7 +340,7 @@ export default function AgenciesPage() {
                             onClick={() => handleDeleteOffice(office.id, office.name)}
                             className="p-1 text-red-500 hover:bg-gray-800 rounded"
                             title="Delete"
-                            disabled={office.user_count && office.user_count > 0}
+                            disabled={!!office.user_count && office.user_count > 0}
                           >
                             <Trash2 className={`w-4 h-4 ${office.user_count && office.user_count > 0 ? 'opacity-50' : ''}`} />
                           </button>
