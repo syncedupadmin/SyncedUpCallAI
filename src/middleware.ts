@@ -48,6 +48,12 @@ export async function middleware(request: NextRequest) {
     // User has super admin access
     console.log(`User has super admin access, allowing access to ${request.nextUrl.pathname}`);
 
+    // If super admin is accessing /admin, redirect to /superadmin
+    if (isSuperAdmin && request.nextUrl.pathname.startsWith('/admin')) {
+      const newPath = request.nextUrl.pathname.replace('/admin', '/superadmin');
+      return NextResponse.redirect(new URL(newPath, request.url));
+    }
+
     // Admin auth is valid, continue
     return NextResponse.next();
   }
