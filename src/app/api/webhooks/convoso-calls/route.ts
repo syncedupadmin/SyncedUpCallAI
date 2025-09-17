@@ -119,9 +119,9 @@ export async function POST(req: NextRequest) {
       INSERT INTO calls (
         call_id, lead_id, agent_name, phone_number, disposition,
         duration_sec, campaign, recording_url, started_at, ended_at,
-        contact_id, source, created_at
+        contact_id, office_id, source, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       ON CONFLICT (call_id) WHERE call_id IS NOT NULL
       DO UPDATE SET
         lead_id = COALESCE(EXCLUDED.lead_id, calls.lead_id),
@@ -133,7 +133,8 @@ export async function POST(req: NextRequest) {
         recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
         started_at = COALESCE(EXCLUDED.started_at, calls.started_at),
         ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
-        contact_id = COALESCE(EXCLUDED.contact_id, calls.contact_id)
+        contact_id = COALESCE(EXCLUDED.contact_id, calls.contact_id),
+        office_id = COALESCE(calls.office_id, 1)
       RETURNING id
     `, [
       callData.call_id,
@@ -147,6 +148,7 @@ export async function POST(req: NextRequest) {
       callData.started_at,
       callData.ended_at,
       contactId,
+      1, // Default office_id
       'convoso'
     ]);
 
