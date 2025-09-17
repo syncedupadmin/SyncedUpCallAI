@@ -1,13 +1,13 @@
 import { Metadata } from 'next';
-import AdminNav from '@/src/components/AdminNav';
+import SuperAdminNav from '@/src/components/SuperAdminNav';
 import { OfficeProvider } from '@/src/contexts/OfficeContext';
 
 export const metadata: Metadata = {
-  title: 'Admin Portal - SyncedUp Call AI',
-  description: 'Administrative dashboard for SyncedUp Call AI',
+  title: 'Super Admin Portal - SyncedUp Call AI',
+  description: 'Super Administrative dashboard for SyncedUp Call AI',
 };
 
-export default function AdminLayout({
+export default function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ export default function AdminLayout({
   return (
     <OfficeProvider>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
-        <AdminNav />
+        <SuperAdminNav />
         <main className="relative">
           {children}
         </main>
