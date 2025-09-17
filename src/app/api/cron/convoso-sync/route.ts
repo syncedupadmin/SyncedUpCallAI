@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvosoSyncService } from '@/src/lib/convoso-sync';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createClient } from '@/src/lib/supabase/server';
 
 // This can be called by cron OR manually
 export async function GET(req: NextRequest) {
@@ -9,18 +8,7 @@ export async function GET(req: NextRequest) {
   const cronSecret = req.headers.get('x-cron-secret');
   if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
     // Allow manual triggers from admin UI
-    const cookieStore = await cookies();
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-        },
-      }
-    );
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
 
