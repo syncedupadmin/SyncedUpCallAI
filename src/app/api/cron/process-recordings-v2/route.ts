@@ -10,8 +10,8 @@ function validateEnv(): boolean {
     logError('CONVOSO_API_BASE not configured');
     return false;
   }
-  if (!process.env.CONVOSO_API_KEY) {
-    logError('CONVOSO_API_KEY not configured');
+  if (!process.env.CONVOSO_AUTH_TOKEN) {
+    logError('CONVOSO_AUTH_TOKEN not configured');
     return false;
   }
   return true;
@@ -20,7 +20,7 @@ function validateEnv(): boolean {
 // Fetch recording from Convoso API
 async function fetchRecording(callId?: string, leadId?: string): Promise<string | null> {
   const apiBase = process.env.CONVOSO_API_BASE;
-  const apiKey = process.env.CONVOSO_API_KEY;
+  const apiKey = process.env.CONVOSO_AUTH_TOKEN;
 
   try {
     // Try call_id first, then lead_id

@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 // Validate webhook secret
 function validateWebhook(req: NextRequest): boolean {
   const secret = req.headers.get('x-webhook-secret');
-  if (secret && process.env.WEBHOOK_SECRET) {
-    return secret === process.env.WEBHOOK_SECRET;
+  if (secret && process.env.CONVOSO_WEBHOOK_SECRET) {
+    return secret === process.env.CONVOSO_WEBHOOK_SECRET;
   }
   // Allow if no secret configured (for testing)
   return true;

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 // Fetch recording from Convoso API
 async function fetchRecording(callId?: string, leadId?: string): Promise<string | null> {
   const apiBase = process.env.CONVOSO_API_BASE;
-  const apiKey = process.env.CONVOSO_API_KEY;
+  const apiKey = process.env.CONVOSO_AUTH_TOKEN;
 
   if (!apiBase || !apiKey) {
     logError('Convoso API credentials not configured');
@@ -63,8 +63,8 @@ async function fetchRecording(callId?: string, leadId?: string): Promise<string 
 // Validate webhook secret
 function validateWebhook(req: NextRequest): boolean {
   const secret = req.headers.get('x-webhook-secret');
-  if (secret && process.env.WEBHOOK_SECRET) {
-    return secret === process.env.WEBHOOK_SECRET;
+  if (secret && process.env.CONVOSO_WEBHOOK_SECRET) {
+    return secret === process.env.CONVOSO_WEBHOOK_SECRET;
   }
   return true; // Allow if no secret configured
 }

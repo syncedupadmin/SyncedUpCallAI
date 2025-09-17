@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 // Validate webhook secret
 function validateWebhook(req: NextRequest): boolean {
   const secret = req.headers.get('x-webhook-secret');
-  if (secret && process.env.WEBHOOK_SECRET) {
-    return secret === process.env.WEBHOOK_SECRET;
+  if (secret && process.env.CONVOSO_WEBHOOK_SECRET) {
+    return secret === process.env.CONVOSO_WEBHOOK_SECRET;
   }
   // Allow if no secret configured (for testing)
   return true;
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     const result = await db.oneOrNone(`
       INSERT INTO calls (
         call_id, lead_id, agent_name, phone_number, disposition,
-        duration, campaign, recording_url, started_at, ended_at,
+        duration_sec, campaign, recording_url, started_at, ended_at,
         contact_id, source, created_at
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         agent_name = EXCLUDED.agent_name,
         phone_number = COALESCE(EXCLUDED.phone_number, calls.phone_number),
         disposition = EXCLUDED.disposition,
-        duration = EXCLUDED.duration,
+        duration_sec = EXCLUDED.duration_sec,
         campaign = COALESCE(EXCLUDED.campaign, calls.campaign),
         recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
         started_at = COALESCE(EXCLUDED.started_at, calls.started_at),
