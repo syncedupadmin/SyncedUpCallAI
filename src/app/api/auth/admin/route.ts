@@ -1,18 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/src/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+
+export const runtime = 'nodejs'; // not edge, we need proper cookies
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
     if (!email || !password) {
-      return NextResponse.json(
+      return Response.json(
         { error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (cookies) => {
+            cookies.forEach((cookie) => {
+              cookieStore.set(cookie);
+            });
+          },
+        },
+      }
+    );
 
     // Attempt to sign in
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -21,116 +38,138 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      return NextResponse.json(
+      return Response.json(
         { error: error.message },
         { status: 401 }
       );
     }
 
     if (!data?.user) {
-      return NextResponse.json(
+      return Response.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    // Check if user is admin using the database function
-    const { data: isAdmin, error: adminCheckError } = await supabase.rpc('is_admin');
+    // Check if user is super admin using the database function
+    const { data: isSuper, error: adminCheckError } = await supabase.rpc('is_super_admin');
 
-    if (adminCheckError || !isAdmin) {
+    if (adminCheckError) {
+      return Response.json(
+        { error: adminCheckError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!isSuper) {
       // Sign out the non-admin user
       await supabase.auth.signOut();
-
-      return NextResponse.json(
+      return Response.json(
         { error: 'Access denied. Admin privileges required.' },
         { status: 403 }
       );
     }
 
-    // User is an admin, create response with admin cookie
-    const response = NextResponse.json(
-      {
-        ok: true,
-        user: {
-          email: data.user.email,
-          id: data.user.id,
-          role: 'admin'
-        }
-      },
-      { status: 200 }
-    );
-
-    // Set admin auth cookie
-    response.cookies.set('admin-auth', process.env.ADMIN_SECRET || 'admin-secret-key', {
+    // Set admin cookie
+    cookieStore.set({
+      name: 'su_admin',
+      value: 'true',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: '/'
+      sameSite: 'lax',
+      secure: true,
+      path: '/',
+      maxAge: 60 * 60 * 6, // 6 hours
     });
 
-    return response;
+    return Response.json(
+      { ok: true, user: data.user },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Admin auth error:', error);
-    return NextResponse.json(
+    return Response.json(
       { error: 'Authentication failed' },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (cookies) => {
+            cookies.forEach((cookie) => {
+              cookieStore.set(cookie);
+            });
+          },
+        },
+      }
+    );
+
     await supabase.auth.signOut();
 
-    const response = NextResponse.json(
+    // Clear admin auth cookie
+    cookieStore.delete('su_admin');
+
+    return Response.json(
       { ok: true },
       { status: 200 }
     );
-
-    // Clear admin auth cookie
-    response.cookies.delete('admin-auth');
-
-    return response;
   } catch (error) {
     console.error('Logout error:', error);
-    return NextResponse.json(
+    return Response.json(
       { error: 'Logout failed' },
       { status: 500 }
     );
   }
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        { authenticated: false },
-        { status: 401 }
-      );
+export async function GET() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookies) => {
+          cookies.forEach((cookie) => {
+            cookieStore.set(cookie);
+          });
+        },
+      },
     }
+  );
 
-    // Check if user is admin using the database function
-    const { data: isAdmin } = await supabase.rpc('is_admin');
-
-    return NextResponse.json({
-      authenticated: true,
-      isAdmin: isAdmin || false,
-      user: {
-        email: user.email,
-        id: user.id,
-        role: isAdmin ? 'admin' : 'user'
-      }
-    });
-  } catch (error) {
-    console.error('Admin check error:', error);
-    return NextResponse.json(
-      { authenticated: false },
-      { status: 500 }
-    );
+  const { data: userRes, error: uerr } = await supabase.auth.getUser();
+  if (uerr || !userRes?.user) {
+    return Response.json({ error: 'Not signed in' }, { status: 401 });
   }
+
+  const { data: isSuper, error } = await supabase.rpc('is_super_admin');
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  if (!isSuper) {
+    return Response.json({ error: 'Access denied. Admin privileges required.' }, { status: 403 });
+  }
+
+  // set short-lived admin cookie
+  cookieStore.set({
+    name: 'su_admin',
+    value: 'true',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: true,
+    path: '/',
+    maxAge: 60 * 60 * 6,
+  });
+
+  return Response.json({ ok: true, user: userRes.user }, { status: 200 });
 }

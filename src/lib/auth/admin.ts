@@ -2,14 +2,14 @@ import { createClient } from '@/src/lib/supabase/server';
 import { NextRequest } from 'next/server';
 
 /**
- * Check if the current user is an admin using the database is_admin() function
+ * Check if the current user is a super admin using the database is_super_admin() function
  */
 export async function isUserAdmin(userId?: string): Promise<boolean> {
   try {
     const supabase = await createClient();
 
-    // Use the database is_admin() function for canonical admin check
-    const { data, error } = await supabase.rpc('is_admin');
+    // Use the database is_super_admin() function for canonical admin check
+    const { data, error } = await supabase.rpc('is_super_admin');
 
     if (error) {
       console.error('Error checking admin status:', error);
@@ -53,14 +53,14 @@ export async function getCurrentUser() {
 }
 
 /**
- * Check if the current request is from an admin user
+ * Check if the current request is from a super admin user
  */
 export async function isAdminRequest(): Promise<boolean> {
   try {
     const supabase = await createClient();
 
-    // Use the database is_admin() function for canonical admin check
-    const { data, error } = await supabase.rpc('is_admin');
+    // Use the database is_super_admin() function for canonical admin check
+    const { data, error } = await supabase.rpc('is_super_admin');
 
     if (error) {
       console.error('Error checking admin request:', error);

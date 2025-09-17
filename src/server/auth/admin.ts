@@ -21,26 +21,16 @@ export async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
       return false;
     }
 
-    // Check if user is an admin using the is_admin() function
-    const { data: isAdmin, error } = await supabase
-      .rpc('is_admin');
+    // Check if user is a super admin using the is_super_admin() function
+    const { data: isSuperAdmin, error } = await supabase
+      .rpc('is_super_admin');
 
     if (error) {
-      console.error('Error calling is_admin:', error);
-      // Fallback to checking profiles table
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !profile || profile.role !== 'admin') {
-        return false;
-      }
-      return true;
+      console.error('Error calling is_super_admin:', error);
+      return false;
     }
 
-    return isAdmin === true;
+    return isSuperAdmin === true;
   } catch (error) {
     console.error('Error checking admin authentication:', error);
     return false;
