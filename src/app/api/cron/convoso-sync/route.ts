@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvosoSyncService } from '@/lib/convoso-sync';
+import { ConvosoSyncService } from '@/src/lib/convoso-sync';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 

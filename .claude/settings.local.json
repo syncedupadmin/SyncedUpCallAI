@@ -21,7 +21,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(vercel:*)",
-      "Bash(dir)"
+      "Bash(dir)",
+      "Bash(mv:*)",
+      "Bash(dir:*)"
     ]
   },
   "outputStyle": "default"

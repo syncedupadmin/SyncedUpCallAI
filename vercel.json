@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/convoso-delta",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/convoso-sync",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
