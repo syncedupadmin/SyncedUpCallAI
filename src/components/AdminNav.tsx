@@ -74,6 +74,12 @@ export default function AdminNav() {
         href: '/admin/test-tools',
         icon: Wrench,
         description: 'Development & testing'
+      },
+      {
+        name: 'Bulk Upload',
+        href: '/admin/bulk-upload',
+        icon: Upload,
+        description: 'Import CSV/Excel data'
       }
     ];
 
@@ -119,6 +125,12 @@ export default function AdminNav() {
         href: '/admin/test-tools',
         icon: Wrench,
         description: 'Development & testing'
+      },
+      {
+        name: 'Bulk Upload',
+        href: '/admin/bulk-upload',
+        icon: Upload,
+        description: 'Import CSV/Excel data'
       }
     ];
 
