@@ -57,18 +57,7 @@ export async function GET(req: NextRequest) {
 
 // Reset endpoint for testing
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
-  );
+  const supabase = await createClient();
 
   // Admin only
   const { data: { user } } = await supabase.auth.getUser();
