@@ -6,20 +6,22 @@ export const dynamic = 'force-dynamic';
 
 // Fetch recording from Convoso API
 async function fetchRecording(callId?: string, leadId?: string): Promise<string | null> {
-  const apiBase = process.env.CONVOSO_API_BASE;
-  const apiKey = process.env.CONVOSO_AUTH_TOKEN;
+  const authToken = process.env.CONVOSO_AUTH_TOKEN;
+  const apiBase = 'https://api.convoso.com/v1';
 
-  if (!apiBase || !apiKey) {
-    logError('Convoso API credentials not configured');
+  if (!authToken) {
+    logError('CONVOSO_AUTH_TOKEN not configured');
     return null;
   }
 
   try {
+    // Build query parameters with auth token
     const params = new URLSearchParams({
-      auth_token: apiKey,
+      auth_token: authToken,
       limit: '1'
     });
 
+    // Add call_id or lead_id to params
     if (callId) {
       params.append('call_id', callId);
     } else if (leadId) {
@@ -28,14 +30,15 @@ async function fetchRecording(callId?: string, leadId?: string): Promise<string 
       return null;
     }
 
-    const url = `${apiBase}/users/recordings?${params.toString()}`;
+    // Use the correct endpoint: /leads/get-recordings (not /users/recordings)
+    const url = `${apiBase}/leads/get-recordings?${params.toString()}`;
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Accept': 'application/json'
       }
+      // No Bearer token needed - auth_token is in query params
     });
 
     if (!response.ok) {
@@ -44,13 +47,11 @@ async function fetchRecording(callId?: string, leadId?: string): Promise<string 
 
     const data = await response.json();
 
+    // Check if we have a successful response with recordings
     if (data.success && data.data?.entries?.length > 0) {
       const recording = data.data.entries[0];
-      const recordingUrl = recording.url;
-      if (recordingUrl && !recordingUrl.startsWith('http')) {
-        return `${apiBase}/recordings/${recordingUrl}`;
-      }
-      return recordingUrl;
+      // Return the recording URL directly
+      return recording.url || null;
     }
 
     return null;
