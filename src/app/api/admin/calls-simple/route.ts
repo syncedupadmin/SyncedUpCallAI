@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         c.recording_url,
         c.agent_id,
         COALESCE(c.agent_name, a.name) as agent_name,
-        COALESCE(c.phone_number, ct.phone_e164, ct.primary_phone) as phone_number,
+        COALESCE(c.phone_number, ct.primary_phone) as phone_number,
         c.lead_id,
         c.created_at,
         c.updated_at,
