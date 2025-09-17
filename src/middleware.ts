@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  // Handle admin authentication for all admin pages
-  if (request.nextUrl.pathname.startsWith('/admin')) {
+  // Handle admin authentication for all admin and superadmin pages
+  if (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/superadmin')) {
     // Create Supabase client first to check authentication
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest) {
     const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
 
     if (isSuperAdmin) {
-      return NextResponse.redirect(new URL('/admin', request.url));
+      return NextResponse.redirect(new URL('/superadmin', request.url));
     } else {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
