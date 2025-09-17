@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
       const upsertValue = leadData.lead_id || leadData.phone_number;
 
       const result = await db.oneOrNone(`
-        INSERT INTO contacts (lead_id, phone_number, first_name, last_name, email, address, city, state, list_id, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        INSERT INTO contacts (lead_id, phone_number, first_name, last_name, email, address, city, state, list_id, office_id, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         ON CONFLICT (${upsertKey})
         DO UPDATE SET
           phone_number = COALESCE(EXCLUDED.phone_number, contacts.phone_number),
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
           city = COALESCE(EXCLUDED.city, contacts.city),
           state = COALESCE(EXCLUDED.state, contacts.state),
           list_id = COALESCE(EXCLUDED.list_id, contacts.list_id),
+          office_id = COALESCE(contacts.office_id, 1), -- Keep existing office_id or default to 1
           updated_at = NOW()
         RETURNING id
       `, [
@@ -97,7 +98,8 @@ export async function POST(req: NextRequest) {
         leadData.address,
         leadData.city,
         leadData.state,
-        leadData.list_id
+        leadData.list_id,
+        1 // Default office_id
       ]);
 
       contactId = result?.id;
