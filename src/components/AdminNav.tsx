@@ -17,7 +17,8 @@ import {
   User,
   Wrench,
   Crown,
-  Upload
+  Upload,
+  Activity
 } from 'lucide-react';
 
 interface NavItem {
@@ -80,6 +81,12 @@ export default function AdminNav() {
         href: '/admin/bulk-upload',
         icon: Upload,
         description: 'Import CSV/Excel data'
+      },
+      {
+        name: 'Discovery Test',
+        href: '/admin/discovery-test',
+        icon: Activity,
+        description: 'AI pattern discovery'
       }
     ];
 
@@ -131,6 +138,12 @@ export default function AdminNav() {
         href: '/admin/bulk-upload',
         icon: Upload,
         description: 'Import CSV/Excel data'
+      },
+      {
+        name: 'Discovery Test',
+        href: '/admin/discovery-test',
+        icon: Activity,
+        description: 'AI pattern discovery'
       }
     ];
 
