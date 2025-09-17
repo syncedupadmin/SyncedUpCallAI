@@ -18,7 +18,8 @@ import {
   Wrench,
   Crown,
   Upload,
-  Activity
+  Activity,
+  Mic
 } from 'lucide-react';
 
 interface NavItem {
@@ -87,6 +88,12 @@ export default function AdminNav() {
         href: '/admin/discovery-test',
         icon: Activity,
         description: 'AI pattern discovery'
+      },
+      {
+        name: 'Openings',
+        href: '/admin/openings',
+        icon: Mic,
+        description: 'Opening analysis & training'
       }
     ];
 
@@ -144,6 +151,12 @@ export default function AdminNav() {
         href: '/admin/discovery-test',
         icon: Activity,
         description: 'AI pattern discovery'
+      },
+      {
+        name: 'Openings',
+        href: '/admin/openings',
+        icon: Mic,
+        description: 'Opening analysis & training'
       }
     ];
 
