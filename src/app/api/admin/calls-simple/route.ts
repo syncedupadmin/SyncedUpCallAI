@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
       }, { status: 401 });
     }
 
-    // Check if user is admin using the is_admin function
-    const { data: isAdmin } = await supabase.rpc('is_admin');
+    // Check if user is admin using the is_super_admin function (now equivalent to is_admin)
+    const { data: isAdmin } = await supabase.rpc('is_super_admin');
 
     if (!isAdmin) {
       return NextResponse.json({

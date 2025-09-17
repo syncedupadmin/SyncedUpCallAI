@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user is admin
-    const { data: isAdmin } = await supabase.rpc('is_admin');
+    const { data: isAdmin } = await supabase.rpc('is_super_admin');
     if (!isAdmin) {
       return NextResponse.json({
         ok: false,
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
       }, { status: 401 });
     }
 
-    const { data: isAdmin } = await supabase.rpc('is_admin');
+    const { data: isAdmin } = await supabase.rpc('is_super_admin');
     if (!isAdmin) {
       return NextResponse.json({
         ok: false,

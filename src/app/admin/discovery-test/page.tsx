@@ -110,7 +110,7 @@ export default function DiscoveryTestPage() {
           <div className="bg-gradient-to-r from-green-900/50 to-emerald-900/50 rounded-xl p-8 mb-8 border border-green-800">
             <div className="text-center">
               <div className="text-7xl font-bold text-white mb-2">
-                {metrics.closeRate.toFixed(1)}%
+                {(metrics?.closeRate || 0).toFixed(1)}%
               </div>
               <div className="text-xl text-green-100">Closing Rate</div>
               <div className="text-sm text-green-200 mt-4">
@@ -161,7 +161,7 @@ export default function DiscoveryTestPage() {
               </div>
               <div className="text-3xl font-bold text-white">{metrics.earlyHangups}</div>
               <div className="text-xs text-gray-500 mt-2">
-                Agents hanging up on "Hello" ({metrics.hangupRate.toFixed(1)}% of calls)
+                Agents hanging up on "Hello" ({(metrics?.hangupRate || 0).toFixed(1)}% of calls)
               </div>
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function DiscoveryTestPage() {
             <div className="mb-6">
               <div className="flex justify-between text-sm mb-2">
                 <span>{processedCalls} / {selectedCount} calls processed</span>
-                <span>{progress.toFixed(1)}%</span>
+                <span>{(progress || 0).toFixed(1)}%</span>
               </div>
               <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
                 <div

@@ -284,7 +284,7 @@ export default function AdminAnalyticsPage() {
               <div className="text-3xl font-bold text-white mb-2">{data.leads.total}</div>
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-400">
-                  {data.leads.conversionRate.toFixed(1)}% conversion rate
+                  {(data.leads.conversionRate || 0).toFixed(1)}% conversion rate
                 </span>
               </div>
             </div>
@@ -309,7 +309,7 @@ export default function AdminAnalyticsPage() {
               </div>
               <div className="text-3xl font-bold text-white mb-2">{data.webhooks.total}</div>
               <div className="text-sm text-gray-400">
-                {data.webhooks.successRate.toFixed(1)}% success rate
+                {(data.webhooks.successRate || 0).toFixed(1)}% success rate
               </div>
             </div>
           </div>

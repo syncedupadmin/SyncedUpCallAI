@@ -349,7 +349,7 @@ export default function BulkUploadPage() {
                   <FileSpreadsheet className="w-12 h-12 text-green-400 mx-auto mb-4" />
                   <p className="text-lg font-medium">{selectedFile.name}</p>
                   <p className="text-sm text-gray-400">
-                    {(selectedFile.size / 1024).toFixed(2)} KB
+                    {((selectedFile?.size || 0) / 1024).toFixed(2)} KB
                   </p>
                 </>
               ) : (

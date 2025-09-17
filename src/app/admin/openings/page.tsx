@@ -154,14 +154,16 @@ export default function OpeningsPage() {
     }
   };
 
-  const formatPercentage = (value: number): string => {
-    if (!value || isNaN(value)) return '0%';
-    return `${(value * 100).toFixed(1)}%`;
+  const formatPercentage = (value: number | string | null): string => {
+    const num = parseFloat(String(value));
+    if (!value || isNaN(num)) return '0%';
+    return `${(num * 100).toFixed(1)}%`;
   };
 
-  const formatNumber = (value: number): string => {
-    if (!value || isNaN(value)) return '0';
-    return value.toFixed(1);
+  const formatNumber = (value: number | string | null): string => {
+    const num = parseFloat(String(value));
+    if (!value || isNaN(num)) return '0';
+    return num.toFixed(1);
   };
 
   return (
@@ -293,7 +295,7 @@ export default function OpeningsPage() {
 
                     <div className="flex gap-4 text-xs text-gray-500">
                       <span>Agent: {opening.agent_name}</span>
-                      <span>Pace: {opening.pace_wpm?.toFixed(0)} wpm</span>
+                      <span>Pace: {parseFloat(String(opening.pace_wpm || 0)).toFixed(0)} wpm</span>
                       <span>Score: {formatPercentage(opening.success_score)}</span>
                       <span className={`font-bold ${
                         opening.disposition === 'SALE' ? 'text-green-500' :
@@ -509,7 +511,7 @@ export default function OpeningsPage() {
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">Pace</label>
-                    <p className="text-white">{selectedOpening.pace_wpm?.toFixed(0)} wpm</p>
+                    <p className="text-white">{parseFloat(String(selectedOpening.pace_wpm || 0)).toFixed(0)} wpm</p>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">Silence Ratio</label>

@@ -37,7 +37,7 @@ export default function SuperAdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'super_admin' | 'admin' | 'user'>('all');
+  const [filter, setFilter] = useState<'all' | 'admin' | 'user'>('all');
   const [showAddUser, setShowAddUser] = useState(false);
   const [showChangeLevel, setShowChangeLevel] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({ email: '', name: '', phone: '', type: 'agent' });
@@ -51,18 +51,15 @@ export default function SuperAdminUsersPage() {
     try {
       setLoading(true);
 
-      // Use the get_users_by_level_v2 function
+      // Use the simplified get_users_by_level function
       const { data: allUsers } = await supabase
-        .rpc('get_users_by_level_v2', { level: 'user' });
+        .rpc('get_users_by_level', { level_filter: 'user' });
 
       const { data: admins } = await supabase
-        .rpc('get_users_by_level_v2', { level: 'admin' });
+        .rpc('get_users_by_level', { level_filter: 'admin' });
 
-      const { data: superAdmins } = await supabase
-        .rpc('get_users_by_level_v2', { level: 'super' });
-
-      // Combine all users
-      const data = [...(allUsers || []), ...(admins || []), ...(superAdmins || [])];
+      // Combine all users (now only 2 types)
+      const data = [...(allUsers || []), ...(admins || [])];
       const error = null;
 
       if (error) {
@@ -112,16 +109,15 @@ export default function SuperAdminUsersPage() {
 
         if (profileError) throw profileError;
 
-        // Set admin level
-        const level = newUser.type === 'super' ? 'super' : 'operator';
+        // Set admin level (all admins are now equal)
         const { error: levelError } = await supabase.rpc('set_admin_level', {
           user_email: newUser.email,
-          new_level: level
+          new_level: 'admin'
         });
 
         if (levelError) throw levelError;
 
-        toast.success(`${newUser.type === 'super' ? 'Super admin' : 'Admin'} created successfully`);
+        toast.success('Admin created successfully');
       }
 
       setShowAddUser(false);
@@ -133,7 +129,7 @@ export default function SuperAdminUsersPage() {
     }
   };
 
-  const handleChangeLevel = async (email: string, newLevel: 'super' | 'operator' | 'remove') => {
+  const handleChangeLevel = async (email: string, newLevel: 'admin' | 'remove') => {
     try {
       const { error } = await supabase.rpc('set_admin_level', {
         user_email: email,
@@ -144,7 +140,7 @@ export default function SuperAdminUsersPage() {
 
       const message = newLevel === 'remove'
         ? 'Admin privileges removed'
-        : `User promoted to ${newLevel === 'super' ? 'super admin' : 'operator admin'}`;
+        : 'User promoted to admin';
 
       toast.success(message);
       setShowChangeLevel(null);
@@ -161,8 +157,7 @@ export default function SuperAdminUsersPage() {
       user.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesFilter = filter === 'all' ||
-      (filter === 'super_admin' && user.user_level === 'super_admin') ||
-      (filter === 'admin' && user.user_level === 'admin') ||
+      (filter === 'admin' && (user.user_level === 'admin' || user.user_level === 'super_admin')) ||
       (filter === 'user' && user.user_level === 'user');
 
     return matchesSearch && matchesFilter;
@@ -170,8 +165,7 @@ export default function SuperAdminUsersPage() {
 
   const stats = {
     total: users.length,
-    superAdmins: users.filter(u => u.user_level === 'super_admin').length,
-    admins: users.filter(u => u.user_level === 'admin').length,
+    admins: users.filter(u => u.user_level === 'admin' || u.user_level === 'super_admin').length,
     regularUsers: users.filter(u => u.user_level === 'user').length
   };
 
@@ -189,7 +183,7 @@ export default function SuperAdminUsersPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent mb-2">
-          Super Admin User Management
+          Admin User Management
         </h1>
         <p className="text-gray-400">Manage all users and their access levels</p>
       </div>
@@ -201,15 +195,11 @@ export default function SuperAdminUsersPage() {
           <div className="text-2xl font-bold text-white">{stats.total}</div>
         </div>
         <div className="bg-gray-900/50 backdrop-blur-xl rounded-lg border border-gray-800 p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Super Admins</div>
-          <div className="text-2xl font-bold text-purple-400">{stats.superAdmins}</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Admins</div>
+          <div className="text-2xl font-bold text-purple-400">{stats.admins}</div>
         </div>
         <div className="bg-gray-900/50 backdrop-blur-xl rounded-lg border border-gray-800 p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Operator Admins</div>
-          <div className="text-2xl font-bold text-orange-400">{stats.admins}</div>
-        </div>
-        <div className="bg-gray-900/50 backdrop-blur-xl rounded-lg border border-gray-800 p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Agents</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Users</div>
           <div className="text-2xl font-bold text-blue-400">{stats.regularUsers}</div>
         </div>
       </div>
@@ -229,7 +219,7 @@ export default function SuperAdminUsersPage() {
 
         <div className="flex gap-2">
           <div className="flex gap-1 bg-gray-800/50 rounded-lg p-1">
-            {(['all', 'super_admin', 'admin', 'user'] as const).map((filterOption) => (
+            {(['all', 'admin', 'user'] as const).map((filterOption) => (
               <button
                 key={filterOption}
                 onClick={() => setFilter(filterOption)}
@@ -240,8 +230,7 @@ export default function SuperAdminUsersPage() {
                 }`}
               >
                 {filterOption === 'all' ? 'All' :
-                 filterOption === 'super_admin' ? 'Super' :
-                 filterOption === 'admin' ? 'Operators' : 'Agents'}
+                 filterOption === 'admin' ? 'Admins' : 'Users'}
               </button>
             ))}
           </div>
@@ -306,9 +295,8 @@ export default function SuperAdminUsersPage() {
                 onChange={(e) => setNewUser({ ...newUser, type: e.target.value })}
                 className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
               >
-                <option value="agent">Agent (Regular User)</option>
-                <option value="operator">Operator Admin</option>
-                <option value="super">Super Admin</option>
+                <option value="agent">Regular User</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
           </div>
@@ -371,15 +359,11 @@ export default function SuperAdminUsersPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          user.user_level === 'super_admin'
+                          user.user_level === 'admin' || user.user_level === 'super_admin'
                             ? 'bg-gradient-to-br from-purple-600 to-pink-600'
-                            : user.user_level === 'admin'
-                            ? 'bg-gradient-to-br from-orange-600 to-red-600'
                             : 'bg-gradient-to-br from-gray-600 to-gray-700'
                         }`}>
-                          {user.user_level === 'super_admin' ? (
-                            <Crown className="w-5 h-5 text-white" />
-                          ) : user.user_level === 'admin' ? (
+                          {user.user_level === 'admin' || user.user_level === 'super_admin' ? (
                             <Shield className="w-5 h-5 text-white" />
                           ) : (
                             <Users className="w-5 h-5 text-white" />
@@ -393,16 +377,12 @@ export default function SuperAdminUsersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.user_level === 'super_admin'
+                        user.user_level === 'admin' || user.user_level === 'super_admin'
                           ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                          : user.user_level === 'admin'
-                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                           : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                       }`}>
-                        {user.user_level === 'super_admin' && <Crown className="w-3 h-3" />}
-                        {user.user_level === 'admin' && <Shield className="w-3 h-3" />}
-                        {user.user_level === 'super_admin' ? 'Super Admin' :
-                         user.user_level === 'admin' ? 'Operator' : 'Agent'}
+                        {(user.user_level === 'admin' || user.user_level === 'super_admin') && <Shield className="w-3 h-3" />}
+                        {user.user_level === 'admin' || user.user_level === 'super_admin' ? 'Admin' : 'User'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -437,25 +417,16 @@ export default function SuperAdminUsersPage() {
                         {showChangeLevel === user.email ? (
                           <div className="absolute right-0 top-0 z-10 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 min-w-[200px]">
                             <div className="text-xs text-gray-400 mb-2">Change Level for {user.email}</div>
-                            {user.user_level !== 'super_admin' && (
+                            {user.user_level === 'user' && (
                               <button
-                                onClick={() => handleChangeLevel(user.email, 'super')}
+                                onClick={() => handleChangeLevel(user.email, 'admin')}
                                 className="w-full text-left px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/20 rounded transition flex items-center gap-2"
                               >
-                                <Crown className="w-4 h-4" />
-                                Promote to Super Admin
-                              </button>
-                            )}
-                            {user.user_level !== 'admin' && (
-                              <button
-                                onClick={() => handleChangeLevel(user.email, 'operator')}
-                                className="w-full text-left px-3 py-1.5 text-sm text-orange-400 hover:bg-orange-500/20 rounded transition flex items-center gap-2"
-                              >
                                 <Shield className="w-4 h-4" />
-                                {user.user_level === 'super_admin' ? 'Demote to' : 'Promote to'} Operator
+                                Promote to Admin
                               </button>
                             )}
-                            {user.user_level !== 'user' && (
+                            {(user.user_level === 'admin' || user.user_level === 'super_admin') && (
                               <button
                                 onClick={() => handleChangeLevel(user.email, 'remove')}
                                 className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/20 rounded transition flex items-center gap-2"
@@ -495,11 +466,10 @@ export default function SuperAdminUsersPage() {
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
           <div>
-            <h4 className="text-sm font-medium text-purple-400 mb-1">User Level Hierarchy</h4>
+            <h4 className="text-sm font-medium text-purple-400 mb-1">User Roles</h4>
             <ul className="text-xs text-gray-400 space-y-1">
-              <li>• <span className="text-purple-400">Super Admins</span>: Can manage all users and change anyone's level</li>
-              <li>• <span className="text-orange-400">Operator Admins</span>: Can create and manage regular agents only</li>
-              <li>• <span className="text-blue-400">Agents</span>: Regular users with access to the standard dashboard</li>
+              <li>• <span className="text-purple-400">Admins</span>: Full access to admin portal and can manage all users</li>
+              <li>• <span className="text-blue-400">Users</span>: Regular users with access to the standard dashboard</li>
             </ul>
           </div>
         </div>

@@ -36,6 +36,8 @@ interface Call {
 export default function AdminCallsPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -43,14 +45,20 @@ export default function AdminCallsPage() {
 
   useEffect(() => {
     fetchCalls();
-    const interval = setInterval(fetchCalls, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      fetchCalls(true); // Auto-refresh
+    }, 15000); // Refresh every 15 seconds
     return () => clearInterval(interval);
   }, []);
 
-  const fetchCalls = async () => {
+  const fetchCalls = async (isAutoRefresh = false) => {
     try {
-      setLoading(true);
-      console.log('DEBUG - Fetching calls...');
+      if (isAutoRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      console.log('DEBUG - Fetching calls...', isAutoRefresh ? '(auto-refresh)' : '');
 
       // Try the simpler endpoint first
       const response = await fetch('/api/admin/calls-simple');
@@ -86,6 +94,8 @@ export default function AdminCallsPage() {
       console.error('Error fetching calls:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      setLastRefresh(new Date());
     }
   };
 
@@ -194,10 +204,21 @@ export default function AdminCallsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent mb-2">
-          Call Management
-        </h1>
-        <p className="text-gray-400">Monitor and manage all system calls</p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent mb-2">
+              Call Management
+            </h1>
+            <p className="text-gray-400">Monitor and manage all system calls from Convoso</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-gray-500">Last updated</div>
+            <div className="text-sm text-gray-400">{format(lastRefresh, 'HH:mm:ss')}</div>
+            {refreshing && (
+              <div className="text-xs text-cyan-400 mt-1 animate-pulse">Refreshing...</div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -262,17 +283,31 @@ export default function AdminCallsPage() {
           </div>
 
           <button
-            onClick={fetchCalls}
-            disabled={loading}
+            onClick={() => fetchCalls(false)}
+            disabled={loading || refreshing}
             className="px-4 py-2 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-lg text-gray-300 hover:text-white transition flex items-center gap-2"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 ${loading || refreshing ? 'animate-spin' : ''}`} />
+            {loading || refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
 
+      {/* Data Status */}
+      {calls.length === 0 && !loading && (
+        <div className="mb-4 p-6 bg-blue-900/20 border border-blue-600 rounded-lg text-center">
+          <h3 className="text-blue-400 font-bold mb-2">No Calls Yet</h3>
+          <p className="text-blue-200 mb-4">
+            Waiting for calls from Convoso webhooks. Calls will appear here automatically when received.
+          </p>
+          <p className="text-sm text-blue-300">
+            Auto-refreshing every 15 seconds...
+          </p>
+        </div>
+      )}
+
       {/* Debug Info */}
+      {calls.length > 0 && (
       <div className="mb-4 p-4 bg-yellow-900/20 border border-yellow-600 rounded-lg">
         <h3 className="text-yellow-400 font-bold mb-2">Debug Info</h3>
         <div className="text-sm text-yellow-200">
@@ -284,6 +319,7 @@ export default function AdminCallsPage() {
           <div>Date filter: {dateFilter}</div>
         </div>
       </div>
+      )}
 
       {/* Calls Table */}
       <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-800 overflow-hidden">
