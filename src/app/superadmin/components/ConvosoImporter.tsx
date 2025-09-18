@@ -597,9 +597,6 @@ export default function ConvosoImporter() {
           </div>
         )}
 
-        {/* Debug Info */}
-        {console.log('[ConvosoImporter Render] calls:', calls.length, 'filteredCalls:', filteredCalls.length)}
-
         {/* Results Section */}
         {filteredCalls.length > 0 && (
           <>
