@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/src/lib/supabase/client';
 
 interface Call {
   recording_id: string;
@@ -43,7 +43,7 @@ export default function ConvosoImporter() {
   });
 
   // Initialize Supabase client
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   // Helper function to get auth token
   const getAuthToken = async () => {
