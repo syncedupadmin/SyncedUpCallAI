@@ -69,6 +69,10 @@ export default function ConvosoImporter() {
   const [sortField, setSortField] = useState<keyof Call>('start_time');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   // Apply filters whenever calls or filter values change
   useEffect(() => {
     if (calls.length === 0) {
@@ -108,7 +112,14 @@ export default function ConvosoImporter() {
     });
 
     setFilteredCalls(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
   }, [calls, selectedAgent, selectedDisposition, selectedCampaign, selectedList, minDuration, maxDuration, sortField, sortDirection]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredCalls.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCalls = filteredCalls.slice(startIndex, endIndex);
 
   const searchCalls = async () => {
     if (!dateFrom || !dateTo) {
@@ -630,6 +641,11 @@ export default function ConvosoImporter() {
                 color: '#374151'
               }}>
                 📞 Found {filteredCalls.length} calls
+                {totalPages > 1 && (
+                  <span style={{ fontWeight: '400', fontSize: '14px', color: '#6b7280', marginLeft: '12px' }}>
+                    (Showing {startIndex + 1}-{Math.min(endIndex, filteredCalls.length)} of {filteredCalls.length})
+                  </span>
+                )}
               </h3>
 
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -745,7 +761,7 @@ export default function ConvosoImporter() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCalls.map((call, index) => (
+                  {paginatedCalls.map((call, index) => (
                     <tr
                       key={call.recording_id}
                       style={{
@@ -801,6 +817,101 @@ export default function ConvosoImporter() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '24px',
+                padding: '16px',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === 1 ? '#f3f4f6' : '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    color: currentPage === 1 ? '#9ca3af' : '#374151',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  First
+                </button>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === 1 ? '#f3f4f6' : '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    color: currentPage === 1 ? '#9ca3af' : '#374151',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Previous
+                </button>
+
+                <span style={{
+                  padding: '6px 16px',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#111827'
+                }}>
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === totalPages ? '#f3f4f6' : '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    color: currentPage === totalPages ? '#9ca3af' : '#374151',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Next
+                </button>
+
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '6px 12px',
+                    background: currentPage === totalPages ? '#f3f4f6' : '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    color: currentPage === totalPages ? '#9ca3af' : '#374151',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Last
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
