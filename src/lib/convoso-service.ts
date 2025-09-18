@@ -192,7 +192,10 @@ export class ConvosoService {
       customer_phone: lead?.phone_number || '',
       customer_email: lead?.email || '',
       agent_id: lead?.user_id || '',
-      agent_name: lead?.user_name || 'Unknown Agent',
+      // Handle "System User" for automated/abandoned calls
+      agent_name: (lead?.user_name === 'System User' || !lead?.user_name)
+        ? 'Auto-Detected'
+        : lead.user_name,
       disposition: lead?.status_name || lead?.status || 'UNKNOWN',
       campaign_name: lead?.campaign_name || 'Unknown Campaign',
       list_name: lead?.directory_name || lead?.list_id || 'Unknown List'
