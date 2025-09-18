@@ -80,10 +80,10 @@ export class ConvosoService {
   }
 
   /**
-   * Fetch call logs with recordings from Convoso API using the /log/retrieve endpoint
+   * Fetch call logs with recordings from Convoso API using the /log/retrieve endpoint with pagination
    * This endpoint properly respects date parameters and includes all call metadata
    */
-  async fetchRecordings(dateFrom: string, dateTo: string, limit: number = 10000): Promise<ConvosoRecording[]> {
+  async fetchRecordings(dateFrom: string, dateTo: string, maxLimit?: number): Promise<ConvosoRecording[]> {
     // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS
     const formatDateTime = (date: string) => {
       if (date.includes(' ')) return date; // Already formatted
@@ -97,56 +97,90 @@ export class ConvosoService {
       return `${date} 23:59:59`; // Add end of day
     };
 
-    const params = new URLSearchParams({
-      auth_token: CONVOSO_AUTH_TOKEN!,
-      start_time: formatDateTime(dateFrom),
-      end_time: formatEndDateTime(dateTo),
-      include_recordings: '1',
-      limit: String(limit),
-      offset: '0'
-    });
+    const allRecordings: ConvosoRecording[] = [];
+    let offset = 0;
+    const limit = 10000; // Convoso API max limit per request
+    let totalFound = 0;
+    let hasMore = true;
 
-    const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
     console.log(`[ConvosoService] Fetching call logs from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
 
-    try {
-      const response = await fetch(url);
+    while (hasMore) {
+      const params = new URLSearchParams({
+        auth_token: CONVOSO_AUTH_TOKEN!,
+        start_time: formatDateTime(dateFrom),
+        end_time: formatEndDateTime(dateTo),
+        include_recordings: '1',
+        limit: String(limit),
+        offset: String(offset)
+      });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
+      console.log(`[ConvosoService] Fetching recordings page: offset=${offset}, limit=${limit}`);
+
+      try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Check for API error
+        if (data.success === false) {
+          throw new Error(data.text || data.error || 'API returned failure');
+        }
+
+        // Extract and transform call logs to match our recording structure
+        if (data.data && data.data.results) {
+          totalFound = data.data.total_found || 0;
+          const pageResults = data.data.results;
+
+          console.log(`[ConvosoService] Page ${Math.floor(offset / limit) + 1}: Found ${totalFound} total calls, fetched ${pageResults.length} in this page`);
+
+          // Transform log entries to match ConvosoRecording structure
+          // NO FILTERS - let the UI handle filtering
+          const recordings = pageResults
+            .map((entry: any) => ({
+              recording_id: entry.recording?.[0]?.recording_id || entry.id,
+              lead_id: entry.lead_id,
+              start_time: entry.call_date,
+              end_time: entry.call_date, // Will calculate from duration
+              seconds: entry.call_length,
+              url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || ''
+            }));
+
+          allRecordings.push(...recordings);
+
+          // Check if we need to fetch more pages
+          if (pageResults.length < limit || allRecordings.length >= totalFound) {
+            hasMore = false;
+          } else if (maxLimit && allRecordings.length >= maxLimit) {
+            // Stop if we've reached the user-specified max limit
+            hasMore = false;
+            console.log(`[ConvosoService] Stopping at user-specified limit of ${maxLimit}`);
+          } else {
+            offset += limit;
+            // Add small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } else {
+          hasMore = false;
+        }
+      } catch (error: any) {
+        console.error(`[ConvosoService] Error fetching recordings at offset ${offset}:`, error);
+        // If we've already fetched some data, return what we have
+        if (allRecordings.length > 0) {
+          console.warn(`[ConvosoService] Returning partial results: ${allRecordings.length} recordings fetched before error`);
+          return allRecordings as ConvosoRecording[];
+        }
+        throw error;
       }
-
-      const data = await response.json();
-
-      // Check for API error
-      if (data.success === false) {
-        throw new Error(data.text || data.error || 'API returned failure');
-      }
-
-      // Extract and transform call logs to match our recording structure
-      if (data.data && data.data.results) {
-        console.log(`[ConvosoService] Found ${data.data.total_found} calls, fetched ${data.data.results.length}`);
-
-        // Transform log entries to match ConvosoRecording structure
-        // NO FILTERS - let the UI handle filtering
-        const recordings = data.data.results
-          .map((entry: any) => ({
-            recording_id: entry.recording?.[0]?.recording_id || entry.id,
-            lead_id: entry.lead_id,
-            start_time: entry.call_date,
-            end_time: entry.call_date, // Will calculate from duration
-            seconds: entry.call_length,
-            url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || ''
-          }));
-
-        return recordings as ConvosoRecording[];
-      }
-
-      return [];
-    } catch (error: any) {
-      console.error('[ConvosoService] Error fetching call logs:', error);
-      throw error;
     }
+
+    console.log(`[ConvosoService] Completed fetching ${allRecordings.length} recordings out of ${totalFound} total`);
+    return allRecordings as ConvosoRecording[];
   }
 
   /**
@@ -372,9 +406,9 @@ export class ConvosoService {
   }
 
   /**
-   * Fetch and combine all data for a date range using the new log/retrieve endpoint
+   * Fetch and combine all data for a date range using the new log/retrieve endpoint with pagination
    */
-  async fetchCompleteCallData(dateFrom: string, dateTo: string): Promise<CombinedCallData[]> {
+  async fetchCompleteCallData(dateFrom: string, dateTo: string, progressCallback?: (fetched: number, total: number) => void): Promise<CombinedCallData[]> {
     // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS
     const formatDateTime = (date: string) => {
       if (date.includes(' ')) return date; // Already formatted
@@ -388,68 +422,103 @@ export class ConvosoService {
       return `${date} 23:59:59`; // Add end of day
     };
 
-    const params = new URLSearchParams({
-      auth_token: CONVOSO_AUTH_TOKEN!,
-      start_time: formatDateTime(dateFrom),
-      end_time: formatEndDateTime(dateTo),
-      include_recordings: '1',
-      limit: '10000',
-      offset: '0'
-    });
+    const allCalls: CombinedCallData[] = [];
+    let offset = 0;
+    const limit = 10000; // Convoso API max limit per request
+    let totalFound = 0;
+    let hasMore = true;
 
-    const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
     console.log(`[ConvosoService] Fetching complete call data from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
 
-    try {
-      const response = await fetch(url);
+    while (hasMore) {
+      const params = new URLSearchParams({
+        auth_token: CONVOSO_AUTH_TOKEN!,
+        start_time: formatDateTime(dateFrom),
+        end_time: formatEndDateTime(dateTo),
+        include_recordings: '1',
+        limit: String(limit),
+        offset: String(offset)
+      });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
+      console.log(`[ConvosoService] Fetching page: offset=${offset}, limit=${limit}`);
+
+      try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Check for API error
+        if (data.success === false) {
+          throw new Error(data.text || data.error || 'API returned failure');
+        }
+
+        // Extract and transform call logs to our format
+        if (data.data && data.data.results) {
+          totalFound = data.data.total_found || 0;
+          const pageResults = data.data.results;
+
+          console.log(`[ConvosoService] Page ${Math.floor(offset / limit) + 1}: Found ${totalFound} total calls, fetched ${pageResults.length} in this page`);
+
+          // Transform log entries to CombinedCallData structure
+          // NO FILTERS - let the UI handle filtering
+          const combinedData = pageResults
+            .map((entry: any): CombinedCallData => ({
+              // Recording data
+              recording_id: entry.recording?.[0]?.recording_id || entry.id,
+              lead_id: entry.lead_id,
+              start_time: entry.call_date,
+              end_time: entry.call_date, // API doesn't provide separate end time
+              duration_seconds: parseInt(entry.call_length) || 0,
+              recording_url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || '',
+
+              // Lead data (now included in the log entry)
+              customer_first_name: entry.first_name || '',
+              customer_last_name: entry.last_name || '',
+              customer_phone: entry.phone_number || '',
+              customer_email: '', // Not provided in log/retrieve
+              agent_id: entry.user_id || '',
+              agent_name: entry.user || '',
+              disposition: entry.status_name || entry.status || 'UNKNOWN',
+              campaign_name: entry.campaign || 'Unknown Campaign',
+              list_name: entry.list_id || 'Unknown List'
+            }));
+
+          allCalls.push(...combinedData);
+
+          // Report progress if callback provided
+          if (progressCallback) {
+            progressCallback(allCalls.length, totalFound);
+          }
+
+          // Check if we need to fetch more pages
+          if (pageResults.length < limit || allCalls.length >= totalFound) {
+            hasMore = false;
+          } else {
+            offset += limit;
+            // Add small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } else {
+          hasMore = false;
+        }
+      } catch (error: any) {
+        console.error(`[ConvosoService] Error fetching page at offset ${offset}:`, error);
+        // If we've already fetched some data, return what we have
+        if (allCalls.length > 0) {
+          console.warn(`[ConvosoService] Returning partial results: ${allCalls.length} calls fetched before error`);
+          return allCalls;
+        }
+        throw error;
       }
-
-      const data = await response.json();
-
-      // Check for API error
-      if (data.success === false) {
-        throw new Error(data.text || data.error || 'API returned failure');
-      }
-
-      // Extract and transform call logs to our format
-      if (data.data && data.data.results) {
-        console.log(`[ConvosoService] Found ${data.data.total_found} calls, processing ${data.data.results.length}`);
-
-        // Transform log entries to CombinedCallData structure
-        // NO FILTERS - let the UI handle filtering
-        const combinedData = data.data.results
-          .map((entry: any): CombinedCallData => ({
-            // Recording data
-            recording_id: entry.recording?.[0]?.recording_id || entry.id,
-            lead_id: entry.lead_id,
-            start_time: entry.call_date,
-            end_time: entry.call_date, // API doesn't provide separate end time
-            duration_seconds: parseInt(entry.call_length) || 0,
-            recording_url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || '',
-
-            // Lead data (now included in the log entry)
-            customer_first_name: entry.first_name || '',
-            customer_last_name: entry.last_name || '',
-            customer_phone: entry.phone_number || '',
-            customer_email: '', // Not provided in log/retrieve
-            agent_id: entry.user_id || '',
-            agent_name: entry.user || '',
-            disposition: entry.status_name || entry.status || 'UNKNOWN',
-            campaign_name: entry.campaign || 'Unknown Campaign',
-            list_name: entry.list_id || 'Unknown List'
-          }));
-
-        return combinedData;
-      }
-
-      return [];
-    } catch (error: any) {
-      console.error('[ConvosoService] Error fetching complete call data:', error);
-      throw error;
     }
+
+    console.log(`[ConvosoService] Completed fetching ${allCalls.length} calls out of ${totalFound} total`);
+    return allCalls;
   }
 
   /**

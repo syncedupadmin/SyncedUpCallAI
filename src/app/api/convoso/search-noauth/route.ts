@@ -19,8 +19,18 @@ export async function GET(req: NextRequest) {
 
     const service = new ConvosoService();
 
-    // Fetch complete call data (recordings + lead info)
-    const allCalls = await service.fetchCompleteCallData(dateFrom, dateTo);
+    // Track progress
+    let fetchProgress = { fetched: 0, total: 0 };
+
+    // Fetch complete call data (recordings + lead info) with progress tracking
+    const allCalls = await service.fetchCompleteCallData(
+      dateFrom,
+      dateTo,
+      (fetched, total) => {
+        fetchProgress = { fetched, total };
+        console.log(`[NOAUTH Search] Progress: ${fetched}/${total} calls fetched`);
+      }
+    );
 
     // NO FILTERS - let the UI handle all filtering
     const calls = allCalls;
@@ -33,18 +43,25 @@ export async function GET(req: NextRequest) {
       new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
     );
 
-    console.log(`[NOAUTH Search] Found ${calls.length} calls`);
+    console.log(`[NOAUTH Search] Completed: fetched ${calls.length} calls`);
 
     return NextResponse.json({
       success: true,
       calls,
       filterOptions,
       total: calls.length,
+      pagination: {
+        totalFound: fetchProgress.total,
+        totalFetched: calls.length,
+        complete: fetchProgress.fetched >= fetchProgress.total || calls.length === fetchProgress.total
+      },
       dateRange: {
         from: dateFrom,
         to: dateTo
       },
-      message: 'WARNING: This is a test endpoint without authentication!'
+      message: fetchProgress.total > 10000
+        ? `Fetched all ${calls.length} calls using pagination (${Math.ceil(fetchProgress.total / 10000)} API requests)`
+        : 'WARNING: This is a test endpoint without authentication!'
     });
 
   } catch (error: any) {
