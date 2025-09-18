@@ -422,102 +422,121 @@ export class ConvosoService {
       return `${date} 23:59:59`; // Add end of day
     };
 
-    const allCalls: CombinedCallData[] = [];
-    let offset = 0;
     const limit = 10000; // Convoso API max limit per request
-    let totalFound = 0;
-    let hasMore = true;
+    const maxPages = 3; // Limit to 3 pages (30k calls) to prevent timeouts
 
     console.log(`[ConvosoService] Fetching complete call data from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
 
-    while (hasMore) {
-      const params = new URLSearchParams({
-        auth_token: CONVOSO_AUTH_TOKEN!,
-        start_time: formatDateTime(dateFrom),
-        end_time: formatEndDateTime(dateTo),
-        include_recordings: '1',
-        limit: String(limit),
-        offset: String(offset)
-      });
+    // First, get the total count with a small request
+    const countParams = new URLSearchParams({
+      auth_token: CONVOSO_AUTH_TOKEN!,
+      start_time: formatDateTime(dateFrom),
+      end_time: formatEndDateTime(dateTo),
+      include_recordings: '1',
+      limit: '1',
+      offset: '0'
+    });
 
-      const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
-      console.log(`[ConvosoService] Fetching page: offset=${offset}, limit=${limit}`);
+    const countUrl = `${CONVOSO_API_BASE}/log/retrieve?${countParams.toString()}`;
+    const countResponse = await fetch(countUrl);
+    const countData = await countResponse.json();
 
-      try {
-        const response = await fetch(url);
+    if (countData.success === false) {
+      throw new Error(countData.text || countData.error || 'API returned failure');
+    }
 
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
+    const totalFound = countData.data?.total_found || 0;
+    console.log(`[ConvosoService] Total calls found: ${totalFound}`);
 
-        const data = await response.json();
+    if (totalFound === 0) {
+      return [];
+    }
 
-        // Check for API error
-        if (data.success === false) {
-          throw new Error(data.text || data.error || 'API returned failure');
-        }
+    // Calculate how many pages we need (up to maxPages)
+    const pagesNeeded = Math.min(Math.ceil(totalFound / limit), maxPages);
 
-        // Extract and transform call logs to our format
-        if (data.data && data.data.results) {
-          totalFound = data.data.total_found || 0;
-          const pageResults = data.data.results;
+    // Create all fetch promises at once for parallel execution
+    const fetchPromises: Promise<CombinedCallData[]>[] = [];
 
-          console.log(`[ConvosoService] Page ${Math.floor(offset / limit) + 1}: Found ${totalFound} total calls, fetched ${pageResults.length} in this page`);
+    for (let page = 0; page < pagesNeeded; page++) {
+      const offset = page * limit;
 
-          // Transform log entries to CombinedCallData structure
-          // NO FILTERS - let the UI handle filtering
-          const combinedData = pageResults
-            .map((entry: any): CombinedCallData => ({
+      const fetchPage = async (): Promise<CombinedCallData[]> => {
+        const params = new URLSearchParams({
+          auth_token: CONVOSO_AUTH_TOKEN!,
+          start_time: formatDateTime(dateFrom),
+          end_time: formatEndDateTime(dateTo),
+          include_recordings: '1',
+          limit: String(limit),
+          offset: String(offset)
+        });
+
+        const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
+        console.log(`[ConvosoService] Fetching page ${page + 1}/${pagesNeeded}: offset=${offset}`);
+
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          if (data.success === false) {
+            throw new Error(data.text || data.error || 'API returned failure');
+          }
+
+          if (data.data && data.data.results) {
+            const pageResults = data.data.results;
+            console.log(`[ConvosoService] Page ${page + 1}: Fetched ${pageResults.length} calls`);
+
+            // Transform log entries to CombinedCallData structure
+            return pageResults.map((entry: any): CombinedCallData => ({
               // Recording data
               recording_id: entry.recording?.[0]?.recording_id || entry.id,
               lead_id: entry.lead_id,
               start_time: entry.call_date,
-              end_time: entry.call_date, // API doesn't provide separate end time
+              end_time: entry.call_date,
               duration_seconds: parseInt(entry.call_length) || 0,
               recording_url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || '',
-
-              // Lead data (now included in the log entry)
+              // Lead data
               customer_first_name: entry.first_name || '',
               customer_last_name: entry.last_name || '',
               customer_phone: entry.phone_number || '',
-              customer_email: '', // Not provided in log/retrieve
+              customer_email: '',
               agent_id: entry.user_id || '',
               agent_name: entry.user || '',
               disposition: entry.status_name || entry.status || 'UNKNOWN',
               campaign_name: entry.campaign || 'Unknown Campaign',
               list_name: entry.list_id || 'Unknown List'
             }));
-
-          allCalls.push(...combinedData);
-
-          // Report progress if callback provided
-          if (progressCallback) {
-            progressCallback(allCalls.length, totalFound);
           }
+          return [];
+        } catch (error: any) {
+          console.error(`[ConvosoService] Error fetching page ${page + 1}:`, error);
+          return []; // Return empty array for failed pages
+        }
+      };
 
-          // Check if we need to fetch more pages
-          if (pageResults.length < limit || allCalls.length >= totalFound) {
-            hasMore = false;
-          } else {
-            offset += limit;
-            // Add small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        } else {
-          hasMore = false;
-        }
-      } catch (error: any) {
-        console.error(`[ConvosoService] Error fetching page at offset ${offset}:`, error);
-        // If we've already fetched some data, return what we have
-        if (allCalls.length > 0) {
-          console.warn(`[ConvosoService] Returning partial results: ${allCalls.length} calls fetched before error`);
-          return allCalls;
-        }
-        throw error;
-      }
+      fetchPromises.push(fetchPage());
     }
 
-    console.log(`[ConvosoService] Completed fetching ${allCalls.length} calls out of ${totalFound} total`);
+    // Execute all fetches in parallel
+    console.log(`[ConvosoService] Fetching ${pagesNeeded} pages in parallel...`);
+    const pageResults = await Promise.all(fetchPromises);
+
+    // Flatten all results
+    const allCalls = pageResults.flat();
+
+    if (progressCallback) {
+      progressCallback(allCalls.length, totalFound);
+    }
+
+    if (pagesNeeded >= maxPages && totalFound > allCalls.length) {
+      console.log(`[ConvosoService] Reached max page limit. Fetched ${allCalls.length} out of ${totalFound} total calls`);
+    } else {
+      console.log(`[ConvosoService] Completed fetching ${allCalls.length} calls`);
+    }
+
     return allCalls;
   }
 
