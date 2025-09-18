@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronUpDownIcon, PlayIcon } from '@heroicons/react/24/outline';
 
 interface Call {
   recording_id: string;
@@ -62,36 +61,36 @@ export default function ConvosoImporter() {
 
   const searchCalls = async () => {
     if (!dateFrom || !dateTo) {
-      toast.error('Please select date range');
+      toast.error('Please select both start and end dates');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch('/api/convoso/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          dateFrom,
-          dateTo,
-          timeFrom,
-          timeTo
-        })
+      const params = new URLSearchParams({
+        dateFrom,
+        dateTo,
+        ...(timeFrom && { timeFrom }),
+        ...(timeTo && { timeTo })
       });
 
+      const response = await fetch(`/api/convoso/search?${params}`);
       if (!response.ok) {
         throw new Error('Failed to search calls');
       }
 
       const data = await response.json();
-      setCalls(data.calls);
-      setFilteredCalls(data.calls);
-      setFilterOptions(data.filterOptions);
-      setSelectedCalls(new Set());
+      setCalls(data.calls || []);
+      setFilterOptions(data.filterOptions || {
+        campaigns: [],
+        lists: [],
+        dispositions: [],
+        agents: []
+      });
 
-      toast.success(`Found ${data.calls.length} calls`);
+      // Apply initial filters
+      applyFilters();
+      toast.success(`Found ${data.calls?.length || 0} calls`);
     } catch (error) {
       console.error('Error searching calls:', error);
       toast.error('Failed to search calls');
@@ -100,23 +99,21 @@ export default function ConvosoImporter() {
     }
   };
 
-  const importSelectedCalls = async () => {
-    if (selectedCalls.size === 0) {
-      toast.error('Please select calls to import');
+  const importCalls = async () => {
+    const callsToImport = Array.from(selectedCalls).map(id =>
+      calls.find(c => c.recording_id === id)
+    ).filter(Boolean);
+
+    if (callsToImport.length === 0) {
+      toast.error('No calls selected for import');
       return;
     }
 
     setImporting(true);
     try {
-      const callsToImport = calls.filter(call =>
-        selectedCalls.has(call.recording_id)
-      );
-
       const response = await fetch('/api/convoso/import', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           calls: callsToImport
         })
@@ -163,31 +160,32 @@ export default function ConvosoImporter() {
     filtered.sort((a, b) => {
       const aVal = a[sortField];
       const bVal = b[sortField];
+      const modifier = sortDirection === 'asc' ? 1 : -1;
 
-      if (typeof aVal === 'string') {
-        return sortDirection === 'asc'
-          ? aVal.localeCompare(bVal as string)
-          : (bVal as string).localeCompare(aVal);
-      } else {
-        return sortDirection === 'asc'
-          ? (aVal as number) - (bVal as number)
-          : (bVal as number) - (aVal as number);
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return (aVal - bVal) * modifier;
       }
+      return String(aVal).localeCompare(String(bVal)) * modifier;
     });
 
     setFilteredCalls(filtered);
   };
 
-  const toggleSort = (field: keyof Call) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  const handleFilterChange = () => {
+    applyFilters();
   };
 
-  const toggleSelectAll = () => {
+  const toggleCallSelection = (id: string) => {
+    const newSelection = new Set(selectedCalls);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedCalls(newSelection);
+  };
+
+  const selectAll = () => {
     if (selectedCalls.size === filteredCalls.length) {
       setSelectedCalls(new Set());
     } else {
@@ -195,100 +193,250 @@ export default function ConvosoImporter() {
     }
   };
 
-  const toggleSelectCall = (recordingId: string) => {
-    const newSelection = new Set(selectedCalls);
-    if (newSelection.has(recordingId)) {
-      newSelection.delete(recordingId);
-    } else {
-      newSelection.add(recordingId);
-    }
-    setSelectedCalls(newSelection);
-  };
-
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
+    const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const playRecording = (url: string) => {
-    window.open(url, '_blank');
-  };
-
-  // Apply filters when they change
-  const handleFilterChange = () => {
-    applyFilters();
-  };
-
   return (
-    <div className="bg-white rounded-lg shadow">
-      <div className="p-6">
-        <h2 className="text-2xl font-bold mb-6">Convoso Call Importer</h2>
+    <div style={{
+      background: '#ffffff',
+      borderRadius: '12px',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+      border: '1px solid #e5e7eb',
+      overflow: 'hidden'
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '24px 32px',
+        borderBottom: '1px solid #e5e7eb',
+        background: 'linear-gradient(to right, #f9fafb, #ffffff)'
+      }}>
+        <h2 style={{
+          fontSize: '24px',
+          fontWeight: '700',
+          color: '#111827',
+          marginBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '28px' }}>📥</span>
+          Convoso Call Importer
+        </h2>
+        <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+          Search and import call recordings from Convoso
+        </p>
+      </div>
 
+      {/* Main Content */}
+      <div style={{ padding: '32px' }}>
         {/* Search Section */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-semibold mb-4">Search Calls</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div style={{
+          padding: '24px',
+          background: '#f9fafb',
+          borderRadius: '8px',
+          border: '1px solid #e5e7eb',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#374151',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>🔍</span> Search Calls
+          </h3>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '20px'
+          }}>
             <div>
-              <label className="block text-sm font-medium mb-1">Date From</label>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                Date From
+              </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  color: '#111827'
+                }}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Date To</label>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                Date To
+              </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  color: '#111827'
+                }}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Time From (optional)</label>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                Time From (optional)
+              </label>
               <input
                 type="time"
                 value={timeFrom}
                 onChange={(e) => setTimeFrom(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  color: '#111827'
+                }}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Time To (optional)</label>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                Time To (optional)
+              </label>
               <input
                 type="time"
                 value={timeTo}
                 onChange={(e) => setTimeTo(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
+
           <button
             onClick={searchCalls}
             disabled={loading}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            style={{
+              padding: '10px 24px',
+              background: loading ? '#9ca3af' : '#3b82f6',
+              color: '#ffffff',
+              borderRadius: '6px',
+              border: 'none',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = '#2563eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = '#3b82f6';
+              }
+            }}
           >
-            {loading ? 'Searching...' : 'Search Calls'}
+            {loading ? 'Searching...' : '🔍 Search Calls'}
           </button>
         </div>
 
         {/* Filters Section */}
         {calls.length > 0 && (
-          <div className="mb-6 p-4 border rounded-lg">
-            <h3 className="font-semibold mb-4">Filters</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div style={{
+            padding: '20px',
+            background: '#f9fafb',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            marginBottom: '24px'
+          }}>
+            <h3 style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>🎯</span> Filters
+            </h3>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px'
+            }}>
               <div>
-                <label className="block text-sm font-medium mb-1">Agent</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  Agent
+                </label>
                 <select
                   value={selectedAgent}
                   onChange={(e) => {
                     setSelectedAgent(e.target.value);
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 >
                   <option value="">All Agents</option>
                   {filterOptions.agents.map(agent => (
@@ -296,15 +444,26 @@ export default function ConvosoImporter() {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Disposition</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  Disposition
+                </label>
                 <select
                   value={selectedDisposition}
                   onChange={(e) => {
                     setSelectedDisposition(e.target.value);
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 >
                   <option value="">All Dispositions</option>
                   {filterOptions.dispositions.map(disp => (
@@ -312,15 +471,26 @@ export default function ConvosoImporter() {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Campaign</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  Campaign
+                </label>
                 <select
                   value={selectedCampaign}
                   onChange={(e) => {
                     setSelectedCampaign(e.target.value);
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 >
                   <option value="">All Campaigns</option>
                   {filterOptions.campaigns.map(camp => (
@@ -328,15 +498,26 @@ export default function ConvosoImporter() {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">List</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  List
+                </label>
                 <select
                   value={selectedList}
                   onChange={(e) => {
                     setSelectedList(e.target.value);
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 >
                   <option value="">All Lists</option>
                   {filterOptions.lists.map(list => (
@@ -344,8 +525,11 @@ export default function ConvosoImporter() {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Min Duration (sec)</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  Min Duration (sec)
+                </label>
                 <input
                   type="number"
                   value={minDuration}
@@ -354,11 +538,22 @@ export default function ConvosoImporter() {
                     setMinDuration(Math.max(1, Number(e.target.value)));
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Max Duration (sec)</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                  Max Duration (sec)
+                </label>
                 <input
                   type="number"
                   value={maxDuration}
@@ -366,164 +561,212 @@ export default function ConvosoImporter() {
                     setMaxDuration(Number(e.target.value));
                     handleFilterChange();
                   }}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '13px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    color: '#111827'
+                  }}
                 />
               </div>
             </div>
           </div>
         )}
 
-        {/* Results Table */}
+        {/* Results Section */}
         {filteredCalls.length > 0 && (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">
-                Results ({filteredCalls.length} calls, {selectedCalls.size} selected)
+          <>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px'
+            }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#374151'
+              }}>
+                📞 Found {filteredCalls.length} calls
               </h3>
-              <button
-                onClick={importSelectedCalls}
-                disabled={importing || selectedCalls.size === 0}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {importing ? 'Importing...' : `Import Selected (${selectedCalls.size})`}
-              </button>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={selectAll}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#ffffff',
+                    color: '#4b5563',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f9fafb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#ffffff';
+                  }}
+                >
+                  {selectedCalls.size === filteredCalls.length ? 'Deselect All' : 'Select All'}
+                </button>
+
+                <button
+                  onClick={importCalls}
+                  disabled={importing || selectedCalls.size === 0}
+                  style={{
+                    padding: '8px 20px',
+                    background: importing || selectedCalls.size === 0 ? '#9ca3af' : '#10b981',
+                    color: '#ffffff',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: importing || selectedCalls.size === 0 ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!importing && selectedCalls.size > 0) {
+                      e.currentTarget.style.background = '#059669';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!importing && selectedCalls.size > 0) {
+                      e.currentTarget.style.background = '#10b981';
+                    }
+                  }}
+                >
+                  {importing ? 'Importing...' : `📤 Import Selected (${selectedCalls.size})`}
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left">
+            {/* Table */}
+            <div style={{
+              overflowX: 'auto',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              background: '#ffffff'
+            }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '14px'
+              }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
                       <input
                         type="checkbox"
-                        checked={selectedCalls.size === filteredCalls.length}
-                        onChange={toggleSelectAll}
-                        className="rounded border-gray-300"
+                        checked={selectedCalls.size === filteredCalls.length && filteredCalls.length > 0}
+                        onChange={selectAll}
+                        style={{ cursor: 'pointer' }}
                       />
                     </th>
-                    <th
-                      onClick={() => toggleSort('start_time')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Date/Time
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
+                        onClick={() => {
+                          setSortField('start_time');
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          handleFilterChange();
+                        }}>
+                      Date/Time {sortField === 'start_time' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
-                    <th
-                      onClick={() => toggleSort('customer_phone')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Customer
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
+                      Customer
                     </th>
-                    <th
-                      onClick={() => toggleSort('agent_name')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Agent
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
+                        onClick={() => {
+                          setSortField('agent_name');
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          handleFilterChange();
+                        }}>
+                      Agent {sortField === 'agent_name' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
-                    <th
-                      onClick={() => toggleSort('duration_seconds')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Duration
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
+                        onClick={() => {
+                          setSortField('duration_seconds');
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          handleFilterChange();
+                        }}>
+                      Duration {sortField === 'duration_seconds' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
-                    <th
-                      onClick={() => toggleSort('disposition')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Disposition
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
+                        onClick={() => {
+                          setSortField('disposition');
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          handleFilterChange();
+                        }}>
+                      Disposition {sortField === 'disposition' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
-                    <th
-                      onClick={() => toggleSort('campaign_name')}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        Campaign
-                        <ChevronUpDownIcon className="h-4 w-4" />
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Recording
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
+                      Campaign
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCalls.map((call) => (
-                    <tr key={call.recording_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                <tbody>
+                  {filteredCalls.map((call, index) => (
+                    <tr
+                      key={call.recording_id}
+                      style={{
+                        borderBottom: '1px solid #f3f4f6',
+                        background: index % 2 === 0 ? '#ffffff' : '#fafafa',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? '#ffffff' : '#fafafa'}
+                    >
+                      <td style={{ padding: '12px 16px' }}>
                         <input
                           type="checkbox"
                           checked={selectedCalls.has(call.recording_id)}
-                          onChange={() => toggleSelectCall(call.recording_id)}
-                          className="rounded border-gray-300"
+                          onChange={() => toggleCallSelection(call.recording_id)}
+                          style={{ cursor: 'pointer' }}
                         />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td style={{ padding: '12px 16px', color: '#111827' }}>
                         {new Date(call.start_time).toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div>
-                          <div className="font-medium">
-                            {call.customer_first_name} {call.customer_last_name}
-                          </div>
-                          <div className="text-gray-500">{call.customer_phone}</div>
+                      <td style={{ padding: '12px 16px', color: '#111827' }}>
+                        <div style={{ fontWeight: '500' }}>
+                          {call.customer_first_name} {call.customer_last_name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {call.customer_phone}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td style={{ padding: '12px 16px', color: '#111827' }}>
                         {call.agent_name}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td style={{ padding: '12px 16px', color: '#111827' }}>
                         {formatDuration(call.duration_seconds)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          call.disposition === 'SALE' ? 'bg-green-100 text-green-800' :
-                          call.disposition === 'CALLBACK' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          background: call.disposition === 'SALE' ? '#dcfce7' : '#f3f4f6',
+                          color: call.disposition === 'SALE' ? '#15803d' : '#4b5563'
+                        }}>
                           {call.disposition}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td style={{ padding: '12px 16px', color: '#111827' }}>
                         {call.campaign_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {call.recording_url && (
-                          <button
-                            onClick={() => playRecording(call.recording_url)}
-                            className="text-blue-600 hover:text-blue-800"
-                            title="Play recording"
-                          >
-                            <PlayIcon className="h-5 w-5" />
-                          </button>
-                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        {/* No results message */}
-        {calls.length === 0 && !loading && (
-          <div className="text-center py-8 text-gray-500">
-            Search for calls to import them into the system
-          </div>
+          </>
         )}
       </div>
     </div>
