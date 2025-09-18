@@ -19,8 +19,11 @@ export async function GET(req: NextRequest) {
     // Fetch complete call data (recordings + lead info)
     const allCalls = await service.fetchCompleteCallData(dateFrom, dateTo);
 
-    // Filter out 0-second calls (abandoned/failed)
-    const calls = allCalls.filter(call => call.duration_seconds > 0);
+    // Filter out 0-second calls (abandoned/failed) and Auto-Detected (no agent) calls
+    const calls = allCalls.filter(call =>
+      call.duration_seconds > 0 &&
+      call.agent_name !== 'Auto-Detected'
+    );
 
     // Get filter options from the results
     const filterOptions = service.getFilterOptions(calls);
