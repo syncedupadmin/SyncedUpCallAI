@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/src/lib/supabase/client';
 
@@ -69,95 +69,13 @@ export default function ConvosoImporter() {
   const [sortField, setSortField] = useState<keyof Call>('start_time');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  const searchCalls = async () => {
-    if (!dateFrom || !dateTo) {
-      toast.error('Please select both start and end dates');
+  // Apply filters whenever calls or filter values change
+  useEffect(() => {
+    if (calls.length === 0) {
+      setFilteredCalls([]);
       return;
     }
 
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        dateFrom,
-        dateTo,
-        ...(timeFrom && { timeFrom }),
-        ...(timeTo && { timeTo })
-      });
-
-      // TEMPORARY: Using noauth endpoint for testing
-      const response = await fetch(`/api/convoso/search-noauth?${params}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Search failed:', response.status, errorData);
-        throw new Error(errorData.error || 'Failed to search calls');
-      }
-
-      const data = await response.json();
-      setCalls(data.calls || []);
-      setFilterOptions(data.filterOptions || {
-        campaigns: [],
-        lists: [],
-        dispositions: [],
-        agents: []
-      });
-
-      // Apply initial filters
-      applyFilters();
-      toast.success(`Found ${data.calls?.length || 0} calls`);
-    } catch (error) {
-      console.error('Error searching calls:', error);
-      toast.error('Failed to search calls');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const importCalls = async () => {
-    const callsToImport = Array.from(selectedCalls).map(id =>
-      calls.find(c => c.recording_id === id)
-    ).filter(Boolean);
-
-    if (callsToImport.length === 0) {
-      toast.error('No calls selected for import');
-      return;
-    }
-
-    setImporting(true);
-    try {
-      const response = await fetch('/api/convoso/import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await getAuthToken()}`
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          calls: callsToImport
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to import calls');
-      }
-
-      const data = await response.json();
-      toast.success(`Imported ${data.imported} calls, ${data.queued_for_transcription} queued for transcription`);
-
-      // Clear selection
-      setSelectedCalls(new Set());
-    } catch (error) {
-      console.error('Error importing calls:', error);
-      toast.error('Failed to import calls');
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const applyFilters = () => {
     let filtered = [...calls];
 
     if (selectedAgent) {
@@ -190,11 +108,96 @@ export default function ConvosoImporter() {
     });
 
     setFilteredCalls(filtered);
+  }, [calls, selectedAgent, selectedDisposition, selectedCampaign, selectedList, minDuration, maxDuration, sortField, sortDirection]);
+
+  const searchCalls = async () => {
+    if (!dateFrom || !dateTo) {
+      toast.error('Please select both start and end dates');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        dateFrom,
+        dateTo,
+        ...(timeFrom && { timeFrom }),
+        ...(timeTo && { timeTo })
+      });
+
+      // TEMPORARY: Using noauth endpoint for testing
+      const response = await fetch(`/api/convoso/search-noauth?${params}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Search failed:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to search calls');
+      }
+
+      const data = await response.json();
+      const fetchedCalls = data.calls || [];
+      setCalls(fetchedCalls);
+      setFilteredCalls(fetchedCalls); // Set filtered calls immediately with all data
+      setFilterOptions(data.filterOptions || {
+        campaigns: [],
+        lists: [],
+        dispositions: [],
+        agents: []
+      });
+
+      toast.success(`Found ${fetchedCalls.length} calls`);
+    } catch (error) {
+      console.error('Error searching calls:', error);
+      toast.error('Failed to search calls');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleFilterChange = () => {
-    applyFilters();
+  const importCalls = async () => {
+    const callsToImport = Array.from(selectedCalls).map(id =>
+      calls.find(c => c.recording_id === id)
+    ).filter(Boolean);
+
+    if (callsToImport.length === 0) {
+      toast.error('No calls selected for import');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      // TEMPORARY: Using noauth endpoint for testing
+      const response = await fetch('/api/convoso/import-noauth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          calls: callsToImport
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to import calls');
+      }
+
+      const data = await response.json();
+      toast.success(`Imported ${data.imported} calls, ${data.queued_for_transcription} queued for transcription`);
+
+      // Clear selection
+      setSelectedCalls(new Set());
+    } catch (error) {
+      console.error('Error importing calls:', error);
+      toast.error('Failed to import calls');
+    } finally {
+      setImporting(false);
+    }
   };
+
+  // Filter change is now handled by useEffect above
 
   const toggleCallSelection = (id: string) => {
     const newSelection = new Set(selectedCalls);
@@ -447,7 +450,6 @@ export default function ConvosoImporter() {
                   value={selectedAgent}
                   onChange={(e) => {
                     setSelectedAgent(e.target.value);
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -474,7 +476,6 @@ export default function ConvosoImporter() {
                   value={selectedDisposition}
                   onChange={(e) => {
                     setSelectedDisposition(e.target.value);
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -501,7 +502,6 @@ export default function ConvosoImporter() {
                   value={selectedCampaign}
                   onChange={(e) => {
                     setSelectedCampaign(e.target.value);
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -528,7 +528,6 @@ export default function ConvosoImporter() {
                   value={selectedList}
                   onChange={(e) => {
                     setSelectedList(e.target.value);
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -557,7 +556,6 @@ export default function ConvosoImporter() {
                   min="1"
                   onChange={(e) => {
                     setMinDuration(Math.max(1, Number(e.target.value)));
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -580,7 +578,6 @@ export default function ConvosoImporter() {
                   value={maxDuration}
                   onChange={(e) => {
                     setMaxDuration(Number(e.target.value));
-                    handleFilterChange();
                   }}
                   style={{
                     width: '100%',
@@ -694,8 +691,7 @@ export default function ConvosoImporter() {
                         onClick={() => {
                           setSortField('start_time');
                           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          handleFilterChange();
-                        }}>
+                              }}>
                       Date/Time {sortField === 'start_time' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
@@ -705,24 +701,21 @@ export default function ConvosoImporter() {
                         onClick={() => {
                           setSortField('agent_name');
                           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          handleFilterChange();
-                        }}>
+                              }}>
                       Agent {sortField === 'agent_name' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
                         onClick={() => {
                           setSortField('duration_seconds');
                           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          handleFilterChange();
-                        }}>
+                              }}>
                       Duration {sortField === 'duration_seconds' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', cursor: 'pointer' }}
                         onClick={() => {
                           setSortField('disposition');
                           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          handleFilterChange();
-                        }}>
+                              }}>
                       Disposition {sortField === 'disposition' && (sortDirection === 'desc' ? '↓' : '↑')}
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
