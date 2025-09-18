@@ -40,10 +40,14 @@ export default function ConvosoControlBoard() {
 
   const loadSettings = async () => {
     try {
-      const response = await fetch('/api/convoso/control');
+      // TEMPORARY: Using noauth endpoint for testing
+      const response = await fetch('/api/convoso/control-noauth');
       if (response.ok) {
         const data = await response.json();
+        console.log('[ConvosoControlBoard] Loaded settings:', data);
         setSettings(data);
+      } else {
+        console.error('[ConvosoControlBoard] Failed to load settings:', response.status);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -56,7 +60,8 @@ export default function ConvosoControlBoard() {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const response = await fetch('/api/convoso/control', {
+      // TEMPORARY: Using noauth endpoint for testing
+      const response = await fetch('/api/convoso/control-noauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
@@ -66,7 +71,9 @@ export default function ConvosoControlBoard() {
         toast.success('Control settings saved successfully!');
         await loadSettings(); // Reload to get updated timestamps
       } else {
-        throw new Error('Failed to save settings');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[ConvosoControlBoard] Save failed:', errorData);
+        throw new Error(errorData.error || 'Failed to save settings');
       }
     } catch (error) {
       console.error('Error saving settings:', error);

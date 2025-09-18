@@ -138,7 +138,9 @@ export default function ConvosoImporter() {
       }
 
       const data = await response.json();
+      console.log('[ConvosoImporter] API Response:', data);
       const fetchedCalls = data.calls || [];
+      console.log('[ConvosoImporter] Fetched calls:', fetchedCalls.length, fetchedCalls);
       setCalls(fetchedCalls);
       setFilteredCalls(fetchedCalls); // Set filtered calls immediately with all data
       setFilterOptions(data.filterOptions || {
@@ -147,6 +149,7 @@ export default function ConvosoImporter() {
         dispositions: [],
         agents: []
       });
+      console.log('[ConvosoImporter] State updated - calls:', fetchedCalls.length, 'filtered:', fetchedCalls.length);
 
       toast.success(`Found ${fetchedCalls.length} calls`);
     } catch (error) {
@@ -593,6 +596,9 @@ export default function ConvosoImporter() {
             </div>
           </div>
         )}
+
+        {/* Debug Info */}
+        {console.log('[ConvosoImporter Render] calls:', calls.length, 'filteredCalls:', filteredCalls.length)}
 
         {/* Results Section */}
         {filteredCalls.length > 0 && (
