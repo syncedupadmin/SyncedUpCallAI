@@ -44,7 +44,10 @@ export async function POST(req: NextRequest) {
     const service = new ConvosoService();
 
     // Fetch complete call data (recordings + lead info)
-    const calls = await service.fetchCompleteCallData(dateFrom, dateTo);
+    const allCalls = await service.fetchCompleteCallData(dateFrom, dateTo);
+
+    // Filter out 0-second calls (abandoned/failed)
+    const calls = allCalls.filter(call => call.duration_seconds > 0);
 
     // Get filter options from the results
     const filterOptions = service.getFilterOptions(calls);

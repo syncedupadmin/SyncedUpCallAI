@@ -260,7 +260,8 @@ export class ConvosoService {
       return [];
     }
 
-    let filtered = [...calls];
+    // Always filter out 0-second calls (abandoned/failed)
+    let filtered = calls.filter(call => call.duration_seconds > 0);
 
     // Filter by campaigns
     if (settings.active_campaigns.length > 0) {
