@@ -62,7 +62,7 @@ export default function ConvosoImporter() {
   const [selectedDisposition, setSelectedDisposition] = useState('');
   const [selectedCampaign, setSelectedCampaign] = useState('');
   const [selectedList, setSelectedList] = useState('');
-  const [minDuration, setMinDuration] = useState(1); // Minimum 1 second (no abandoned calls)
+  const [minDuration, setMinDuration] = useState(0); // Show all calls by default
   const [maxDuration, setMaxDuration] = useState(3600);
 
   // Sorting
@@ -556,9 +556,9 @@ export default function ConvosoImporter() {
                 <input
                   type="number"
                   value={minDuration}
-                  min="1"
+                  min="0"
                   onChange={(e) => {
-                    setMinDuration(Math.max(1, Number(e.target.value)));
+                    setMinDuration(Math.max(0, Number(e.target.value)));
                   }}
                   style={{
                     width: '100%',
@@ -598,6 +598,24 @@ export default function ConvosoImporter() {
         )}
 
         {/* Results Section */}
+        {calls.length > 0 && filteredCalls.length === 0 && (
+          <div style={{
+            padding: '40px',
+            textAlign: 'center',
+            background: '#f9fafb',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            marginTop: '20px'
+          }}>
+            <p style={{ color: '#6b7280', fontSize: '16px', margin: 0 }}>
+              No calls match the current filters. Try adjusting your filter criteria.
+            </p>
+            <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '8px' }}>
+              {calls.length} calls were found but filtered out.
+            </p>
+          </div>
+        )}
+
         {filteredCalls.length > 0 && (
           <>
             <div style={{
