@@ -53,7 +53,7 @@ export default function ConvosoImporter() {
   const [selectedDisposition, setSelectedDisposition] = useState('');
   const [selectedCampaign, setSelectedCampaign] = useState('');
   const [selectedList, setSelectedList] = useState('');
-  const [minDuration, setMinDuration] = useState(0);
+  const [minDuration, setMinDuration] = useState(1); // Minimum 1 second (no abandoned calls)
   const [maxDuration, setMaxDuration] = useState(3600);
 
   // Sorting
@@ -349,8 +349,9 @@ export default function ConvosoImporter() {
                 <input
                   type="number"
                   value={minDuration}
+                  min="1"
                   onChange={(e) => {
-                    setMinDuration(Number(e.target.value));
+                    setMinDuration(Math.max(1, Number(e.target.value)));
                     handleFilterChange();
                   }}
                   className="w-full px-3 py-2 border rounded-lg"
