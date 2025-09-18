@@ -29,6 +29,15 @@ interface FilterOptions {
   agents: string[];
 }
 
+interface Agent {
+  user_id: string;
+  name: string;
+  email?: string;
+  campaigns?: string[];
+  lastActivity?: string;
+  totalEvents?: number;
+}
+
 export default function ConvosoImporter() {
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -41,6 +50,12 @@ export default function ConvosoImporter() {
     dispositions: [],
     agents: []
   });
+
+  // Agent selection states
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [searchMode, setSearchMode] = useState<'all' | 'agent'>('all');
 
   // Initialize Supabase client
   const supabase = createClient();
@@ -121,53 +136,129 @@ export default function ConvosoImporter() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedCalls = filteredCalls.slice(startIndex, endIndex);
 
-  const searchCalls = async () => {
+  // Fetch list of agents for the date range
+  const fetchAgents = async () => {
     if (!dateFrom || !dateTo) {
       toast.error('Please select both start and end dates');
+      return;
+    }
+
+    setLoadingAgents(true);
+    try {
+      const params = new URLSearchParams({ dateFrom, dateTo });
+
+      const response = await fetch(`/api/convoso/get-agents?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch agents');
+      }
+
+      const data = await response.json();
+      setAgents(data.agents || []);
+      toast.success(`Found ${data.agents?.length || 0} agents`);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+      toast.error('Failed to fetch agents');
+    } finally {
+      setLoadingAgents(false);
+    }
+  };
+
+  // Search for calls by specific agent
+  const searchByAgent = async () => {
+    if (!selectedAgentId || !dateFrom || !dateTo) {
+      toast.error('Please select an agent and date range');
       return;
     }
 
     setLoading(true);
     try {
       const params = new URLSearchParams({
+        userId: selectedAgentId,
         dateFrom,
-        dateTo,
-        ...(timeFrom && { timeFrom }),
-        ...(timeTo && { timeTo })
+        dateTo
       });
 
-      // TEMPORARY: Using noauth endpoint for testing
-      const response = await fetch(`/api/convoso/search-noauth?${params}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await fetch(`/api/convoso/search-by-agent?${params}`);
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Search failed:', response.status, errorData);
-        throw new Error(errorData.error || 'Failed to search calls');
+        throw new Error('Failed to search agent calls');
       }
 
       const data = await response.json();
-      console.log('[ConvosoImporter] API Response:', data);
-      const fetchedCalls = data.calls || [];
-      console.log('[ConvosoImporter] Fetched calls:', fetchedCalls.length, fetchedCalls);
-      setCalls(fetchedCalls);
-      setFilteredCalls(fetchedCalls); // Set filtered calls immediately with all data
-      setFilterOptions(data.filterOptions || {
-        campaigns: [],
-        lists: [],
-        dispositions: [],
-        agents: []
-      });
-      console.log('[ConvosoImporter] State updated - calls:', fetchedCalls.length, 'filtered:', fetchedCalls.length);
+      const agent = agents.find(a => a.user_id === selectedAgentId);
 
-      toast.success(`Found ${fetchedCalls.length} calls`);
+      setCalls(data.calls || []);
+      setFilteredCalls(data.calls || []);
+
+      // Set filter options based on the agent's calls
+      const calls = data.calls || [];
+      setFilterOptions({
+        campaigns: [...new Set(calls.map((c: Call) => c.campaign_name))].sort(),
+        lists: [...new Set(calls.map((c: Call) => c.list_name))].sort(),
+        dispositions: [...new Set(calls.map((c: Call) => c.disposition))].sort(),
+        agents: [agent?.name || 'Unknown Agent']
+      });
+
+      toast.success(`Found ${data.calls?.length || 0} calls for ${agent?.name}`);
     } catch (error) {
-      console.error('Error searching calls:', error);
-      toast.error('Failed to search calls');
+      console.error('Error searching by agent:', error);
+      toast.error('Failed to search agent calls');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const searchCalls = async () => {
+    if (searchMode === 'agent') {
+      await searchByAgent();
+    } else {
+      // Original search all logic
+      if (!dateFrom || !dateTo) {
+        toast.error('Please select both start and end dates');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          dateFrom,
+          dateTo,
+          ...(timeFrom && { timeFrom }),
+          ...(timeTo && { timeTo })
+        });
+
+        // TEMPORARY: Using noauth endpoint for testing
+        const response = await fetch(`/api/convoso/search-noauth?${params}`, {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Search failed:', response.status, errorData);
+          throw new Error(errorData.error || 'Failed to search calls');
+        }
+
+        const data = await response.json();
+        console.log('[ConvosoImporter] API Response:', data);
+        const fetchedCalls = data.calls || [];
+        console.log('[ConvosoImporter] Fetched calls:', fetchedCalls.length, fetchedCalls);
+        setCalls(fetchedCalls);
+        setFilteredCalls(fetchedCalls); // Set filtered calls immediately with all data
+        setFilterOptions(data.filterOptions || {
+          campaigns: [],
+          lists: [],
+          dispositions: [],
+          agents: []
+        });
+        console.log('[ConvosoImporter] State updated - calls:', fetchedCalls.length, 'filtered:', fetchedCalls.length);
+
+        toast.success(`Found ${fetchedCalls.length} calls`);
+      } catch (error) {
+        console.error('Error searching calls:', error);
+        toast.error('Failed to search calls');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -270,6 +361,67 @@ export default function ConvosoImporter() {
 
       {/* Main Content */}
       <div style={{ padding: '32px' }}>
+        {/* Search Mode Toggle */}
+        <div style={{
+          padding: '20px',
+          background: '#f0f9ff',
+          borderRadius: '8px',
+          border: '1px solid #3b82f6',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#1e40af',
+            marginBottom: '12px'
+          }}>
+            Search Mode
+          </h3>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => {
+                setSearchMode('all');
+                setSelectedAgentId('');
+                setCalls([]);
+                setFilteredCalls([]);
+              }}
+              style={{
+                padding: '8px 20px',
+                background: searchMode === 'all' ? '#3b82f6' : '#ffffff',
+                color: searchMode === 'all' ? '#ffffff' : '#374151',
+                borderRadius: '6px',
+                border: searchMode === 'all' ? 'none' : '1px solid #d1d5db',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Search All Calls (Limited to 30k)
+            </button>
+            <button
+              onClick={() => {
+                setSearchMode('agent');
+                setCalls([]);
+                setFilteredCalls([]);
+              }}
+              style={{
+                padding: '8px 20px',
+                background: searchMode === 'agent' ? '#3b82f6' : '#ffffff',
+                color: searchMode === 'agent' ? '#ffffff' : '#374151',
+                borderRadius: '6px',
+                border: searchMode === 'agent' ? 'none' : '1px solid #d1d5db',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Search by Agent (Unlimited)
+            </button>
+          </div>
+        </div>
+
         {/* Search Section */}
         <div style={{
           padding: '24px',
@@ -287,7 +439,7 @@ export default function ConvosoImporter() {
             alignItems: 'center',
             gap: '8px'
           }}>
-            <span>🔍</span> Search Calls
+            <span>🔍</span> {searchMode === 'agent' ? 'Search by Agent' : 'Search All Calls'}
           </h3>
 
           <div style={{
@@ -401,9 +553,105 @@ export default function ConvosoImporter() {
             </div>
           </div>
 
+          {/* Agent selection for agent mode */}
+          {searchMode === 'agent' && (
+            <div style={{
+              marginTop: '20px',
+              padding: '16px',
+              background: '#ffffff',
+              borderRadius: '6px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-end'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: '#374151',
+                    marginBottom: '4px'
+                  }}>
+                    Select Agent
+                  </label>
+                  {agents.length === 0 ? (
+                    <button
+                      onClick={fetchAgents}
+                      disabled={loadingAgents || !dateFrom || !dateTo}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: loadingAgents ? '#f3f4f6' : '#ffffff',
+                        color: '#374151',
+                        cursor: loadingAgents || !dateFrom || !dateTo ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {loadingAgents ? 'Loading agents...' : 'Click to Load Agents'}
+                    </button>
+                  ) : (
+                    <select
+                      value={selectedAgentId}
+                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: '#ffffff',
+                        color: '#111827'
+                      }}
+                    >
+                      <option value="">Select an agent...</option>
+                      {agents.map(agent => (
+                        <option key={agent.user_id} value={agent.user_id}>
+                          {agent.name} ({agent.totalEvents || 0} events)
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {agents.length > 0 && (
+                  <button
+                    onClick={fetchAgents}
+                    disabled={loadingAgents}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#ffffff',
+                      color: '#6b7280',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '14px',
+                      cursor: loadingAgents ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Refresh
+                  </button>
+                )}
+              </div>
+              {agents.length > 0 && (
+                <p style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  marginTop: '8px',
+                  margin: 0,
+                  paddingTop: '8px'
+                }}>
+                  Found {agents.length} agents in the selected date range
+                </p>
+              )}
+            </div>
+          )}
+
           <button
             onClick={searchCalls}
-            disabled={loading}
+            disabled={loading || (searchMode === 'agent' && !selectedAgentId)}
             style={{
               padding: '10px 24px',
               background: loading ? '#9ca3af' : '#3b82f6',
@@ -426,7 +674,11 @@ export default function ConvosoImporter() {
               }
             }}
           >
-            {loading ? 'Searching...' : '🔍 Search Calls'}
+            {loading
+              ? 'Searching...'
+              : searchMode === 'agent'
+                ? `🔍 Search Agent Calls`
+                : '🔍 Search All Calls'}
           </button>
         </div>
 

@@ -423,7 +423,7 @@ export class ConvosoService {
     };
 
     const limit = 10000; // Convoso API max limit per request
-    const maxPages = 3; // Limit to 3 pages (30k calls) to prevent timeouts
+    const maxPages = progressCallback ? 10 : 3; // Allow more pages if progress tracking is enabled (for background/specific operations)
 
     console.log(`[ConvosoService] Fetching complete call data from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
 
