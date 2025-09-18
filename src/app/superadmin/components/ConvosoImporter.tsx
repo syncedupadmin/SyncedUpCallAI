@@ -84,12 +84,11 @@ export default function ConvosoImporter() {
         ...(timeTo && { timeTo })
       });
 
-      const response = await fetch(`/api/convoso/search?${params}`, {
+      // TEMPORARY: Using noauth endpoint for testing
+      const response = await fetch(`/api/convoso/search-noauth?${params}`, {
         headers: {
-          'Authorization': `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json',
-        },
-        credentials: 'include'
+        }
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
