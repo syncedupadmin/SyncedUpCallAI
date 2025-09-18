@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface Call {
   recording_id: string;
@@ -41,6 +42,15 @@ export default function ConvosoImporter() {
     agents: []
   });
 
+  // Initialize Supabase client
+  const supabase = createClientComponentClient();
+
+  // Helper function to get auth token
+  const getAuthToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || '';
+  };
+
   // Search parameters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -74,9 +84,17 @@ export default function ConvosoImporter() {
         ...(timeTo && { timeTo })
       });
 
-      const response = await fetch(`/api/convoso/search?${params}`);
+      const response = await fetch(`/api/convoso/search?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
       if (!response.ok) {
-        throw new Error('Failed to search calls');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Search failed:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to search calls');
       }
 
       const data = await response.json();
@@ -113,7 +131,11 @@ export default function ConvosoImporter() {
     try {
       const response = await fetch('/api/convoso/import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await getAuthToken()}`
+        },
+        credentials: 'include',
         body: JSON.stringify({
           calls: callsToImport
         })
