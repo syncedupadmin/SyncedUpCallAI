@@ -21,11 +21,13 @@ export async function GET(req: NextRequest) {
 
   // Verify this is called by Vercel Cron, has valid secret, or admin auth
   const vercelCronHeader = req.headers.get('x-vercel-cron');
+  const userAgent = req.headers.get('user-agent');
+  const isVercelCron = vercelCronHeader || userAgent?.includes('vercel-cron');
   const cronSecret = req.headers.get('x-cron-secret');
   const hasAdminAuth = isAdminAuthenticated(req);
 
   const authorized =
-    !!vercelCronHeader ||
+    isVercelCron ||
     (cronSecret && cronSecret === process.env.CRON_SECRET) ||
     hasAdminAuth;
 

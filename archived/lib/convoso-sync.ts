@@ -61,9 +61,10 @@ export class ConvosoSyncService {
 
       console.log(`[Convoso Sync] Fetching recordings since: ${lastCheckDate}`);
 
-      // Use the CORRECT endpoint: leads/get-recordings
+      // Use the CORRECT endpoint: leads/get-recordings with lead_id=0
       const params = new URLSearchParams({
         auth_token: CONVOSO_AUTH_TOKEN!,
+        lead_id: '0',  // This returns ALL recordings!
         date_from: lastCheckDate,  // YYYY-MM-DD format
         date_to: new Date().toISOString().split('T')[0], // Today
         limit: '500'
@@ -82,16 +83,16 @@ export class ConvosoSyncService {
 
       const data = await response.json();
 
-      // The response structure is different for get-recordings
-      if (!data || !data.recordings) {
+      // The response structure is data.data.entries when using lead_id=0
+      if (!data || !data.data || !data.data.entries || data.data.entries.length === 0) {
         console.log('[Convoso Sync] No recordings found');
         return { success: true, count: 0 };
       }
 
-      console.log(`[Convoso Sync] Found ${data.recordings.length} recordings`);
+      console.log(`[Convoso Sync] Found ${data.data.total} total recordings, processing ${data.data.entries.length}`);
 
-      // 3. Process recordings (different field names!)
-      const recordings = data.recordings;
+      // 3. Process recordings from data.entries
+      const recordings = data.data.entries;
       let processedCount = 0;
       let latestDate = lastCheckDate;
 

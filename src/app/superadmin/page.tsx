@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-const ConvosoPanel = dynamic(() => import('./parts/ConvosoPanel'), {
+const ConvosoControlBoard = dynamic(() => import('./components/ConvosoControlBoard'), {
   ssr: false,
-  loading: () => <div className="pulse">Loading Convoso panel...</div>
+  loading: () => <div className="pulse">Loading control board...</div>
+});
+
+const ConvosoImporter = dynamic(() => import('./components/ConvosoImporter'), {
+  ssr: false,
+  loading: () => <div className="pulse">Loading importer...</div>
 });
 
 export default function AdminPage() {
@@ -358,7 +363,15 @@ export default function AdminPage() {
       </div>
 
       {/* Convoso Sync Panel - Full Width */}
-      <ConvosoPanel />
+      {/* Convoso Control Board */}
+      <div style={{ marginTop: 32 }}>
+        <ConvosoControlBoard />
+      </div>
+
+      {/* Convoso Import Dashboard */}
+      <div style={{ marginTop: 32 }}>
+        <ConvosoImporter />
+      </div>
 
       {/* System Info */}
       <div className="glass-card" style={{ marginTop: 24 }}>

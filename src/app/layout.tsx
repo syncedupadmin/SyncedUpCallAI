@@ -19,6 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <script src="/unregister-sw.js" defer />
+      </head>
       <body className="antialiased">
         {children}
       </body>

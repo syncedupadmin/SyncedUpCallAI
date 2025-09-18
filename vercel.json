@@ -29,12 +29,8 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/convoso-delta",
+      "path": "/api/cron/convoso-auto",
       "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/convoso-sync",
-      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
