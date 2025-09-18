@@ -80,27 +80,34 @@ export class ConvosoService {
   }
 
   /**
-   * Fetch recordings from Convoso API using the /users/recordings endpoint
-   * Note: This requires a user parameter (email or user ID)
-   * For now, we'll still use lead_id=0 trick with /leads/get-recordings as it works
+   * Fetch call logs with recordings from Convoso API using the /log/retrieve endpoint
+   * This endpoint properly respects date parameters and includes all call metadata
    */
-  async fetchRecordings(dateFrom: string, dateTo: string, limit: number = 500): Promise<ConvosoRecording[]> {
-    // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS if needed
+  async fetchRecordings(dateFrom: string, dateTo: string, limit: number = 10000): Promise<ConvosoRecording[]> {
+    // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS
     const formatDateTime = (date: string) => {
       if (date.includes(' ')) return date; // Already formatted
-      return `${date} 00:00:00`; // Add time component
+      if (date.includes(':')) return date; // Has time
+      return `${date} 00:00:00`; // Add start of day
+    };
+
+    const formatEndDateTime = (date: string) => {
+      if (date.includes(' ')) return date; // Already formatted
+      if (date.includes(':')) return date; // Has time
+      return `${date} 23:59:59`; // Add end of day
     };
 
     const params = new URLSearchParams({
       auth_token: CONVOSO_AUTH_TOKEN!,
-      lead_id: '0', // This returns ALL recordings
-      date_from: dateFrom, // YYYY-MM-DD format
-      date_to: dateTo,
-      limit: String(limit)
+      start_time: formatDateTime(dateFrom),
+      end_time: formatEndDateTime(dateTo),
+      include_recordings: '1',
+      limit: String(limit),
+      offset: '0'
     });
 
-    const url = `${CONVOSO_API_BASE}/leads/get-recordings?${params.toString()}`;
-    console.log(`[ConvosoService] Fetching recordings from ${dateFrom} to ${dateTo}`);
+    const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
+    console.log(`[ConvosoService] Fetching call logs from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
 
     try {
       const response = await fetch(url);
@@ -116,15 +123,28 @@ export class ConvosoService {
         throw new Error(data.text || data.error || 'API returned failure');
       }
 
-      // Extract recordings from response
-      if (data.data && data.data.entries) {
-        console.log(`[ConvosoService] Found ${data.data.total} recordings, fetched ${data.data.entries.length}`);
-        return data.data.entries as ConvosoRecording[];
+      // Extract and transform call logs to match our recording structure
+      if (data.data && data.data.results) {
+        console.log(`[ConvosoService] Found ${data.data.total_found} calls, fetched ${data.data.results.length}`);
+
+        // Transform log entries to match ConvosoRecording structure
+        // NO FILTERS - let the UI handle filtering
+        const recordings = data.data.results
+          .map((entry: any) => ({
+            recording_id: entry.recording?.[0]?.recording_id || entry.id,
+            lead_id: entry.lead_id,
+            start_time: entry.call_date,
+            end_time: entry.call_date, // Will calculate from duration
+            seconds: entry.call_length,
+            url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || ''
+          }));
+
+        return recordings as ConvosoRecording[];
       }
 
       return [];
     } catch (error: any) {
-      console.error('[ConvosoService] Error fetching recordings:', error);
+      console.error('[ConvosoService] Error fetching call logs:', error);
       throw error;
     }
   }
@@ -352,29 +372,84 @@ export class ConvosoService {
   }
 
   /**
-   * Fetch and combine all data for a date range
+   * Fetch and combine all data for a date range using the new log/retrieve endpoint
    */
   async fetchCompleteCallData(dateFrom: string, dateTo: string): Promise<CombinedCallData[]> {
-    // Step 1: Fetch recordings
-    const recordings = await this.fetchRecordings(dateFrom, dateTo);
+    // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS
+    const formatDateTime = (date: string) => {
+      if (date.includes(' ')) return date; // Already formatted
+      if (date.includes(':')) return date; // Has time
+      return `${date} 00:00:00`; // Add start of day
+    };
 
-    if (recordings.length === 0) {
+    const formatEndDateTime = (date: string) => {
+      if (date.includes(' ')) return date; // Already formatted
+      if (date.includes(':')) return date; // Has time
+      return `${date} 23:59:59`; // Add end of day
+    };
+
+    const params = new URLSearchParams({
+      auth_token: CONVOSO_AUTH_TOKEN!,
+      start_time: formatDateTime(dateFrom),
+      end_time: formatEndDateTime(dateTo),
+      include_recordings: '1',
+      limit: '10000',
+      offset: '0'
+    });
+
+    const url = `${CONVOSO_API_BASE}/log/retrieve?${params.toString()}`;
+    console.log(`[ConvosoService] Fetching complete call data from ${formatDateTime(dateFrom)} to ${formatEndDateTime(dateTo)}`);
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Check for API error
+      if (data.success === false) {
+        throw new Error(data.text || data.error || 'API returned failure');
+      }
+
+      // Extract and transform call logs to our format
+      if (data.data && data.data.results) {
+        console.log(`[ConvosoService] Found ${data.data.total_found} calls, processing ${data.data.results.length}`);
+
+        // Transform log entries to CombinedCallData structure
+        // NO FILTERS - let the UI handle filtering
+        const combinedData = data.data.results
+          .map((entry: any): CombinedCallData => ({
+            // Recording data
+            recording_id: entry.recording?.[0]?.recording_id || entry.id,
+            lead_id: entry.lead_id,
+            start_time: entry.call_date,
+            end_time: entry.call_date, // API doesn't provide separate end time
+            duration_seconds: parseInt(entry.call_length) || 0,
+            recording_url: entry.recording?.[0]?.public_url || entry.recording?.[0]?.src || '',
+
+            // Lead data (now included in the log entry)
+            customer_first_name: entry.first_name || '',
+            customer_last_name: entry.last_name || '',
+            customer_phone: entry.phone_number || '',
+            customer_email: '', // Not provided in log/retrieve
+            agent_id: entry.user_id || '',
+            agent_name: entry.user || '',
+            disposition: entry.status_name || entry.status || 'UNKNOWN',
+            campaign_name: entry.campaign || 'Unknown Campaign',
+            list_name: entry.list_id || 'Unknown List'
+          }));
+
+        return combinedData;
+      }
+
       return [];
+    } catch (error: any) {
+      console.error('[ConvosoService] Error fetching complete call data:', error);
+      throw error;
     }
-
-    // Step 2: Fetch lead data for each recording
-    const combinedData: CombinedCallData[] = [];
-
-    for (const recording of recordings) {
-      const lead = await this.fetchLeadData(recording.lead_id);
-      const combined = this.combineCallData(recording, lead);
-      combinedData.push(combined);
-
-      // Small delay to avoid hammering API
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    return combinedData;
   }
 
   /**

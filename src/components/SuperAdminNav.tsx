@@ -172,17 +172,17 @@ export default function SuperAdminNav() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Desktop Navigation */}
-          <div className="flex items-center">
+          <div className="flex items-center flex-1">
             <div className="flex-shrink-0 flex items-center">
               <Crown className="w-8 h-8 text-purple-500" />
               <span className="ml-2 text-xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-                Super Admin Portal
+                Super Admin
               </span>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:block ml-10">
-              <div className="flex items-baseline space-x-1">
+            <div className="hidden md:block ml-6 flex-1">
+              <div className="flex items-baseline space-x-0.5">
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   const active = isActive(item.href);
@@ -191,14 +191,14 @@ export default function SuperAdminNav() {
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                         active
                           ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
                           : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
-                      {item.name}
+                      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{item.name}</span>
                     </Link>
                   );
                 })}
@@ -207,12 +207,12 @@ export default function SuperAdminNav() {
           </div>
 
           {/* User Menu */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 flex-shrink-0">
             <OfficeSelector />
             {user && (
-              <div className="flex items-center gap-3 px-4 py-2 bg-gray-800/50 rounded-lg">
-                <User className="w-4 h-4 text-gray-400" />
-                <div className="text-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg">
+                <User className="w-3.5 h-3.5 text-gray-400" />
+                <div className="text-xs">
                   <div className="text-gray-300">{user.email}</div>
                   <div className="text-xs text-gray-500 uppercase tracking-wider">
                     Super Admin
@@ -223,10 +223,10 @@ export default function SuperAdminNav() {
 
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:text-purple-300"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:text-purple-300"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="text-sm font-medium">Sign Out</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">Sign Out</span>
             </button>
           </div>
 

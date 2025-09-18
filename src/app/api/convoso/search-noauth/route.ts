@@ -9,8 +9,11 @@ export async function GET(req: NextRequest) {
     console.log('[NOAUTH Search] Starting search without authentication checks...');
 
     const searchParams = req.nextUrl.searchParams;
-    const dateFrom = searchParams.get('dateFrom') || '2025-09-17';
-    const dateTo = searchParams.get('dateTo') || '2025-09-18';
+
+    // Use today as default date
+    const today = new Date().toISOString().split('T')[0];
+    const dateFrom = searchParams.get('dateFrom') || today;
+    const dateTo = searchParams.get('dateTo') || today;
 
     console.log(`[NOAUTH Search] Searching from ${dateFrom} to ${dateTo}`);
 
@@ -19,11 +22,8 @@ export async function GET(req: NextRequest) {
     // Fetch complete call data (recordings + lead info)
     const allCalls = await service.fetchCompleteCallData(dateFrom, dateTo);
 
-    // Filter out 0-second calls (abandoned/failed) and Auto-Detected (no agent) calls
-    const calls = allCalls.filter(call =>
-      call.duration_seconds > 0 &&
-      call.agent_name !== 'Auto-Detected'
-    );
+    // NO FILTERS - let the UI handle all filtering
+    const calls = allCalls;
 
     // Get filter options from the results
     const filterOptions = service.getFilterOptions(calls);
