@@ -4,17 +4,25 @@ const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
 const CONVOSO_API_BASE = 'https://api.convoso.com/v1';
 
 export interface ConvosoCall {
-  call_id: string;
-  lead_id: string;
-  agent_name: string;
-  agent_id: string;
-  disposition: string;
-  duration: string;
-  call_start: string;
-  call_end: string;
+  // From /users/recordings endpoint
+  recording_id?: number;
+  lead_id: string | number;
+  start_time?: string;
+  end_time?: string;
+  seconds?: number | null;
+  url?: string;
+
+  // Additional fields we might get
+  call_id?: string;
+  agent_name?: string;
+  agent_id?: string;
+  disposition?: string;
+  duration?: string | number;
+  call_start?: string;
+  call_end?: string;
   first_name?: string;
   last_name?: string;
-  phone_number: string;
+  phone_number?: string;
   email?: string;
   campaign?: string;
   list_id?: string;
@@ -38,7 +46,7 @@ export class ConvosoSyncService {
     console.log(`[Convoso Sync] Starting sync for office ${officeId}`);
 
     try {
-      // 1. Get last sync timestamp
+      // Get last sync date - format as YYYY-MM-DD
       const { data: syncState } = await this.supabase
         .from('sync_state')
         .select('value')
@@ -46,19 +54,22 @@ export class ConvosoSyncService {
         .eq('office_id', officeId)
         .single();
 
-      const lastCheck = syncState?.value ||
-        new Date(Date.now() - 3600000).toISOString(); // Default: 1 hour ago
+      // Convert to YYYY-MM-DD format (Convoso requirement)
+      const lastCheckDate = syncState?.value
+        ? new Date(syncState.value).toISOString().split('T')[0]
+        : new Date(Date.now() - 86400000).toISOString().split('T')[0]; // Yesterday
 
-      console.log(`[Convoso Sync] Fetching calls since: ${lastCheck}`);
+      console.log(`[Convoso Sync] Fetching recordings since: ${lastCheckDate}`);
 
-      // 2. Fetch from Convoso API
+      // Use the CORRECT endpoint: leads/get-recordings
       const params = new URLSearchParams({
         auth_token: CONVOSO_AUTH_TOKEN!,
-        start_date: lastCheck,
+        date_from: lastCheckDate,  // YYYY-MM-DD format
+        date_to: new Date().toISOString().split('T')[0], // Today
         limit: '500'
       });
 
-      const url = `${CONVOSO_API_BASE}/calllog/search?${params.toString()}`;
+      const url = `${CONVOSO_API_BASE}/leads/get-recordings?${params.toString()}`;
       console.log(`[Convoso Sync] Calling API: ${url}`);
 
       const response = await fetch(url);
@@ -71,36 +82,43 @@ export class ConvosoSyncService {
 
       const data = await response.json();
 
-      if (!data.success || !data.data?.entries) {
-        console.log('[Convoso Sync] No new calls found');
+      // The response structure is different for get-recordings
+      if (!data || !data.recordings) {
+        console.log('[Convoso Sync] No recordings found');
         return { success: true, count: 0 };
       }
 
-      // 3. Process each call
-      const calls = data.data.entries as ConvosoCall[];
-      let processedCount = 0;
-      let newCallTime = lastCheck;
+      console.log(`[Convoso Sync] Found ${data.recordings.length} recordings`);
 
-      for (const call of calls) {
+      // 3. Process recordings (different field names!)
+      const recordings = data.recordings;
+      let processedCount = 0;
+      let latestDate = lastCheckDate;
+
+      for (const recording of recordings) {
         try {
-          // Prepare call data with corrected column names
+          // Map recording data to our call structure
           const callData = {
-            call_id: call.call_id,
-            convoso_lead_id: call.lead_id, // Map to convoso_lead_id column
-            agent_name: call.agent_name || call.agent_id,
-            agent_email: null, // Set if available
-            disposition: call.disposition,
-            duration: parseInt(call.duration || '0'),
-            phone_number: call.phone_number,
-            recording_url: call.recording_url,
-            campaign: call.campaign,
-            started_at: call.call_start,
-            ended_at: call.call_end,
-            office_id: officeId, // REQUIRED field - using parameter
-            talk_time_sec: parseInt(call.talk_time || '0'),
+            call_id: recording.id ? `convoso_${recording.id}` : `convoso_${recording.recording_id || Date.now()}_${Math.random()}`,
+            convoso_lead_id: String(recording.lead_id),
+            agent_name: recording.agent || recording.agent_name || 'Unknown Agent',
+            agent_email: null,
+            disposition: recording.disposition || 'UNKNOWN',
+            duration: parseInt(recording.duration || '0'),
+            phone_number: recording.phone || recording.phone_number || 'Unknown',
+            recording_url: recording.url || recording.recording_url,
+            campaign: recording.campaign || 'Unknown',
+            started_at: recording.date || recording.created_at || new Date().toISOString(),
+            ended_at: recording.end_date || recording.created_at || new Date().toISOString(),
+            office_id: officeId,
+            talk_time_sec: parseInt(recording.duration || '0'),
             source: 'convoso_api',
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            metadata: {
+              recording_id: recording.id || recording.recording_id,
+              original_url: recording.url
+            }
           };
 
           // Insert or update call
@@ -112,57 +130,37 @@ export class ConvosoSyncService {
             });
 
           if (callError) {
-            console.error(`Error saving call ${call.call_id}:`, callError);
+            console.error(`Error saving call:`, callError);
             continue;
-          }
-
-          // Update or create contact if we have name/email
-          if (call.first_name || call.last_name || call.email) {
-            const contactData = {
-              phone_number: call.phone_number,
-              first_name: call.first_name,
-              last_name: call.last_name,
-              email: call.email,
-              lead_id: call.lead_id,
-              office_id: officeId,
-              updated_at: new Date().toISOString()
-            };
-
-            await this.supabase
-              .from('contacts')
-              .upsert(contactData, {
-                onConflict: 'phone_number',
-                ignoreDuplicates: false
-              });
           }
 
           processedCount++;
 
-          // Track latest call time
-          if (call.call_end > newCallTime) {
-            newCallTime = call.call_end;
+          // Track latest date
+          const recordingDate = recording.date || recording.created_at;
+          if (recordingDate && recordingDate > latestDate) {
+            latestDate = recordingDate;
           }
         } catch (error) {
-          console.error(`Error processing call ${call.call_id}:`, error);
+          console.error(`Error processing recording:`, error);
         }
       }
 
-      // 4. Update sync state with latest call time
+      // 4. Update sync state with current time
       await this.supabase
         .from('sync_state')
         .upsert({
           key: 'last_convoso_check',
-          value: newCallTime,
+          value: new Date().toISOString(),
           office_id: officeId,
           updated_at: new Date().toISOString()
         });
 
-      console.log(`[Convoso Sync] Processed ${processedCount} calls`);
+      console.log(`[Convoso Sync] Processed ${processedCount} recordings`);
 
       return {
         success: true,
-        count: processedCount,
-        lastCheck: newCallTime
+        count: processedCount
       };
 
     } catch (error: any) {

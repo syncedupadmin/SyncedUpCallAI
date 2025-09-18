@@ -4,6 +4,29 @@ import { createClient } from '@/src/lib/supabase/server';
 
 // This can be called by cron OR manually
 export async function GET(req: NextRequest) {
+  // Check if this is a Vercel cron job
+  const vercelCron = req.headers.get('x-vercel-cron');
+  const userAgent = req.headers.get('user-agent');
+  const isVercelCron = vercelCron || userAgent?.includes('vercel-cron');
+
+  // Allow Vercel cron jobs to bypass authentication
+  if (isVercelCron) {
+    try {
+      const syncService = new ConvosoSyncService();
+      const officeId = req.nextUrl.searchParams.get('office_id');
+      const result = await syncService.syncCalls(
+        officeId ? parseInt(officeId) : 1
+      );
+      return NextResponse.json(result);
+    } catch (error: any) {
+      console.error('[API] Sync error:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+  }
+
   // Optional: Verify cron secret for production
   const cronSecret = req.headers.get('x-cron-secret');
   if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
