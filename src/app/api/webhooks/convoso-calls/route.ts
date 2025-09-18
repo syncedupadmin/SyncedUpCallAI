@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       agent_name: body.agent_name || body.agent || null,
       phone_number: body.phone_number || body.phone || body.customer_phone || null,
       disposition: body.disposition || body.status || null,
-      duration: body.duration !== undefined ? Number(body.duration) : null,
+      duration_sec: body.duration !== undefined ? Number(body.duration) : null,
       campaign: body.campaign || body.campaign_name || null,
       recording_url: body.recording_url || body.recording || null,
       started_at: body.started_at || body.start_time || null,
@@ -60,11 +60,11 @@ export async function POST(req: NextRequest) {
     };
 
     // Validate required fields for a call record
-    if (!callData.agent_name || !callData.disposition || callData.duration === null) {
+    if (!callData.agent_name || !callData.disposition || callData.duration_sec === null) {
       logError('Missing required call fields', null, {
         has_agent: !!callData.agent_name,
         has_disposition: !!callData.disposition,
-        has_duration: callData.duration !== null,
+        has_duration: callData.duration_sec !== null,
         body
       });
 
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       callData.agent_name,
       callData.phone_number,
       callData.disposition,
-      callData.duration,
+      callData.duration_sec,
       callData.campaign,
       callData.recording_url,
       callData.started_at,
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     if (!callData.recording_url && (callData.call_id || callData.lead_id)) {
       try {
         // Determine if call has ended and calculate smart scheduling
-        const callHasEnded = !!(callData.ended_at || (callData.duration && callData.duration > 0));
+        const callHasEnded = !!(callData.ended_at || (callData.duration_sec && callData.duration_sec > 0));
         const callStartTime = callData.started_at ? new Date(callData.started_at) : new Date();
         const callEndTime = callData.ended_at ? new Date(callData.ended_at) : null;
 
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
       has_recording: !!callData.recording_url,
       agent_name: callData.agent_name,
       disposition: callData.disposition,
-      duration: callData.duration,
+      duration_sec: callData.duration_sec,
       source: 'convoso'
     });
 

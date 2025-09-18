@@ -80,9 +80,17 @@ export class ConvosoService {
   }
 
   /**
-   * Fetch recordings from Convoso API using lead_id=0 trick
+   * Fetch recordings from Convoso API using the /users/recordings endpoint
+   * Note: This requires a user parameter (email or user ID)
+   * For now, we'll still use lead_id=0 trick with /leads/get-recordings as it works
    */
   async fetchRecordings(dateFrom: string, dateTo: string, limit: number = 500): Promise<ConvosoRecording[]> {
+    // Convert date format from YYYY-MM-DD to YYYY-MM-DD HH:MM:SS if needed
+    const formatDateTime = (date: string) => {
+      if (date.includes(' ')) return date; // Already formatted
+      return `${date} 00:00:00`; // Add time component
+    };
+
     const params = new URLSearchParams({
       auth_token: CONVOSO_AUTH_TOKEN!,
       lead_id: '0', // This returns ALL recordings
@@ -117,6 +125,54 @@ export class ConvosoService {
       return [];
     } catch (error: any) {
       console.error('[ConvosoService] Error fetching recordings:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch recordings using the users/recordings endpoint (requires user email/ID)
+   * This is the documented endpoint but requires specific user parameter
+   */
+  async fetchUserRecordings(userEmails: string[], startTime: string, endTime: string, limit: number = 20, offset: number = 0): Promise<ConvosoRecording[]> {
+    // Format datetime: YYYY-MM-DD HH:MM:SS
+    const formatDateTime = (date: string) => {
+      if (date.includes(' ')) return date;
+      return `${date} 00:00:00`;
+    };
+
+    const params = new URLSearchParams({
+      auth_token: CONVOSO_AUTH_TOKEN!,
+      user: userEmails.join(','), // Comma-delimited list of users
+      start_time: formatDateTime(startTime),
+      end_time: formatDateTime(endTime),
+      limit: String(limit),
+      offset: String(offset)
+    });
+
+    const url = `${CONVOSO_API_BASE}/users/recordings?${params.toString()}`;
+    console.log(`[ConvosoService] Fetching user recordings for users: ${userEmails.join(',')}`);
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success === false) {
+        throw new Error(data.text || data.error || 'API returned failure');
+      }
+
+      if (data.data && data.data.entries) {
+        console.log(`[ConvosoService] Found ${data.data.total} user recordings, fetched ${data.data.entries.length}`);
+        return data.data.entries as ConvosoRecording[];
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error('[ConvosoService] Error fetching user recordings:', error);
       throw error;
     }
   }
@@ -331,10 +387,11 @@ export class ConvosoService {
       const callData = {
         call_id: `convoso_${call.recording_id}`,
         convoso_lead_id: call.lead_id,
+        lead_id: call.lead_id,  // Add lead_id field
         agent_name: call.agent_name,
         agent_email: null,
         disposition: call.disposition,
-        duration: call.duration_seconds,
+        duration_sec: call.duration_seconds,  // Changed from duration to duration_sec
         phone_number: call.customer_phone,
         recording_url: call.recording_url,
         campaign: call.campaign_name,
