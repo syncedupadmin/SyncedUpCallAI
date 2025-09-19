@@ -91,15 +91,16 @@ export default function AdminCallsPage() {
               // Update message during processing
               const completed = progressData.progress?.completed || 0;
               const total = progressData.progress?.total || 0;
+              const status = progressData.status || 'processing';
 
-              if (completed < total) {
+              if (status === 'processing' && completed < total) {
                 setProcessingStatus({
                   active: true,
                   message: `Processing... ${completed} of ${total} calls completed`
                 });
               }
 
-              if (completed >= total && total > 0) {
+              if (status === 'complete' || (completed >= total && total > 0)) {
                 clearInterval(progressInterval);
                 setProcessingStatus({
                   active: false,
@@ -110,6 +111,9 @@ export default function AdminCallsPage() {
                 // Refresh calls to show updated status
                 setTimeout(() => fetchCalls(), 2000);
               }
+            } else {
+              // If we get a 404, the batch might not be initialized yet
+              console.log('Progress not found yet, will retry...');
             }
           }, 2000);
 
