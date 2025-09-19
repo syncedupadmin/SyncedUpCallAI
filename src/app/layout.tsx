@@ -1,5 +1,6 @@
 import '@/styles/globals.css';
 import { Inter } from 'next/font/google';
+import { PrefsProvider } from "@/components/PrefsProvider";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -23,7 +24,7 @@ export default function RootLayout({
         <script src="/unregister-sw.js" defer />
       </head>
       <body className="antialiased">
-        {children}
+        <PrefsProvider>{children}</PrefsProvider>
       </body>
     </html>
   );

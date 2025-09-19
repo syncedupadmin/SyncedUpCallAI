@@ -41,6 +41,38 @@ export type Analysis = {
     reason_primary_span: [number, number] | null;
     reason_primary_quote?: string;
   };
+  rebuttals_used?: { id: string; bucket: string; ts: string; quote_agent: string; score?: number }[];
+  rebuttals_missed?: { escape_type: string; ts: string }[];
+  rebuttal_summary?: {
+    total_used: number;
+    total_missed: number;
+    used_ids: string[];
+    missed_reasons: string[];
+    asked_for_card_after_last_rebuttal?: boolean;
+  };
+  outcome?: {
+    sale_status: "none" | "sale" | "post_date";
+    payment_confirmed: boolean;
+    post_date_iso: string | null;
+    evidence_quote?: string;
+  };
+  signals?: {
+    card_provided: boolean;
+    card_last4: string | null;
+    esign_sent: boolean;
+    esign_confirmed: boolean;
+    charge_confirmed_phrase: boolean;
+    post_date_phrase: boolean;
+  };
+  rebuttals?: {
+    used: Array<{type: string; ts: string; quote: string}>;
+    missed: Array<{type: string; at_ts: string; stall_quote: string}>;
+    counts: {
+      used: number;
+      missed: number;
+      asked_for_card_after_last_rebuttal: boolean;
+    };
+  };
 };
 
 function toLocal(dt?: string | null) { if (!dt) return ""; const d = new Date(dt); return isNaN(d.valueOf()) ? dt : d.toLocaleString(); }
@@ -68,7 +100,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const reasonTone: Record<string, keyof typeof badgeMap> = { pricing:"amber", spouse_approval:"blue", bank_decline:"rose", benefits_confusion:"violet", trust_scam_fear:"rose" };
 
-export default function CallAnalysisCard({ data }: { data: Analysis }) {
+export default function CallAnalysisCard({
+  data,
+  showActions = false,
+  showCustomerQuotes = false,
+  showRebuttalScores = true,
+  compactUI = false,
+}: {
+  data: Analysis;
+  showActions?: boolean;
+  showCustomerQuotes?: boolean;
+  showRebuttalScores?: boolean;
+  compactUI?: boolean;
+}) {
   const d = data;
   const tone = reasonTone[d.reason_primary] || "slate";
   return (
@@ -76,7 +120,15 @@ export default function CallAnalysisCard({ data }: { data: Analysis }) {
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-start justify-between">
           <div><h1 className="text-xl font-bold text-slate-900">Call Analysis</h1><p className="text-sm text-slate-600">Model {d.model} • v{d.version} • Confidence {Math.round(d.confidence * 100)}%</p></div>
-          <div className="flex items-center gap-2"><Badge tone={tone}>{d.reason_primary.replaceAll("_", " ")}</Badge>{d.purchase_intent && <Badge tone="emerald">intent: {d.purchase_intent}</Badge>}<Badge tone="slate">lead score: {d.lead_score}</Badge></div>
+          <div className="flex items-center gap-2">
+            <Badge tone={tone}>{d.reason_primary.replaceAll("_", " ")}</Badge>
+            {d.outcome?.sale_status === "sale" && <Badge tone="emerald">SALE</Badge>}
+            {d.outcome?.sale_status === "post_date" && (
+              <Badge tone="amber">POST DATE{d.outcome?.post_date_iso ? `: ${new Date(d.outcome.post_date_iso).toLocaleDateString()}` : ""}</Badge>
+            )}
+            {d.purchase_intent && <Badge tone="emerald">intent: {d.purchase_intent}</Badge>}
+            <Badge tone="slate">lead score: {d.lead_score}</Badge>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 p-4">
@@ -103,21 +155,61 @@ export default function CallAnalysisCard({ data }: { data: Analysis }) {
               </div>
             </Section>
 
-            <Section title="Key Quotes">
-              <ul className="space-y-3">
-                {d.key_quotes?.map((q, i) => (
-                  <li key={i} className="rounded-lg border border-slate-200 p-3">
-                    <div className="flex items-center gap-2 text-xs text-slate-500"><span>{q.ts}</span><span>•</span><span className="uppercase">{q.speaker}</span></div>
-                    <div className="mt-1 text-slate-900">"{q.quote}"</div>
-                  </li>
-                ))}
-              </ul>
+            <Section title="Rebuttals Used">
+              {d.rebuttals_used?.length ? (
+                <ul className="space-y-3">
+                  {d.rebuttals_used.map((r, i) => (
+                    <li key={i} className="rounded-lg border border-slate-200 p-3">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>{r.ts}</span>
+                        <span>•</span>
+                        <span className="uppercase">AGENT</span>
+                        <span>•</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-[2px] text-[10px] font-medium text-slate-800">
+                          {r.bucket}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-[2px] text-[10px] font-medium text-slate-800">
+                          {r.id}
+                        </span>
+                        {showRebuttalScores && typeof r.score === "number" && (
+                          <>
+                            <span>•</span>
+                            <span>match {Math.round(r.score * 100)}%</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="mt-1 text-slate-900">"{r.quote_agent}"</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-sm text-slate-500">No rebuttals detected.</div>
+              )}
+
+              {!!d.rebuttals_missed?.length && (
+                <div className="mt-3 text-xs text-rose-600">
+                  Missed rebuttals: {d.rebuttals_missed.map(m => `${m.escape_type} @ ${m.ts}`).join(", ")}
+                </div>
+              )}
+
+              {d.rebuttal_summary && (
+                <div className="mt-3 text-xs text-slate-600">
+                  Used: {d.rebuttal_summary.total_used} • Missed: {d.rebuttal_summary.total_missed} • Asked for card after last
+                  rebuttal: {d.rebuttal_summary.asked_for_card_after_last_rebuttal ? "Yes" : "No"}
+                </div>
+              )}
             </Section>
           </div>
 
           <div className="space-y-4">
             <Section title="Outcome & Risks">
-              <div className="flex flex-wrap gap-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
+              <div className="text-sm text-slate-700">
+                {d.outcome?.sale_status === "sale" && <>Payment confirmed{d.signals?.card_last4 ? ` • card **** ${d.signals.card_last4}` : ""}</>}
+                {d.outcome?.sale_status === "post_date" && <>Payment scheduled{d.outcome?.post_date_iso ? ` for ${toLocal(d.outcome.post_date_iso)}` : ""}</>}
+                {!d.outcome?.sale_status || d.outcome.sale_status === "none" ? "No outcome detected" : null}
+              </div>
+              {d.outcome?.evidence_quote && <div className="text-xs text-slate-500 mt-1">Evidence: "{d.outcome.evidence_quote}"</div>}
+              <div className="flex flex-wrap gap-2 mt-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
               {!!d.compliance_flags?.length && <div className="flex flex-wrap gap-2">{d.compliance_flags.map((r, i) => <Chip key={i} text={`compliance: ${r}`} />)}</div>}
               {d.reason_secondary ? <div className="text-sm text-slate-700">Detail: {d.reason_secondary}</div> : null}
               {d.evidence?.reason_primary_quote && (

@@ -77,6 +77,17 @@ TAXONOMY HINTS (do not echo):
 - "spouse_approval": mentions spouse/partner, "need to ask my wife/husband", "talk together tonight".
 - "bank_decline": card failed, insufficient funds, issuer declined, retry later.
 - "benefits_confusion": asks "what do I actually get?", copays/deductible confusion, PPO/HMO uncertainty.
+
+Outcome rules (SALE vs POST DATE):
+- If transcript contains explicit scheduling ("post date", "charge on <date>", "process on <date>"), set outcome.sale_status="post_date". Copy a short quote to outcome.evidence_quote. If you can normalize the date, set outcome.post_date_iso (local TZ: America/New_York).
+- If transcript confirms a same-day payment ("approved/processed/went through"), set outcome.sale_status="sale" and outcome.payment_confirmed=true.
+- If both appear, "post_date" wins.
+
+Signals:
+- Fill rebuttals.used and rebuttals.missed (max 6 each). A rebuttal is "used" if the agent responds to a stall/objection with a semantically matching rebuttal within 30 seconds. "missed" if the customer gives a stall and the agent moves on or accepts it.
+- Always prefer customer quotes for objections/stalls; include timestamps (MM:SS).
+- Card numbers must be redacted except last 4; if last 4 is spoken/read back, set signals.card_provided=true and signals.card_last4=<last4>.
+- E-sign: set signals.esign_sent when the agent sends a text/link for signature; signals.esign_confirmed when customer says they signed/sent it back.
 - "trust_scam_fear": "sounds like a scam," wants proof/license, refuses payment info due to trust.
 - "already_covered": has active plan, employer plan, Medicare Advantage etc.
 - "agent_miscommunication": caller repeats because agent unclear, wrong name/price referenced, contradictory info.

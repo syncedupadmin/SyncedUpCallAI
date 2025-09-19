@@ -8,8 +8,11 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   // Check authorization for batch endpoint
   const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.JOBS_SECRET}`) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  const expectedAuth = `Bearer ${process.env.JOBS_SECRET}`;
+
+  if (!authHeader || authHeader !== expectedAuth) {
+    // Quick ignore to stop spamming logs
+    return NextResponse.json({ ok: true, skipped: 'missing/invalid auth' }, { status: 200 });
   }
 
   // Get batch size from query params, default to 50

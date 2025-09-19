@@ -121,10 +121,6 @@ export const AnalysisSchema = z.object({
     }).optional()
   }).optional(),
 
-  // Payment signal
-  signals: z.object({
-    payment_taken: z.boolean()
-  }).optional(),
 
   // Coaching flags
   coaching_flags: z.array(z.enum([
@@ -141,5 +137,42 @@ export const AnalysisSchema = z.object({
     customer_name: z.string().nullable(),
     phone: z.string().nullable(),
     email: z.string().nullable()
+  }).optional(),
+
+  // Outcome classification driven by explicit "sale vs post-date" logic
+  outcome: z.object({
+    sale_status: z.enum(["none","sale","post_date"]).default("none"),
+    payment_confirmed: z.boolean().default(false),             // "charged/approved/processed"
+    post_date_iso: z.string().nullable().default(null),        // ISO string when we caught a scheduled date
+    evidence_quote: z.string().optional(),                     // short quote that triggered the status
+  }).optional(),
+
+  // Low-level signals we derive before/outside the LLM so you can audit the why
+  signals: z.object({
+    card_provided: z.boolean().default(false),
+    card_last4: z.string().regex(/^\d{4}$/).nullable().default(null),
+    esign_sent: z.boolean().default(false),                    // "I texted you a link", "e-sign", etc.
+    esign_confirmed: z.boolean().default(false),               // "I signed it", "sent it back"
+    charge_confirmed_phrase: z.boolean().default(false),       // "payment processed/approved/charged"
+    post_date_phrase: z.boolean().default(false),              // "post date", "charge on the 15th…"
+  }).optional(),
+
+  // Rebuttals (used + missed) for the "Key Quotes" panel
+  rebuttals: z.object({
+    used: z.array(z.object({
+      type: z.enum(["pricing","spouse","benefits","trust","callback","already_covered","bank","other"]),
+      ts: z.string(),                 // MM:SS
+      quote: z.string()
+    })).max(6).default([]),
+    missed: z.array(z.object({
+      type: z.enum(["pricing","spouse","benefits","trust","callback","already_covered","bank","other"]),
+      at_ts: z.string(),              // where the stall happened and no rebuttal followed
+      stall_quote: z.string()
+    })).max(6).default([]),
+    counts: z.object({
+      used: z.number().int().nonnegative().default(0),
+      missed: z.number().int().nonnegative().default(0),
+      asked_for_card_after_last_rebuttal: z.boolean().default(false)
+    }).default({ used:0, missed:0, asked_for_card_after_last_rebuttal:false })
   }).optional()
 });
