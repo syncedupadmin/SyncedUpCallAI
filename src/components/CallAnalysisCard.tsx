@@ -37,6 +37,10 @@ export type Analysis = {
   asr_quality: "poor" | "fair" | "good" | "excellent";
   summary: string;
   notes: string | null;
+  evidence?: {
+    reason_primary_span: [number, number] | null;
+    reason_primary_quote?: string;
+  };
 };
 
 function toLocal(dt?: string | null) { if (!dt) return ""; const d = new Date(dt); return isNaN(d.valueOf()) ? dt : d.toLocaleString(); }
@@ -116,6 +120,11 @@ export default function CallAnalysisCard({ data }: { data: Analysis }) {
               <div className="flex flex-wrap gap-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
               {!!d.compliance_flags?.length && <div className="flex flex-wrap gap-2">{d.compliance_flags.map((r, i) => <Chip key={i} text={`compliance: ${r}`} />)}</div>}
               {d.reason_secondary ? <div className="text-sm text-slate-700">Detail: {d.reason_secondary}</div> : null}
+              {d.evidence?.reason_primary_quote && (
+                <div className="text-xs text-slate-500">
+                  Evidence: "{d.evidence.reason_primary_quote}"
+                </div>
+              )}
             </Section>
 
             <Section title="Talk Metrics">
