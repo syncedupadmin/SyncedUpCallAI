@@ -3,8 +3,13 @@ import { db } from '@/src/server/db';
 
 export async function GET(req: NextRequest) {
   try {
-    // Drop the problematic policy
+    // First, drop ALL existing policies to clean up
     await db.none(`DROP POLICY IF EXISTS "user_offices_read_policy" ON public.user_offices`);
+    await db.none(`DROP POLICY IF EXISTS "user_offices_read_simple" ON public.user_offices`);
+    await db.none(`DROP POLICY IF EXISTS "user_offices_write_simple" ON public.user_offices`);
+    await db.none(`DROP POLICY IF EXISTS "user_offices_insert_policy" ON public.user_offices`);
+    await db.none(`DROP POLICY IF EXISTS "user_offices_update_policy" ON public.user_offices`);
+    await db.none(`DROP POLICY IF EXISTS "user_offices_delete_policy" ON public.user_offices`);
 
     // Create a new policy without self-reference
     await db.none(`
@@ -44,12 +49,12 @@ export async function GET(req: NextRequest) {
           AND admin_level = 'super'
         )
         OR
-        -- Agency admins can add to their offices (check existing membership directly)
+        -- Agency admins can add to their offices
         EXISTS (
           SELECT 1
           FROM public.user_offices existing_membership
           WHERE existing_membership.user_id = auth.uid()
-          AND existing_membership.office_id = NEW.office_id
+          AND existing_membership.office_id = user_offices.office_id
           AND existing_membership.role = 'admin'
         )
       )
@@ -131,8 +136,10 @@ export async function GET(req: NextRequest) {
 
     // If the complex fix fails, try a simpler approach
     try {
-      // Drop all policies
+      // Drop ALL policies (including any that might exist)
       await db.none(`DROP POLICY IF EXISTS "user_offices_read_policy" ON public.user_offices`);
+      await db.none(`DROP POLICY IF EXISTS "user_offices_read_simple" ON public.user_offices`);
+      await db.none(`DROP POLICY IF EXISTS "user_offices_write_simple" ON public.user_offices`);
       await db.none(`DROP POLICY IF EXISTS "user_offices_insert_policy" ON public.user_offices`);
       await db.none(`DROP POLICY IF EXISTS "user_offices_update_policy" ON public.user_offices`);
       await db.none(`DROP POLICY IF EXISTS "user_offices_delete_policy" ON public.user_offices`);
