@@ -60,39 +60,66 @@ const MODEL_CANDIDATES = [
 ].filter(Boolean) as string[];
 
 async function callOpenAI(model: string, systemPrompt: string, userPrompt: string) {
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
+  async function request(body: any) {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    if (!r.ok) {
+      const err: any = new Error(`OpenAI ${r.status} (${model}): ${text}`);
+      err.status = r.status;
+      throw err;
+    }
+    return JSON.parse(text);
+  }
+
+  // Try Structured Outputs first
+  try {
+    const body = {
       model,
       temperature: 0,
-      seed: 7, // repeatability for QA
+      seed: 7,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
       response_format: {
         type: "json_schema",
         json_schema: {
           name: "CallAnalysis",
-          schema: schemaPayload,
-          strict: true
-        }
+          schema: schemaPayload,  // your computed schema object
+          strict: true,
+        },
       },
+    };
+    const data = await request(body);
+    return JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+  } catch (e: any) {
+    // If schema is the problem, fallback to json_object so you can keep working
+    const isSchemaFail =
+      e?.status === 400 &&
+      typeof e.message === "string" &&
+      e.message.includes("Invalid schema for response_format");
+    if (!isSchemaFail) throw e;
+
+    const fallbackBody = {
+      model,
+      temperature: 0,
+      seed: 7,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ]
-    })
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => "");
-    const err: any = new Error(`OpenAI ${r.status} (${model}): ${text}`);
-    err.status = r.status;
-    throw err;
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+    };
+    const data = await request(fallbackBody);
+    return JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
   }
-  const data = await r.json();
-  const txt = data.choices?.[0]?.message?.content ?? "{}";
-  return JSON.parse(txt);
 }
 
 function firstStr(x: any): any {
@@ -126,11 +153,9 @@ function normalize(o: any) {
     o.qa_breakdown.closing = roundInt(o.qa_breakdown.closing);
   }
 
-  // evidence safety net
-  if (o.evidence) {
-    if (!("reason_primary_quote" in o.evidence))
-      o.evidence.reason_primary_quote = "";
-  }
+  // evidence safety net - ensure it exists and has all required fields
+  if (!o.evidence) o.evidence = { reason_primary_span: null, reason_primary_quote: "" };
+  if (!("reason_primary_quote" in o.evidence)) o.evidence.reason_primary_quote = "";
 
   return o;
 }
