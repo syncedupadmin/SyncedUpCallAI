@@ -63,5 +63,83 @@ export const AnalysisSchema = z.object({
     // fixed-length array (minItems=2, maxItems=2) that OpenAI accepts
     reason_primary_span: z.array(z.number().int().nonnegative()).length(2).nullable(),
     reason_primary_quote: z.string()                  // required key
-  }).strict().nullable()                              // required at root; nullable value; strict inner object
+  }).strict().nullable(),                             // required at root; nullable value; strict inner object
+
+  // Openings & control
+  opening_score: z.number().int().min(0).max(100).optional(),
+  control_score: z.number().int().min(0).max(100).optional(),
+  opening_feedback: z.array(z.string()).max(5).optional(),
+
+  // Rebuttals and escapes
+  escape_attempts: z.array(z.object({
+    type: z.enum(["call_back","send_info","already_insured","not_interested","spouse","too_good_to_be_true","time_delay","other"]),
+    ts: z.string(),
+    quote_customer: z.string()
+  })).optional(),
+  rebuttals_used: z.array(z.object({
+    id: z.string(),      // e.g., "OPEN_10TH_CALL", "PREQUAL_LOOP", "LEGIT_1", "ASSUME_SALE_VISA"
+    bucket: z.enum(["opening","prequal","tie_down_affordability","tie_down_time","send_in_writing","spouse","legitimacy","assume_sale"]),
+    ts: z.string(),
+    quote_agent: z.string()
+  })).optional(),
+  rebuttals_missed: z.array(z.object({
+    escape_type: z.string(),
+    ts: z.string()
+  })).optional(),
+  rebuttal_summary: z.object({
+    total_used: z.number().int().min(0),
+    total_missed: z.number().int().min(0),
+    used_ids: z.array(z.string()),
+    missed_reasons: z.array(z.string()),
+    asked_for_card_after_last_rebuttal: z.boolean()
+  }).optional(),
+
+  // Objections
+  objections: z.array(z.object({
+    type: z.enum(["pricing","spouse","benefits","trust","bank","already_covered","other"]),
+    quote: z.string(),
+    ts: z.string()
+  })).max(3).optional(),
+
+  // Pricing & plan
+  price_events: z.array(z.object({
+    kind: z.enum(["quoted_premium","enrollment_fee","discount","waive_fee","price_drop"]),
+    amount: z.number(),
+    currency: z.literal("USD"),
+    ts: z.string(),
+    speaker: z.enum(["agent","customer"])
+  })).optional(),
+  facts: z.object({
+    pricing: z.object({
+      premium_amount: z.number().nullable(),
+      premium_unit: z.literal("monthly"),
+      signup_fee: z.number().nullable(),
+      discount_amount: z.number().nullable()
+    }).optional(),
+    plan: z.object({
+      plan_name: z.string().nullable()
+    }).optional()
+  }).optional(),
+
+  // Payment signal
+  signals: z.object({
+    payment_taken: z.boolean()
+  }).optional(),
+
+  // Coaching flags
+  coaching_flags: z.array(z.enum([
+    "ignored_stated_objection",
+    "did_not_use_rebuttals",
+    "no_opening",
+    "less_than_two_rebuttals",
+    "did_not_ask_card_after_rebuttal"
+  ])).optional(),
+
+  // CRM snapshot
+  crm_snapshot: z.object({
+    disposition: z.string().nullable(),
+    customer_name: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable()
+  }).optional()
 });
