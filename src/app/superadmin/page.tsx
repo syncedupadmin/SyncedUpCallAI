@@ -20,6 +20,7 @@ export default function AdminPage() {
   const [batchData, setBatchData] = useState<any>(null);
   const [lastCallId, setLastCallId] = useState<string | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   useEffect(() => {
     // Check env variables (client-side mock - real check should be server-side)
@@ -157,16 +158,16 @@ export default function AdminPage() {
     try {
       const secret = prompt('Enter JOBS_SECRET:');
       if (!secret) return;
-      
+
       const res = await fetch('/api/admin/replay', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-jobs-secret': secret
         },
         body: JSON.stringify({ limit: 10 })
       });
-      
+
       const data = await res.json();
       if (data.ok) {
         alert(`✅ Re-enqueued ${data.enqueued} quarantined events`);
@@ -177,6 +178,30 @@ export default function AdminPage() {
       alert(`❌ Failed to replay: ${err.message}`);
     } finally {
       setLoading({ ...loading, replay: false });
+    }
+  };
+
+  const clearAllCalls = async () => {
+    setLoading({ ...loading, clearCalls: true });
+    try {
+      const res = await fetch('/api/admin/clear-all-calls', {
+        method: 'DELETE'
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ ${data.message}`);
+        // Refresh webhook count and last call
+        fetchWebhookCount();
+        fetchLastCall();
+      } else {
+        alert(`❌ Failed to clear calls: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`❌ Failed to clear calls: ${err.message}`);
+    } finally {
+      setLoading({ ...loading, clearCalls: false });
+      setShowClearConfirmation(false);
     }
   };
 
@@ -311,7 +336,7 @@ export default function AdminPage() {
           >
             {loading.batch ? 'Scanning...' : '🔍 Run Batch Scan'}
           </button>
-          
+
           <button
             onClick={analyzeUnanalyzed}
             disabled={loading.analyze}
@@ -320,14 +345,29 @@ export default function AdminPage() {
           >
             {loading.analyze ? 'Analyzing...' : '🧠 Analyze Unanalyzed'}
           </button>
-          
+
           <button
             onClick={replayQuarantined}
             disabled={loading.replay}
             className="btn btn-warning"
-            style={{ marginBottom: 16, width: '100%' }}
+            style={{ marginBottom: 8, width: '100%' }}
           >
             {loading.replay ? 'Replaying...' : '🔁 Replay Quarantined (10)'}
+          </button>
+
+          <button
+            onClick={() => setShowClearConfirmation(true)}
+            disabled={loading.clearCalls}
+            className="btn"
+            style={{
+              marginBottom: 16,
+              width: '100%',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: '1px solid #dc2626'
+            }}
+          >
+            {loading.clearCalls ? 'Clearing...' : '🗑️ Clear All Calls'}
           </button>
           
           {batchData && (
@@ -398,19 +438,92 @@ export default function AdminPage() {
       </div>
 
       {/* Footer info */}
-      <div style={{ 
-        marginTop: 40, 
-        padding: 20, 
+      <div style={{
+        marginTop: 40,
+        padding: 20,
         textAlign: 'center',
         color: '#6b6b7c',
         fontSize: 12
       }}>
         <div>Operator Console v0.9</div>
         <div style={{ marginTop: 8 }}>
-          Environment: {process.env.NODE_ENV || 'production'} | 
+          Environment: {process.env.NODE_ENV || 'production'} |
           Build: {new Date().toISOString().split('T')[0]}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showClearConfirmation && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#1a1a2e',
+            border: '1px solid #dc2626',
+            borderRadius: 12,
+            padding: 32,
+            maxWidth: 400,
+            width: '90%'
+          }}>
+            <h2 style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: '#dc2626',
+              marginBottom: 16
+            }}>
+              ⚠️ Warning: Clear All Calls
+            </h2>
+            <p style={{
+              color: '#a8a8b3',
+              marginBottom: 24,
+              lineHeight: 1.6
+            }}>
+              This will permanently delete ALL calls, transcripts, analyses, and related data from the database.
+              This action cannot be undone!
+            </p>
+            <p style={{
+              color: '#ef4444',
+              fontWeight: 600,
+              marginBottom: 24
+            }}>
+              Are you absolutely sure you want to proceed?
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: 12
+            }}>
+              <button
+                onClick={() => setShowClearConfirmation(false)}
+                className="btn btn-ghost"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={clearAllCalls}
+                className="btn"
+                style={{
+                  flex: 1,
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: '1px solid #dc2626'
+                }}
+              >
+                Yes, Clear All Calls
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
