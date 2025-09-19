@@ -4,6 +4,7 @@ const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
 const CONVOSO_API_BASE = 'https://api.convoso.com/v1';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30; // 30 second timeout for parallel fetching
 
 // Get list of agents active in a date range using agent-productivity/search
 export async function GET(req: NextRequest) {
@@ -116,24 +117,71 @@ export async function GET(req: NextRequest) {
     }
 
     // Now also fetch from log/retrieve to get agents who made calls
-    // This ensures we don't miss any agents
-    const callParams = new URLSearchParams({
+    // Fetch multiple pages in parallel to catch ALL agents
+    console.log('[Get Agents] Fetching calls to find all agents...');
+
+    // First, get total count of calls
+    const countParams = new URLSearchParams({
       auth_token: CONVOSO_AUTH_TOKEN!,
       start_time: `${dateFrom} 00:00:00`,
       end_time: `${dateTo} 23:59:59`,
-      limit: '5000', // Sample to get additional agents
+      limit: '1',
       offset: '0'
     });
 
     try {
-      const callUrl = `${CONVOSO_API_BASE}/log/retrieve?${callParams.toString()}`;
-      const callResponse = await fetch(callUrl);
+      const countUrl = `${CONVOSO_API_BASE}/log/retrieve?${countParams.toString()}`;
+      const countResponse = await fetch(countUrl);
 
-      if (callResponse.ok) {
-        const callData = await callResponse.json();
+      if (countResponse.ok) {
+        const countData = await countResponse.json();
+        const totalCalls = countData.data?.total_found || 0;
+        console.log(`[Get Agents] Total calls in date range: ${totalCalls}`);
 
-        if (callData.data && callData.data.results) {
-          callData.data.results.forEach((call: any) => {
+        // Determine how many pages to fetch (10k calls per page, up to 10 pages = 100k calls)
+        const callsPerPage = 10000;
+        const maxPages = Math.min(Math.ceil(totalCalls / callsPerPage), 10); // Cap at 10 pages (100k calls)
+
+        console.log(`[Get Agents] Fetching ${maxPages} pages of calls in parallel to find all agents`);
+
+        // Create parallel fetch promises
+        const fetchPromises = [];
+        for (let page = 0; page < maxPages; page++) {
+          const pageOffset = page * callsPerPage;
+
+          const pageParams = new URLSearchParams({
+            auth_token: CONVOSO_AUTH_TOKEN!,
+            start_time: `${dateFrom} 00:00:00`,
+            end_time: `${dateTo} 23:59:59`,
+            limit: String(callsPerPage),
+            offset: String(pageOffset)
+          });
+
+          const fetchPage = fetch(`${CONVOSO_API_BASE}/log/retrieve?${pageParams.toString()}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+              if (data?.data?.results) {
+                console.log(`[Get Agents] Page ${page + 1}: Processing ${data.data.results.length} calls`);
+                return data.data.results;
+              }
+              return [];
+            })
+            .catch(err => {
+              console.warn(`[Get Agents] Failed to fetch page ${page + 1}:`, err);
+              return [];
+            });
+
+          fetchPromises.push(fetchPage);
+        }
+
+        // Wait for all pages to complete
+        const allPageResults = await Promise.all(fetchPromises);
+
+        // Process all calls to extract unique agents
+        let totalCallsProcessed = 0;
+        allPageResults.forEach(calls => {
+          calls.forEach((call: any) => {
+            totalCallsProcessed++;
             const userId = call.user_id;
             const userName = call.user || call.user_name;
 
@@ -146,10 +194,18 @@ export async function GET(req: NextRequest) {
                   lastActivity: call.call_date,
                   totalEvents: 1
                 });
+              } else {
+                // Update existing agent's campaign list if they were found in productivity data
+                const existing = agentsMap.get(userId)!;
+                if (call.campaign) {
+                  existing.campaigns.add(call.campaign);
+                }
               }
             }
           });
-        }
+        });
+
+        console.log(`[Get Agents] Processed ${totalCallsProcessed} calls to find agents`);
       }
     } catch (error) {
       console.warn('[Get Agents] Could not fetch additional agents from log/retrieve:', error);
