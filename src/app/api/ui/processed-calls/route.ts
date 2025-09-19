@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         c.duration_sec,
         c.recording_url,
         c.agent_name,
-        c.customer_phone as phone_number,
+        c.phone_number,
         t.text as transcript_text,
         t.lang as transcript_lang,
         t.engine as transcript_engine,
