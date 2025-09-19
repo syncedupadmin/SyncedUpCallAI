@@ -27,7 +27,7 @@ export async function transcribeFromUrl(mp3Url: string): Promise<{
     }
   );
 
-  const uts = resp?.results?.utterances ?? [];
+  const uts = resp?.result?.results?.utterances ?? [];
   const segments: Segment[] = uts.map((u: any) => ({
     speaker: (String(u.speaker) === "0" ? "agent" : "customer") as "agent" | "customer",
     startMs: Math.round(u.start * 1000),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminAuthenticated } from '@/src/server/auth/admin';
+import { isAdminAuthenticated } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 

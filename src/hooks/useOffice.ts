@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { createClient } from '@/src/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 type OfficeRole = 'admin' | 'agent';
 

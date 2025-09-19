@@ -14,7 +14,7 @@ import {
   LogOut,
   Sparkles
 } from 'lucide-react';
-import { createClient } from '@/src/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {

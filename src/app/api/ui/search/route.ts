@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { PAGINATION, createPaginatedResponse } from '@/src/lib/pagination';
+import { db } from '@/server/db';
+import { PAGINATION, createPaginatedResponse } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 

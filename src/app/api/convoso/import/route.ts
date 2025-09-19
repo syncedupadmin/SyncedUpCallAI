@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvosoService } from '@/src/lib/convoso-service';
-import { createClient } from '@/src/lib/supabase/server';
+import { ConvosoService } from '@/lib/convoso-service';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
   try {

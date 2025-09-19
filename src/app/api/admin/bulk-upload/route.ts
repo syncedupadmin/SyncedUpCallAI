@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { isAdminAuthenticated } from '@/src/server/auth/admin';
-import { createClient } from '@/src/lib/supabase/server';
+import { db } from '@/server/db';
+import { isAdminAuthenticated } from '@/server/auth/admin';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // 1 minute for file processing

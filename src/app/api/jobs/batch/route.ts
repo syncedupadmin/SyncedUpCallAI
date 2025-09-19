@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { sleep } from '@/src/server/lib/retry';
-import { logInfo } from '@/src/lib/log';
+import { db } from '@/server/db';
+import { sleep } from '@/server/lib/retry';
+import { logInfo } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
 

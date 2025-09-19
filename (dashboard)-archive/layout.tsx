@@ -1,4 +1,4 @@
-import Navigation from '@/src/components/Navigation';
+import Navigation from '@/components/Navigation';
 
 export default function DashboardLayout({
   children,

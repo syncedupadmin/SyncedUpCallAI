@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminAuthenticated } from '@/src/server/auth/admin';
-import { discoverSuccessfulPatterns } from '@/src/lib/opening-analyzer';
+import { isAdminAuthenticated } from '@/server/auth/admin';
+import { discoverSuccessfulPatterns } from '@/lib/opening-analyzer';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for analysis

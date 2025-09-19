@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { isAdminAuthenticated } from '@/src/server/auth/admin';
-import { logInfo, logError } from '@/src/lib/log';
+import { db } from '@/server/db';
+import { isAdminAuthenticated } from '@/server/auth/admin';
+import { logInfo, logError } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
 

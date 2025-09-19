@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/src/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { Phone, Calendar, Clock, User, ChevronRight, Search } from 'lucide-react';

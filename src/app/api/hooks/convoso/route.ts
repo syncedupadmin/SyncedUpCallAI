@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { ConvosoV1 } from '@/src/server/lib/validation';
-import { idemKey, asIso } from '@/src/server/lib/util';
+import { db } from '@/server/db';
+import { ConvosoV1 } from '@/server/lib/validation';
+import { idemKey, asIso } from '@/server/lib/util';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
+import { db } from '@/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
         for (const transcript of transcripts) {
           try {
             // Generate embedding
-            const { ensureEmbedding } = await import('@/src/server/embeddings');
+            const { ensureEmbedding } = await import('@/server/embeddings');
             await ensureEmbedding(transcript.call_id);
             
             processed++;

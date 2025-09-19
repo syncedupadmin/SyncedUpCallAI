@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
-import FiltersBar, { SelectFilter } from '@/src/ui/FiltersBar';
-import Badge from '@/src/ui/Badge';
-import EmptyState from '@/src/ui/EmptyState';
-import { tokens } from '@/src/ui/tokens';
+import FiltersBar, { SelectFilter } from '@/ui/FiltersBar';
+import Badge from '@/ui/Badge';
+import EmptyState from '@/ui/EmptyState';
+import { tokens } from '@/ui/tokens';
 import {
   Search,
   AlertCircle,
@@ -24,7 +24,7 @@ import {
   Eye,
   Play,
   HelpCircle
-} from '@/src/ui/icons';
+} from '@/ui/icons';
 
 export default function SearchPage() {
   const [q, setQ] = useState('');

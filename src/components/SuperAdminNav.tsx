@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/src/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard,
   Phone,
@@ -22,7 +22,7 @@ import {
   Building2,
   CheckCircle2
 } from 'lucide-react';
-import { OfficeSelector } from '@/src/components/OfficeSelector';
+import { OfficeSelector } from '@/components/OfficeSelector';
 
 interface NavItem {
   name: string;

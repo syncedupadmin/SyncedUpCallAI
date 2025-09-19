@@ -1,5 +1,5 @@
 // src/lib/analyze.ts
-import { AnalysisSchema } from "@/src/lib/analysis-schema";
+import { AnalysisSchema } from "@/lib/analysis-schema";
 
 export async function runAnalysis({
   systemPrompt,

@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
-import AdminNav from '@/src/components/AdminNav';
-import { OfficeProvider } from '@/src/contexts/OfficeContext';
+import AdminNav from '@/components/AdminNav';
+import { OfficeProvider } from '@/contexts/OfficeContext';
 
 export const metadata: Metadata = {
   title: 'Admin Portal - SyncedUp Call AI',

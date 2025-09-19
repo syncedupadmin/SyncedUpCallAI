@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { isAdminAuthenticated } from '@/src/server/auth/admin';
+import { db } from '@/server/db';
+import { isAdminAuthenticated } from '@/server/auth/admin';
 import { v4 as uuidv4 } from 'uuid';
 import {
   analyzeOpening,
@@ -8,7 +8,7 @@ import {
   detectHangups,
   LYING_PATTERNS,
   DISCOVERY_PROMPTS
-} from '@/src/lib/discovery-engine';
+} from '@/lib/discovery-engine';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for large discoveries

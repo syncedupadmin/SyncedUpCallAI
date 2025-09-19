@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvosoService } from '@/src/lib/convoso-service';
+import { ConvosoService } from '@/lib/convoso-service';
 import { createClient } from '@supabase/supabase-js';
 
 // This runs every 15 minutes via Vercel cron

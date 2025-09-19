@@ -3,8 +3,8 @@
  * Discovers successful patterns from YOUR real call data
  */
 
-import { db } from '@/src/server/db';
-import { logInfo, logError } from '@/src/lib/log';
+import { db } from '@/server/db';
+import { logInfo, logError } from '@/lib/log';
 
 interface OpeningPattern {
   phrase: string;

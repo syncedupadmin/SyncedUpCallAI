@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { sha256 } from '@/src/server/lib/embeddings';
+import { db } from '@/server/db';
+import { sha256 } from '@/server/lib/embeddings';
 
 export const dynamic = 'force-dynamic';
 

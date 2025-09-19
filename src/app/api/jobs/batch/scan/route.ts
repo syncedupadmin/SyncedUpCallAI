@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { checkRateLimit } from '@/src/server/middleware/rateLimit';
+import { db } from '@/server/db';
+import { checkRateLimit } from '@/server/middleware/rateLimit';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
+import { db } from '@/server/db';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // Send summary to Slack if configured
     if (rollup.high_risk_calls > 0 || rollup.lost_premium > 0) {
       try {
-        const { postSlack } = await import('@/src/server/lib/alerts');
+        const { postSlack } = await import('@/server/lib/alerts');
         
         const blocks: any[] = [
           {

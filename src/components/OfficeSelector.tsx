@@ -1,6 +1,6 @@
 'use client';
 
-import { useOfficeContext } from '@/src/contexts/OfficeContext';
+import { useOfficeContext } from '@/contexts/OfficeContext';
 import { Building2 } from 'lucide-react';
 
 export function OfficeSelector({ className }: { className?: string }) {

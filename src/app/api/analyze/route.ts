@@ -1,19 +1,17 @@
 // src/app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { transcribeFromUrl } from "@/src/lib/asr-nova2";
-import { computeTalkMetrics, isVoicemailLike } from "@/src/lib/metrics";
-import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/src/server/lib/prompts";
-import { runAnalysis } from "@/src/lib/analyze";
+import { transcribeFromUrl } from "@/lib/asr-nova2";
+import { computeTalkMetrics, isVoicemailLike } from "@/lib/metrics";
+import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/lib/prompts";
+import { runAnalysis } from "@/lib/analyze";
 
 export async function POST(req: NextRequest) {
   try {
     const { recording_url, meta } = await req.json();
-
     if (!recording_url) return NextResponse.json({ error: "recording_url required" }, { status: 400 });
 
     const { segments, asrQuality } = await transcribeFromUrl(recording_url);
 
-    // Fast path: voicemail
     if (isVoicemailLike(segments)) {
       return NextResponse.json({
         version: "2.0",
@@ -35,13 +33,12 @@ export async function POST(req: NextRequest) {
         best_callback_window: null,
         crm_updates: { disposition:"voicemail", callback_requested:false, callback_time_local:null, dnc:false },
         key_quotes: [],
-        asr_quality: "good",
+        asr_quality: asrQuality,
         summary: "No answer; voicemail detected.",
         notes: null
       });
     }
 
-    // Build transcript text for the prompt (speaker-tagged)
     const transcript = segments
       .map(s => `${s.speaker.toUpperCase()} [${new Date(s.startMs).toISOString().substring(14,19)}]: ${s.text}`)
       .join("\n");
@@ -49,21 +46,14 @@ export async function POST(req: NextRequest) {
     const talk = computeTalkMetrics(segments);
 
     const up = userPromptTpl(
-      {
-        ...meta,
-        tz: meta?.tz ?? process.env.TZ ?? "America/New_York",
-      },
+      { ...meta, tz: meta?.tz ?? process.env.TZ ?? "America/New_York" },
       transcript
     );
 
-    const finalJson = await runAnalysis({
-      systemPrompt: ANALYSIS_SYSTEM,
-      userPrompt: up
-    });
+    const finalJson = await runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up });
 
-    // Overwrite with ground-truth metrics + ASR quality to prevent LLM drift
     finalJson.talk_metrics = talk;
-    finalJson.asr_quality = finalJson.asr_quality ?? (segments.length ? "good" : "poor");
+    finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
 
     return NextResponse.json(finalJson);
   } catch (e: any) {

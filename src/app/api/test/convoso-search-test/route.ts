@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvosoService } from '@/src/lib/convoso-service';
+import { ConvosoService } from '@/lib/convoso-service';
 
 export const dynamic = 'force-dynamic';
 

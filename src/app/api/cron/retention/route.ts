@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { applyRetentionPolicy, getRetentionStats } from '@/src/server/lib/retention';
+import { db } from '@/server/db';
+import { applyRetentionPolicy, getRetentionStats } from '@/server/lib/retention';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
 
     if (totalActions > 0) {
       try {
-        const { postSlack } = await import('@/src/server/lib/alerts');
+        const { postSlack } = await import('@/server/lib/alerts');
         
         const blocks: any[] = [
           {

@@ -14,10 +14,10 @@ import {
   Globe,
   Sparkles
 } from 'lucide-react';
-import AuthModal from '@/src/components/Auth/AuthModal';
-import ParticleBackground from '@/src/components/Home/ParticleBackground';
-import AnimatedStats from '@/src/components/Home/AnimatedStats';
-import { createClient } from '@/src/lib/supabase/client';
+import AuthModal from '@/components/Auth/AuthModal';
+import ParticleBackground from '@/components/Home/ParticleBackground';
+import AnimatedStats from '@/components/Home/AnimatedStats';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { ensureEmbedding } from '@/src/server/embeddings';
+import { db } from '@/server/db';
+import { ensureEmbedding } from '@/server/embeddings';
 
 export const dynamic = 'force-dynamic';
 

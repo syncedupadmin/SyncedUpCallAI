@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { useMyMemberships } from '@/src/hooks/useOffice';
+import { useMyMemberships } from '@/hooks/useOffice';
 
 interface MyMembership {
   office_id: number;

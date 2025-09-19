@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { parsePaginationParams, createPaginatedResponse } from '@/src/lib/pagination';
-import { isAdminAuthenticated, unauthorizedResponse } from '@/src/server/auth/admin';
+import { db } from '@/server/db';
+import { parsePaginationParams, createPaginatedResponse } from '@/lib/pagination';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 

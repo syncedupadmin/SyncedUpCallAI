@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { transcribe, translateToEnglish } from '@/src/server/asr';
-import { ensureEmbedding } from '@/src/server/embeddings';
-import { truncatePayload } from '@/src/server/lib/retry';
-import { SSEManager } from '@/src/lib/sse';
+import { db } from '@/server/db';
+import { transcribe, translateToEnglish } from '@/server/asr';
+import { ensureEmbedding } from '@/server/embeddings';
+import { truncatePayload } from '@/server/lib/retry';
+import { SSEManager } from '@/lib/sse';
 
 export const dynamic = 'force-dynamic';
 

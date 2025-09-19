@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { ANALYSIS_SCHEMA, validateAnalysis, softValidateAnalysis } from '@/src/server/lib/json-guard';
-import { ANALYSIS_SYSTEM, userPrompt } from '@/src/server/lib/prompts';
-import { alert } from '@/src/server/lib/alerts';
-import { withinCancelWindow } from '@/src/server/lib/biz';
+import { db } from '@/server/db';
+import { ANALYSIS_SCHEMA, validateAnalysis, softValidateAnalysis } from '@/server/lib/json-guard';
+import { ANALYSIS_SYSTEM, userPrompt } from '@/server/lib/prompts';
+import { alert } from '@/server/lib/alerts';
+import { withinCancelWindow } from '@/server/lib/biz';
 
 export const dynamic = 'force-dynamic';
 
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
   
   // Generate embedding if not exists
   try {
-    const { ensureEmbedding } = await import('@/src/server/embeddings');
+    const { ensureEmbedding } = await import('@/server/embeddings');
     await ensureEmbedding(callId);
   } catch (embedError) {
     console.error('Embedding generation failed:', embedError);
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
   
   // Check for high-risk calls and send alerts
   try {
-    const { processHighRiskCall } = await import('@/src/server/lib/rules');
+    const { processHighRiskCall } = await import('@/server/lib/rules');
     await processHighRiskCall(callId, j);
   } catch (riskError) {
     console.error('High-risk check failed:', riskError);

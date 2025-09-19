@@ -3,8 +3,8 @@
  * Extracts and analyzes call openings from real recordings
  */
 
-import { db } from '@/src/server/db';
-import { logInfo, logError } from '@/src/lib/log';
+import { db } from '@/server/db';
+import { logInfo, logError } from '@/lib/log';
 
 interface WordTiming {
   word: string;

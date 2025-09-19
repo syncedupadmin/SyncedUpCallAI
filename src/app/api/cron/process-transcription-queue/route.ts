@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/server/db';
-import { logInfo, logError } from '@/src/lib/log';
+import { db } from '@/server/db';
+import { logInfo, logError } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
 
