@@ -98,12 +98,12 @@ export async function GET(req: NextRequest) {
         SET
           status = 'processing',
           started_at = NOW(),
-          attempts = attempts + 1
+          attempts = tq.attempts + 1
         FROM (
           SELECT id
           FROM transcription_queue
           WHERE status = 'pending'
-            AND attempts < 3
+            AND transcription_queue.attempts < 3
           ORDER BY
             priority DESC,
             created_at ASC
