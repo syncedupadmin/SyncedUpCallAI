@@ -2,8 +2,26 @@
 import { AnalysisSchema } from "@/lib/analysis-schema";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+// Build a root object schema OpenAI will accept
 const raw = zodToJsonSchema(AnalysisSchema, "CallAnalysis") as any;
-const schemaPayload = raw.definitions?.CallAnalysis ?? raw;  // use the concrete object
+const schemaPayload =
+  raw?.definitions?.CallAnalysis
+    ? {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        $defs: raw.definitions,
+        $ref: "#/$defs/CallAnalysis"
+      }
+    : raw?.$defs?.CallAnalysis
+    ? {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        $defs: raw.$defs,
+        $ref: "#/$defs/CallAnalysis"
+      }
+    : raw; // already a plain object
+
+if (Array.isArray(schemaPayload)) {
+  throw new Error("Schema payload is unexpectedly an array. Check tuple/array fields.");
+}
 
 const MODEL_CANDIDATES = [
   process.env.OPENAI_MODEL,
