@@ -62,6 +62,6 @@ export const AnalysisSchema = z.object({
   evidence: z.object({
     // fixed-length array (minItems=2, maxItems=2) that OpenAI accepts
     reason_primary_span: z.array(z.number().int().nonnegative()).length(2).nullable(),
-    reason_primary_quote: z.string().optional()
-  }).optional()
+    reason_primary_quote: z.string()                  // required
+  }).strict().optional()                              // strict → additionalProperties: false
 });

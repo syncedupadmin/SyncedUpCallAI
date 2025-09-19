@@ -92,6 +92,12 @@ function normalize(o: any) {
     o.qa_breakdown.closing = roundInt(o.qa_breakdown.closing);
   }
 
+  // evidence safety net
+  if (o.evidence) {
+    if (!("reason_primary_quote" in o.evidence))
+      o.evidence.reason_primary_quote = "";
+  }
+
   return o;
 }
 
