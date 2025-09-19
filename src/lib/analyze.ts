@@ -1,5 +1,8 @@
 // src/lib/analyze.ts
 import { AnalysisSchema } from "@/lib/analysis-schema";
+import { zodToJsonSchema } from "zod-to-json-schema";
+
+const schemaPayload = zodToJsonSchema(AnalysisSchema, "CallAnalysis");
 
 const MODEL_CANDIDATES = [
   process.env.OPENAI_MODEL,
@@ -16,8 +19,13 @@ async function callOpenAI(model: string, systemPrompt: string, userPrompt: strin
     },
     body: JSON.stringify({
       model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
+      temperature: 0,
+      top_p: 0.2,
+      seed: 7, // repeatability for QA
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "CallAnalysis", schema: schemaPayload, strict: true }
+      },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
