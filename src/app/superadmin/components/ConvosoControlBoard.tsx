@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Switch } from '@headlessui/react';
 import { toast } from 'sonner';
+import DualListBox from './DualListBox';
 
 interface ControlSettings {
   system_enabled: boolean;
@@ -43,7 +44,6 @@ export default function ConvosoControlBoard() {
   // Agent management
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
-  const [agentSearch, setAgentSearch] = useState('');
 
   // Dynamic options from Convoso
   const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
@@ -222,33 +222,6 @@ export default function ConvosoControlBoard() {
     }
   };
 
-  const selectAll = (filterType: keyof ControlSettings) => {
-    const allOptions = {
-      active_campaigns: availableCampaigns,
-      active_lists: availableLists,
-      active_dispositions: availableDispositions,
-      active_agents: availableAgents
-    };
-
-    setSettings(prev => ({
-      ...prev,
-      [filterType]: allOptions[filterType as keyof typeof allOptions] || []
-    }));
-  };
-
-  const toggleFilter = (filterType: keyof ControlSettings, value: string) => {
-    setSettings(prev => {
-      const current = prev[filterType] as string[];
-      const updated = current.includes(value)
-        ? current.filter(v => v !== value)
-        : [...current, value];
-
-      return {
-        ...prev,
-        [filterType]: updated
-      };
-    });
-  };
 
   const resetToDefault = () => {
     setSettings({
@@ -523,227 +496,57 @@ export default function ConvosoControlBoard() {
 
         {/* Filter Sections */}
         <div style={{ marginBottom: '32px' }}>
-          {[
-            { key: 'active_campaigns', label: 'Active Campaigns', icon: '📢', options: availableCampaigns },
-            { key: 'active_lists', label: 'Active Lists', icon: '📋', options: availableLists },
-            { key: 'active_dispositions', label: 'Active Dispositions', icon: '✅', options: availableDispositions }
-          ].map(({ key, label, icon, options }) => (
-            <div key={key} style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>{icon}</span> {label} {optionsLoaded && options.length > 0 && `(${options.length} available)`}
-                </h3>
-                {optionsLoaded && options.length > 0 && (
-                  <button
-                    onClick={() => selectAll(key as keyof ControlSettings)}
-                    style={{
-                      fontSize: '12px',
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      background: '#f3f4f6',
-                      border: '1px solid #e5e7eb',
-                      color: '#4b5563',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#e5e7eb';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#f3f4f6';
-                    }}
-                  >
-                    Select All
-                  </button>
-                )}
-              </div>
-
-              {!optionsLoaded ? (
-                <div style={{
-                  padding: '20px',
-                  background: '#f9fafb',
-                  borderRadius: '6px',
-                  border: '1px solid #e5e7eb',
-                  textAlign: 'center',
-                  color: '#6b7280',
-                  fontSize: '14px'
-                }}>
-                  Please load filter options using the date selector above
-                </div>
-              ) : options.length === 0 ? (
-                <div style={{
-                  padding: '20px',
-                  background: '#fef2f2',
-                  borderRadius: '6px',
-                  border: '1px solid #fecaca',
-                  textAlign: 'center',
-                  color: '#991b1b',
-                  fontSize: '14px'
-                }}>
-                  No {label.toLowerCase()} found for the selected date range
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '8px' }}>
-                  {options.map(option => (
-                    <label
-                      key={option}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        background: (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb',
-                        border: `1px solid ${(settings[key as keyof ControlSettings] as string[]).includes(option) ? '#bfdbfe' : '#e5e7eb'}`,
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!(settings[key as keyof ControlSettings] as string[]).includes(option)) {
-                          e.currentTarget.style.background = '#f3f4f6';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb';
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={(settings[key as keyof ControlSettings] as string[]).includes(option)}
-                        onChange={() => toggleFilter(key as keyof ControlSettings, option)}
-                        style={{
-                          marginRight: '10px',
-                          width: '16px',
-                          height: '16px',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <span style={{ fontSize: '14px', color: '#374151' }}>{option}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
+          {!optionsLoaded ? (
+            <div style={{
+              padding: '40px',
+              background: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              textAlign: 'center',
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Please load filter options using the date selector above
             </div>
-          ))}
+          ) : (
+            <>
+              <DualListBox
+                title="Active Campaigns"
+                icon="📢"
+                availableItems={availableCampaigns}
+                selectedItems={settings.active_campaigns}
+                onItemsChange={(items) => setSettings(prev => ({ ...prev, active_campaigns: items }))}
+                height="200px"
+              />
 
-          {/* Agent Section with Search */}
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>👤</span> Active Agents {agents.length > 0 && `(${agents.length} available)`}
-              </h3>
-              {agents.length > 0 && (
-                <button
-                  onClick={() => selectAll('active_agents' as keyof ControlSettings)}
-                  style={{
-                    fontSize: '12px',
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    background: '#f3f4f6',
-                    border: '1px solid #e5e7eb',
-                    color: '#4b5563',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#e5e7eb';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f3f4f6';
-                  }}
-                >
-                  Select All
-                </button>
-              )}
-            </div>
+              <DualListBox
+                title="Active Lists"
+                icon="📋"
+                availableItems={availableLists}
+                selectedItems={settings.active_lists}
+                onItemsChange={(items) => setSettings(prev => ({ ...prev, active_lists: items }))}
+                height="200px"
+              />
 
-            {agents.length === 0 ? (
-              <div style={{
-                padding: '20px',
-                background: '#f9fafb',
-                borderRadius: '6px',
-                border: '1px solid #e5e7eb',
-                textAlign: 'center',
-                color: '#6b7280',
-                fontSize: '14px'
-              }}>
-                Please load agents using the date selector above
-              </div>
-            ) : (
-              <>
-                <input
-                  type="text"
-                  placeholder="Search agents..."
-                  value={agentSearch}
-                  onChange={(e) => setAgentSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    borderRadius: '6px',
-                    border: '1px solid #d1d5db',
-                    background: '#ffffff',
-                    marginBottom: '12px'
-                  }}
-                />
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                  gap: '8px',
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  padding: '2px'
-                }}>
-                  {availableAgents
-                    .filter(agent => !agentSearch || agent.toLowerCase().includes(agentSearch.toLowerCase()))
-                    .map(option => (
-                      <label
-                        key={option}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '10px 12px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          background: settings.active_agents.includes(option) ? '#f0f9ff' : '#f9fafb',
-                          border: `1px solid ${settings.active_agents.includes(option) ? '#bfdbfe' : '#e5e7eb'}`,
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!settings.active_agents.includes(option)) {
-                            e.currentTarget.style.background = '#f3f4f6';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = settings.active_agents.includes(option) ? '#f0f9ff' : '#f9fafb';
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={settings.active_agents.includes(option)}
-                          onChange={() => toggleFilter('active_agents' as keyof ControlSettings, option)}
-                          style={{
-                            marginRight: '10px',
-                            width: '16px',
-                            height: '16px',
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <span style={{ fontSize: '14px', color: '#374151' }}>{option}</span>
-                      </label>
-                    ))}
-                </div>
-                {agentSearch && (
-                  <p style={{
-                    fontSize: '12px',
-                    color: '#6b7280',
-                    marginTop: '8px'
-                  }}>
-                    Showing {availableAgents.filter(a => a.toLowerCase().includes(agentSearch.toLowerCase())).length} of {availableAgents.length} agents
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+              <DualListBox
+                title="Active Dispositions"
+                icon="✅"
+                availableItems={availableDispositions}
+                selectedItems={settings.active_dispositions}
+                onItemsChange={(items) => setSettings(prev => ({ ...prev, active_dispositions: items }))}
+                height="200px"
+              />
+
+              <DualListBox
+                title="Active Agents"
+                icon="👤"
+                availableItems={availableAgents}
+                selectedItems={settings.active_agents}
+                onItemsChange={(items) => setSettings(prev => ({ ...prev, active_agents: items }))}
+                height="250px"
+              />
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}
