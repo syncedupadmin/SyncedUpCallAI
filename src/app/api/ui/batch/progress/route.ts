@@ -1,28 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BatchProgressTracker } from '@/src/lib/sse';
+import { db } from '@/src/server/db';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const batchId = req.nextUrl.searchParams.get('batch_id');
-  
+
   if (!batchId) {
-    return NextResponse.json({ 
-      ok: false, 
-      error: 'batch_id required' 
+    return NextResponse.json({
+      ok: false,
+      error: 'batch_id required'
     }, { status: 400 });
   }
 
-  const progress = BatchProgressTracker.getProgress(batchId);
-  
-  if (!progress) {
-    return NextResponse.json({ 
-      ok: false, 
-      error: 'batch_not_found' 
-    }, { status: 404 });
-  }
+  try {
+    // Get batch progress from database
+    const result = await db.query(`
+      SELECT batch_id, total, scanned, posted, completed, failed, status
+      FROM batch_progress
+      WHERE batch_id = $1
+    `, [batchId]);
 
-  return NextResponse.json({ 
-    ok: true, 
-    batch_id: batchId,
-    progress 
-  });
+    if (result.rows.length === 0) {
+      return NextResponse.json({
+        ok: false,
+        error: 'batch_not_found'
+      }, { status: 404 });
+    }
+
+    const progress = result.rows[0];
+
+    return NextResponse.json({
+      ok: true,
+      batch_id: batchId,
+      progress: {
+        total: progress.total,
+        scanned: progress.scanned,
+        posted: progress.posted,
+        completed: progress.completed,
+        failed: progress.failed
+      },
+      status: progress.status
+    });
+  } catch (error: any) {
+    console.error('Error fetching batch progress:', error);
+    return NextResponse.json({
+      ok: false,
+      error: error.message
+    }, { status: 500 });
+  }
 }

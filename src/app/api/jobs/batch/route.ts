@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/server/db';
 import { sleep } from '@/src/server/lib/retry';
-import { BatchProgressTracker } from '@/src/lib/sse';
 import { logInfo } from '@/src/lib/log';
 
 export const dynamic = 'force-dynamic';
@@ -11,16 +10,6 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.JOBS_SECRET}`) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
-  }
-
-  // Check if requesting progress update
-  const batchId = req.nextUrl.searchParams.get('batch_id');
-  if (batchId) {
-    const progress = BatchProgressTracker.getProgress(batchId);
-    if (!progress) {
-      return NextResponse.json({ ok: false, error: 'batch_not_found' }, { status: 404 });
-    }
-    return NextResponse.json({ ok: true, progress });
   }
 
   // Get batch size from query params, default to 50
@@ -54,9 +43,14 @@ export async function GET(req: NextRequest) {
   let failed = 0;
   let completed = 0;
 
-  // Initialize batch tracking
+  // Initialize batch tracking in database
   const newBatchId = `batch_${Date.now()}`;
-  BatchProgressTracker.initBatch(newBatchId, scanned);
+
+  // Create batch progress record in database
+  await db.none(`
+    INSERT INTO batch_progress (batch_id, total, scanned, posted, completed, failed, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [newBatchId, scanned, scanned, 0, 0, 0, 'processing']);
 
   for (const r of rows) {
     try {
@@ -72,12 +66,12 @@ export async function GET(req: NextRequest) {
       posted++;
       completed++; // Count as completed since we queued it
 
-      // Update progress
-      BatchProgressTracker.updateProgress(newBatchId, {
-        posted,
-        completed,
-        failed
-      });
+      // Update progress in database
+      await db.none(`
+        UPDATE batch_progress
+        SET posted = $2, completed = $3, failed = $4, updated_at = NOW()
+        WHERE batch_id = $1
+      `, [newBatchId, posted, completed, failed]);
 
       logInfo({
         event_type: 'batch_transcription_queued',
@@ -93,19 +87,32 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       failed++;
       console.error(`Batch queue error for ${r.id}:`, error);
-      BatchProgressTracker.updateProgress(newBatchId, { failed });
+
+      // Update failed count in database
+      await db.none(`
+        UPDATE batch_progress
+        SET failed = $2, updated_at = NOW()
+        WHERE batch_id = $1
+      `, [newBatchId, failed]);
     }
   }
 
-  const finalProgress = BatchProgressTracker.getProgress(newBatchId);
+  // Mark batch as complete
+  await db.none(`
+    UPDATE batch_progress
+    SET status = 'complete', updated_at = NOW()
+    WHERE batch_id = $1
+  `, [newBatchId]);
 
-  return NextResponse.json({ 
-    ok: true, 
+  return NextResponse.json({
+    ok: true,
     batch_id: newBatchId,
-    progress: finalProgress,
-    scanned,
-    posted,
-    completed,
-    failed
+    progress: {
+      scanned,
+      posted,
+      completed,
+      failed,
+      total: scanned
+    }
   });
 }
