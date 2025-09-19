@@ -31,9 +31,9 @@ export default function AnalyzeDemo() {
 
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">Analyze Call (demo)</h1>
+      <h1 className="text-2xl font-semibold text-black">Analyze Call (demo)</h1>
       <div className="rounded-xl border p-4 space-y-3">
-        <input className="w-full rounded border p-2" placeholder="Paste MP3 URL from Convoso" value={url} onChange={e => setUrl(e.target.value)} />
+        <input className="w-full rounded border p-2 text-black" placeholder="Paste MP3 URL from Convoso" value={url} onChange={e => setUrl(e.target.value)} />
         <button className="rounded bg-black px-4 py-2 text-white disabled:opacity-50" onClick={run} disabled={!url || loading}>
           {loading ? "Analyzing…" : "Analyze"}
         </button>
