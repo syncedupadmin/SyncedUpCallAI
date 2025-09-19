@@ -192,9 +192,9 @@ export default function ConvosoImporter() {
       // Set filter options based on the agent's calls
       const calls = data.calls || [];
       setFilterOptions({
-        campaigns: [...new Set(calls.map((c: Call) => c.campaign_name))].sort(),
-        lists: [...new Set(calls.map((c: Call) => c.list_name))].sort(),
-        dispositions: [...new Set(calls.map((c: Call) => c.disposition))].sort(),
+        campaigns: [...new Set(calls.map((c: Call) => c.campaign_name))].sort() as string[],
+        lists: [...new Set(calls.map((c: Call) => c.list_name))].sort() as string[],
+        dispositions: [...new Set(calls.map((c: Call) => c.disposition))].sort() as string[],
         agents: [agent?.name || 'Unknown Agent']
       });
 
