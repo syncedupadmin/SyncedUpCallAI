@@ -19,7 +19,8 @@ import {
   Upload,
   Activity,
   Mic,
-  Building2
+  Building2,
+  CheckCircle2
 } from 'lucide-react';
 import { OfficeSelector } from '@/src/components/OfficeSelector';
 
@@ -66,6 +67,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/calls',
       icon: Phone,
       description: 'View all calls'
+    },
+    {
+      name: 'Processed',
+      href: '/superadmin/processed-calls',
+      icon: CheckCircle2,
+      description: 'Processed & analyzed calls'
     },
     {
       name: 'Analytics',

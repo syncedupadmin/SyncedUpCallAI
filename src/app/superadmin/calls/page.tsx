@@ -47,7 +47,7 @@ export default function AdminCallsPage() {
 
   useEffect(() => {
     fetchCalls();
-    triggerBatchProcessing(); // Automatically trigger processing on page load
+    // Don't auto-trigger processing - wait for manual button click
     const interval = setInterval(() => {
       fetchCalls(true); // Auto-refresh
     }, 15000); // Refresh every 15 seconds
@@ -388,12 +388,12 @@ export default function AdminCallsPage() {
       )}
 
       {/* Processing Status */}
-      {processingStatus && (
-        <div className={`mb-6 p-4 rounded-lg border ${
-          processingStatus.active
-            ? 'bg-blue-900/20 border-blue-700'
-            : 'bg-gray-800/50 border-gray-700'
-        }`}>
+      <div className={`mb-6 p-4 rounded-lg border ${
+        processingStatus?.active
+          ? 'bg-blue-900/20 border-blue-700'
+          : 'bg-gray-800/50 border-gray-700'
+      }`}>
+        {processingStatus ? (
           <div className="flex items-center gap-3">
             {processingStatus.active && (
               <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
@@ -425,8 +425,22 @@ export default function AdminCallsPage() {
               </button>
             )}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-white font-medium mb-1">Call Processing</div>
+              <div className="text-sm text-gray-400">Click to process unprocessed calls with recordings (10+ seconds)</div>
+            </div>
+            <button
+              onClick={triggerBatchProcessing}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center gap-2 font-medium"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Start Processing
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Calls Table */}
       <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-800 overflow-hidden">
