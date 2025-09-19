@@ -45,10 +45,12 @@ export default function ConvosoControlBoard() {
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [agentSearch, setAgentSearch] = useState('');
 
-  // Available options (these would come from API in production)
-  const availableCampaigns = ['PHS Dialer', 'Medicare Sales', 'Final Expense'];
-  const availableLists = ['PHS DATA - M3 Demon', 'PHS DATA - INX Overnight', 'Fresh Leads'];
-  const availableDispositions = ['SALE', 'CALLBACK', 'NO ANSWER', 'AA', 'BUSY', 'DNC'];
+  // Dynamic options from Convoso
+  const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
+  const [availableLists, setAvailableLists] = useState<string[]>([]);
+  const [availableDispositions, setAvailableDispositions] = useState<string[]>([]);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+
   // Agents will now be dynamically loaded
   const availableAgents = agents.map(a => a.name);
 
@@ -78,7 +80,7 @@ export default function ConvosoControlBoard() {
     }
   };
 
-  const fetchAgents = async () => {
+  const fetchFilterOptions = async () => {
     if (!dateFrom || !dateTo) {
       toast.error('Please select both start and end dates');
       return;
@@ -86,29 +88,61 @@ export default function ConvosoControlBoard() {
 
     setLoadingAgents(true);
     try {
-      const params = new URLSearchParams({ dateFrom, dateTo });
-      const response = await fetch(`/api/convoso/get-agents?${params}`);
+      // Fetch agents
+      const agentParams = new URLSearchParams({ dateFrom, dateTo });
+      const agentResponse = await fetch(`/api/convoso/get-agents?${agentParams}`);
 
-      if (!response.ok) {
+      if (!agentResponse.ok) {
         throw new Error('Failed to fetch agents');
       }
 
-      const data = await response.json();
-      const fetchedAgents = data.agents || [];
+      const agentData = await agentResponse.json();
+      const fetchedAgents = agentData.agents || [];
       setAgents(fetchedAgents);
 
-      // Update settings to include only valid agents
+      // Fetch sample calls to get campaigns, lists, and dispositions
+      const callParams = new URLSearchParams({ dateFrom, dateTo });
+      const callResponse = await fetch(`/api/convoso/search-noauth?${callParams}`);
+
+      let campaigns: string[] = [];
+      let lists: string[] = [];
+      let dispositions: string[] = [];
+
+      if (callResponse.ok) {
+        const callData = await callResponse.json();
+
+        // Extract unique values from the calls
+        if (callData.filterOptions) {
+          campaigns = callData.filterOptions.campaigns || [];
+          lists = callData.filterOptions.lists || [];
+          dispositions = callData.filterOptions.dispositions || [];
+
+          setAvailableCampaigns(campaigns);
+          setAvailableLists(lists);
+          setAvailableDispositions(dispositions);
+        }
+
+        toast.success(`Loaded ${fetchedAgents.length} agents and filter options`);
+      } else {
+        toast.warning(`Loaded ${fetchedAgents.length} agents, but couldn't fetch filter options`);
+      }
+
+      setOptionsLoaded(true);
+
+      // Update settings to include only valid options
       setSettings(prev => ({
         ...prev,
         active_agents: prev.active_agents.filter(agentName =>
           fetchedAgents.some((a: Agent) => a.name === agentName)
-        )
+        ),
+        active_campaigns: prev.active_campaigns.filter(c => campaigns.includes(c)),
+        active_lists: prev.active_lists.filter(l => lists.includes(l)),
+        active_dispositions: prev.active_dispositions.filter(d => dispositions.includes(d))
       }));
 
-      toast.success(`Loaded ${fetchedAgents.length} agents`);
     } catch (error) {
-      console.error('Error fetching agents:', error);
-      toast.error('Failed to fetch agents');
+      console.error('Error fetching filter options:', error);
+      toast.error('Failed to fetch filter options');
     } finally {
       setLoadingAgents(false);
     }
@@ -374,7 +408,7 @@ export default function ConvosoControlBoard() {
             color: '#1e40af',
             marginBottom: '16px'
           }}>
-            Load Agents from Convoso
+            Load Filter Options from Convoso
           </h3>
           <div style={{
             display: 'grid',
@@ -431,7 +465,7 @@ export default function ConvosoControlBoard() {
               />
             </div>
             <button
-              onClick={fetchAgents}
+              onClick={fetchFilterOptions}
               disabled={loadingAgents}
               style={{
                 padding: '8px 20px',
@@ -444,7 +478,7 @@ export default function ConvosoControlBoard() {
                 cursor: loadingAgents ? 'not-allowed' : 'pointer'
               }}
             >
-              {loadingAgents ? 'Loading...' : agents.length > 0 ? `Refresh (${agents.length} loaded)` : 'Load Agents'}
+              {loadingAgents ? 'Loading...' : optionsLoaded ? `Refresh Data` : 'Load Filter Options'}
             </button>
           </div>
         </div>
@@ -497,68 +531,97 @@ export default function ConvosoControlBoard() {
             <div key={key} style={{ marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>{icon}</span> {label}
+                  <span>{icon}</span> {label} {optionsLoaded && options.length > 0 && `(${options.length} available)`}
                 </h3>
-                <button
-                  onClick={() => selectAll(key as keyof ControlSettings)}
-                  style={{
-                    fontSize: '12px',
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    background: '#f3f4f6',
-                    border: '1px solid #e5e7eb',
-                    color: '#4b5563',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#e5e7eb';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f3f4f6';
-                  }}
-                >
-                  Select All
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '8px' }}>
-                {options.map(option => (
-                  <label
-                    key={option}
+                {optionsLoaded && options.length > 0 && (
+                  <button
+                    onClick={() => selectAll(key as keyof ControlSettings)}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '10px 12px',
-                      borderRadius: '6px',
+                      fontSize: '12px',
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      background: '#f3f4f6',
+                      border: '1px solid #e5e7eb',
+                      color: '#4b5563',
                       cursor: 'pointer',
-                      background: (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb',
-                      border: `1px solid ${(settings[key as keyof ControlSettings] as string[]).includes(option) ? '#bfdbfe' : '#e5e7eb'}`,
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={(e) => {
-                      if (!(settings[key as keyof ControlSettings] as string[]).includes(option)) {
-                        e.currentTarget.style.background = '#f3f4f6';
-                      }
+                      e.currentTarget.style.background = '#e5e7eb';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb';
+                      e.currentTarget.style.background = '#f3f4f6';
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={(settings[key as keyof ControlSettings] as string[]).includes(option)}
-                      onChange={() => toggleFilter(key as keyof ControlSettings, option)}
-                      style={{
-                        marginRight: '10px',
-                        width: '16px',
-                        height: '16px',
-                        cursor: 'pointer'
-                      }}
-                    />
-                    <span style={{ fontSize: '14px', color: '#374151' }}>{option}</span>
-                  </label>
-                ))}
+                    Select All
+                  </button>
+                )}
               </div>
+
+              {!optionsLoaded ? (
+                <div style={{
+                  padding: '20px',
+                  background: '#f9fafb',
+                  borderRadius: '6px',
+                  border: '1px solid #e5e7eb',
+                  textAlign: 'center',
+                  color: '#6b7280',
+                  fontSize: '14px'
+                }}>
+                  Please load filter options using the date selector above
+                </div>
+              ) : options.length === 0 ? (
+                <div style={{
+                  padding: '20px',
+                  background: '#fef2f2',
+                  borderRadius: '6px',
+                  border: '1px solid #fecaca',
+                  textAlign: 'center',
+                  color: '#991b1b',
+                  fontSize: '14px'
+                }}>
+                  No {label.toLowerCase()} found for the selected date range
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '8px' }}>
+                  {options.map(option => (
+                    <label
+                      key={option}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb',
+                        border: `1px solid ${(settings[key as keyof ControlSettings] as string[]).includes(option) ? '#bfdbfe' : '#e5e7eb'}`,
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!(settings[key as keyof ControlSettings] as string[]).includes(option)) {
+                          e.currentTarget.style.background = '#f3f4f6';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = (settings[key as keyof ControlSettings] as string[]).includes(option) ? '#f0f9ff' : '#f9fafb';
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(settings[key as keyof ControlSettings] as string[]).includes(option)}
+                        onChange={() => toggleFilter(key as keyof ControlSettings, option)}
+                        style={{
+                          marginRight: '10px',
+                          width: '16px',
+                          height: '16px',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <span style={{ fontSize: '14px', color: '#374151' }}>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 
