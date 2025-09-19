@@ -20,7 +20,7 @@ const nextConfig = {
       // Fonts/images/media (Storage access)
       `img-src 'self' data: blob: https://${supabaseDomain}`,
       "font-src 'self' data: https://fonts.gstatic.com",
-      `media-src 'self' https://${supabaseDomain}`,
+      `media-src 'self' https://${supabaseDomain} https://*.convoso.com`,
       // XHR/fetch/websocket to Supabase - CRITICAL FOR AUTH
       `connect-src 'self' https://${supabaseDomain} wss://${supabaseDomain}`,
       // Workers (if used by app/Next)
