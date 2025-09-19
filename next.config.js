@@ -22,7 +22,7 @@ const nextConfig = {
       "font-src 'self' data: https://fonts.gstatic.com",
       `media-src 'self' https://${supabaseDomain} https://*.convoso.com`,
       // XHR/fetch/websocket to Supabase - CRITICAL FOR AUTH
-      `connect-src 'self' https://${supabaseDomain} wss://${supabaseDomain}`,
+      `connect-src 'self' https://${supabaseDomain} wss://${supabaseDomain} ${process.env.NODE_ENV === 'development' ? 'webpack://*' : ''}`,
       // Workers (if used by app/Next)
       "worker-src 'self' blob:",
       // If you use iframes to display files from Storage
