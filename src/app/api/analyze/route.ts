@@ -1,9 +1,9 @@
 // src/app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { transcribeFromUrl } from "@/lib/asr-nova2";
-import { computeTalkMetrics, isVoicemailLike } from "@/lib/metrics";
-import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/prompts"; // your updated file
-import { runAnalysis } from "@/lib/analyze";
+import { transcribeFromUrl } from "@/src/lib/asr-nova2";
+import { computeTalkMetrics, isVoicemailLike } from "@/src/lib/metrics";
+import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/src/server/lib/prompts";
+import { runAnalysis } from "@/src/lib/analyze";
 
 export async function POST(req: NextRequest) {
   try {
