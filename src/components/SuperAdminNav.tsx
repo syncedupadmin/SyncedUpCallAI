@@ -80,12 +80,6 @@ export default function SuperAdminNav() {
       description: 'Import CSV/Excel data'
     },
     {
-      name: 'Upload Leads',
-      href: '/superadmin/upload-leads',
-      icon: Upload,
-      description: 'Bulk lead upload'
-    },
-    {
       name: 'Openings',
       href: '/superadmin/openings',
       icon: Mic,
