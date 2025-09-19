@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (isVoicemailLike(segments)) {
       return NextResponse.json({
         version: "2.0",
-        model: "gpt-5-thinking",
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         reason_primary: "no_answer_voicemail",
         reason_secondary: null,
         confidence: 0.9,
