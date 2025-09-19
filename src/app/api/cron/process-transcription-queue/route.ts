@@ -6,12 +6,6 @@ export const dynamic = 'force-dynamic';
 
 // Process transcription queue
 export async function GET(req: NextRequest) {
-  // TEMPORARILY DISABLED: Transcription processing disabled until database functions are created
-  return NextResponse.json({
-    message: 'Transcription processing temporarily disabled',
-    ok: true
-  });
-
   const startTime = Date.now();
   const results = {
     processed: 0,

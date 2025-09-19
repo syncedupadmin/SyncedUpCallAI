@@ -12,7 +12,8 @@ import {
   Search,
   Download,
   RefreshCw,
-  Filter
+  Filter,
+  Mic
 } from 'lucide-react';
 
 interface Call {
@@ -492,13 +493,33 @@ export default function AdminCallsPage() {
                 </label>
               </div>
 
-              <div className="flex items-end justify-end">
+              <div className="flex items-end justify-end gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('/api/admin/process-queue', { method: 'POST' });
+                      const data = await res.json();
+                      if (data.ok) {
+                        alert(`✅ Processed ${data.processed} items from queue`);
+                      } else {
+                        alert(`❌ Error: ${data.error}`);
+                      }
+                    } catch (error) {
+                      alert('Failed to process queue');
+                    }
+                  }}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+                  title="Manually trigger transcription queue processing"
+                >
+                  <Mic className="w-5 h-5" />
+                  Process Queue
+                </button>
                 <button
                   onClick={triggerBatchProcessing}
                   className="px-8 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center gap-2 font-medium"
                 >
                   <RefreshCw className="w-5 h-5" />
-                  Start Processing
+                  Start Batch
                 </button>
               </div>
             </div>
