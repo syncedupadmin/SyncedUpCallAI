@@ -41,15 +41,81 @@ export default function AdminCallsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [processingStatus, setProcessingStatus] = useState<{ active: boolean; message: string } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
     fetchCalls();
+    triggerBatchProcessing(); // Automatically trigger processing on page load
     const interval = setInterval(() => {
       fetchCalls(true); // Auto-refresh
     }, 15000); // Refresh every 15 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const triggerBatchProcessing = async () => {
+    try {
+      setProcessingStatus({ active: true, message: 'Triggering batch processing for unprocessed calls...' });
+
+      // Trigger batch processing
+      const response = await fetch('/api/ui/batch/trigger', {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Batch processing triggered:', data);
+
+        if (data.batch_id) {
+          setBatchProgress(data.progress);
+          setProcessingStatus({
+            active: true,
+            message: `Processing ${data.scanned} calls... (${data.posted} queued)`
+          });
+
+          // Check progress periodically
+          const progressInterval = setInterval(async () => {
+            const progressResponse = await fetch(`/api/ui/batch/progress?batch_id=${data.batch_id}`);
+            if (progressResponse.ok) {
+              const progressData = await progressResponse.json();
+              setBatchProgress(progressData.progress);
+
+              if (progressData.progress?.completed >= progressData.progress?.total) {
+                clearInterval(progressInterval);
+                setProcessingStatus({
+                  active: false,
+                  message: `Processing complete: ${progressData.progress.completed} calls processed`
+                });
+                // Refresh calls to show updated status
+                fetchCalls();
+              }
+            }
+          }, 2000);
+
+          // Clear interval after 60 seconds to prevent infinite checking
+          setTimeout(() => clearInterval(progressInterval), 60000);
+        } else if (data.scanned === 0) {
+          setProcessingStatus({
+            active: false,
+            message: 'All calls are already processed or queued'
+          });
+        }
+      } else {
+        console.error('Failed to trigger batch processing');
+        setProcessingStatus({
+          active: false,
+          message: 'Failed to trigger batch processing'
+        });
+      }
+    } catch (error) {
+      console.error('Error triggering batch processing:', error);
+      setProcessingStatus({
+        active: false,
+        message: 'Error triggering batch processing'
+      });
+    }
+  };
 
   const fetchCalls = async (isAutoRefresh = false) => {
     try {
@@ -319,6 +385,47 @@ export default function AdminCallsPage() {
           <div>Date filter: {dateFilter}</div>
         </div>
       </div>
+      )}
+
+      {/* Processing Status */}
+      {processingStatus && (
+        <div className={`mb-6 p-4 rounded-lg border ${
+          processingStatus.active
+            ? 'bg-blue-900/20 border-blue-700'
+            : 'bg-gray-800/50 border-gray-700'
+        }`}>
+          <div className="flex items-center gap-3">
+            {processingStatus.active && (
+              <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
+            )}
+            <div className="flex-1">
+              <div className="text-white font-medium">{processingStatus.message}</div>
+              {batchProgress && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-sm text-gray-400 mb-1">
+                    <span>Processing: {batchProgress.completed || 0} / {batchProgress.total || 0}</span>
+                    <span>{Math.round(((batchProgress.completed || 0) / (batchProgress.total || 1)) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${((batchProgress.completed || 0) / (batchProgress.total || 1)) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            {!processingStatus.active && (
+              <button
+                onClick={triggerBatchProcessing}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Process Again
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Calls Table */}
