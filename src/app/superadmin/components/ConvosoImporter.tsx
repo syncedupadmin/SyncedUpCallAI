@@ -56,6 +56,7 @@ export default function ConvosoImporter() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [searchMode, setSearchMode] = useState<'all' | 'agent'>('all');
+  const [agentSearch, setAgentSearch] = useState<string>('');
 
   // Initialize Supabase client
   const supabase = createClient();
@@ -595,26 +596,53 @@ export default function ConvosoImporter() {
                       {loadingAgents ? 'Loading agents...' : 'Click to Load Agents'}
                     </button>
                   ) : (
-                    <select
-                      value={selectedAgentId}
-                      onChange={(e) => setSelectedAgentId(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        fontSize: '14px',
-                        borderRadius: '6px',
-                        border: '1px solid #d1d5db',
-                        background: '#ffffff',
-                        color: '#111827'
-                      }}
-                    >
-                      <option value="">Select an agent...</option>
-                      {agents.map(agent => (
-                        <option key={agent.user_id} value={agent.user_id}>
-                          {agent.name} ({agent.totalEvents || 0} events)
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Search agents..."
+                        value={agentSearch}
+                        onChange={(e) => setAgentSearch(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          fontSize: '14px',
+                          borderRadius: '6px',
+                          border: '1px solid #d1d5db',
+                          background: '#ffffff',
+                          color: '#111827',
+                          marginBottom: '8px'
+                        }}
+                      />
+                      <select
+                        value={selectedAgentId}
+                        onChange={(e) => setSelectedAgentId(e.target.value)}
+                        size={8}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          fontSize: '14px',
+                          borderRadius: '6px',
+                          border: '1px solid #d1d5db',
+                          background: '#ffffff',
+                          color: '#111827',
+                          height: '200px',
+                          overflowY: 'auto'
+                        }}
+                      >
+                        <option value="">Select an agent ({agents.filter(a =>
+                          !agentSearch || a.name.toLowerCase().includes(agentSearch.toLowerCase())
+                        ).length} shown of {agents.length} total)...</option>
+                        {agents
+                          .filter(agent =>
+                            !agentSearch || agent.name.toLowerCase().includes(agentSearch.toLowerCase())
+                          )
+                          .map(agent => (
+                            <option key={agent.user_id} value={agent.user_id}>
+                              {agent.name} ({agent.totalEvents || 0} events)
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   )}
                 </div>
                 {agents.length > 0 && (
