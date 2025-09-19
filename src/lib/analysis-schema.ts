@@ -58,5 +58,9 @@ export const AnalysisSchema = z.object({
   })).min(0).max(4),
   asr_quality: z.enum(["poor","fair","good","excellent"]),
   summary: z.string().max(200),
-  notes: z.string().max(200).nullable()
+  notes: z.string().max(200).nullable(),
+  evidence: z.object({
+    reason_primary_span: z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]).nullable(),
+    reason_primary_quote: z.string().optional()
+  }).optional()
 });

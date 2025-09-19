@@ -53,7 +53,12 @@ Schema (all fields REQUIRED unless noted):
 
   "asr_quality": "poor" | "fair" | "good" | "excellent",
   "summary": string (<= 40 words),
-  "notes": string | null
+  "notes": string | null,
+
+  "evidence": {
+    "reason_primary_span": [startMs, endMs] | null,
+    "reason_primary_quote": string
+  }
 }
 
 Scoring:
@@ -65,7 +70,19 @@ Rules:
 - All *_score fields and qa_breakdown values must be integers. Round before output.
 - key_quotes[*].speaker is a single string "agent" or "customer" (not an array).
 - Redact any 7+ consecutive digits in quotes as #######.
-- Output ONLY the JSON object.`;
+- Output ONLY the JSON object.
+- For evidence, set evidence.reason_primary_span to [startMs,endMs] for the utterance that triggered reason_primary, and copy that line into evidence.reason_primary_quote.
+
+TAXONOMY HINTS (do not echo):
+- "spouse_approval": mentions spouse/partner, "need to ask my wife/husband", "talk together tonight".
+- "bank_decline": card failed, insufficient funds, issuer declined, retry later.
+- "benefits_confusion": asks "what do I actually get?", copays/deductible confusion, PPO/HMO uncertainty.
+- "trust_scam_fear": "sounds like a scam," wants proof/license, refuses payment info due to trust.
+- "already_covered": has active plan, employer plan, Medicare Advantage etc.
+- "agent_miscommunication": caller repeats because agent unclear, wrong name/price referenced, contradictory info.
+- "requested_callback": explicitly set a time or "call me back later today/tomorrow".
+- "requested_cancel": "cancel," "stop," "no more calls," "refund," etc.
+- "duplicate_policy": multiple policies, accidental duplicate, double-charged narrative.`;
 
 export const userPrompt = (meta: Record<string, any>, transcript: string) =>
 `CALL METADATA:
