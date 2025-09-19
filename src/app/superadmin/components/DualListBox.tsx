@@ -165,6 +165,7 @@ export default function DualListBox({
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '13px',
+                    color: '#374151', // Added text color
                     background: leftSelected.includes(item) ? '#dbeafe' : '#ffffff',
                     border: `1px solid ${leftSelected.includes(item) ? '#93c5fd' : 'transparent'}`,
                     transition: 'all 0.2s',
@@ -322,6 +323,7 @@ export default function DualListBox({
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '13px',
+                    color: '#374151', // Added text color
                     background: rightSelected.includes(item) ? '#dbeafe' : '#ffffff',
                     border: `1px solid ${rightSelected.includes(item) ? '#93c5fd' : 'transparent'}`,
                     transition: 'all 0.2s',
