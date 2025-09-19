@@ -13,6 +13,7 @@
     "backfill:meta": "node scripts/backfill-meta.cjs"
   },
   "dependencies": {
+    "@deepgram/sdk": "^4.11.2",
     "@headlessui/react": "^2.2.8",
     "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.7.0",
@@ -32,7 +33,7 @@
     "sonner": "^2.0.7",
     "swr": "^2.2.5",
     "uuid": "^13.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "20.19.14",
