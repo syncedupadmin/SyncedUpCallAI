@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
+    // Get options from request body
+    const { batchSize = 50, includeShortCalls = false } = await req.json().catch(() => ({}));
+
+    // Build URL with query params
+    const params = new URLSearchParams({
+      batch_size: String(batchSize),
+      include_short: String(includeShortCalls)
+    });
+
     // Trigger the batch job
-    const response = await fetch(`${process.env.APP_URL}/api/jobs/batch`, {
+    const response = await fetch(`${process.env.APP_URL}/api/jobs/batch?${params}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${process.env.JOBS_SECRET}`

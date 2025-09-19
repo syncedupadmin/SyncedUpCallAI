@@ -43,6 +43,8 @@ export default function AdminCallsPage() {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [processingStatus, setProcessingStatus] = useState<{ active: boolean; message: string } | null>(null);
   const [batchProgress, setBatchProgress] = useState<any>(null);
+  const [batchSize, setBatchSize] = useState<number>(50);
+  const [includeShortCalls, setIncludeShortCalls] = useState<boolean>(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -56,11 +58,16 @@ export default function AdminCallsPage() {
 
   const triggerBatchProcessing = async () => {
     try {
-      setProcessingStatus({ active: true, message: 'Triggering batch processing for unprocessed calls...' });
+      setProcessingStatus({ active: true, message: `Starting batch processing (${batchSize} calls)...` });
 
-      // Trigger batch processing
+      // Trigger batch processing with options
       const response = await fetch('/api/ui/batch/trigger', {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchSize,
+          includeShortCalls
+        })
       });
 
       if (response.ok) {
@@ -71,7 +78,7 @@ export default function AdminCallsPage() {
           setBatchProgress(data.progress);
           setProcessingStatus({
             active: true,
-            message: `Processing ${data.scanned} calls... (${data.posted} queued)`
+            message: `Found ${data.scanned} unprocessed calls. Queueing for processing...`
           });
 
           // Check progress periodically
@@ -81,14 +88,27 @@ export default function AdminCallsPage() {
               const progressData = await progressResponse.json();
               setBatchProgress(progressData.progress);
 
-              if (progressData.progress?.completed >= progressData.progress?.total) {
+              // Update message during processing
+              const completed = progressData.progress?.completed || 0;
+              const total = progressData.progress?.total || 0;
+
+              if (completed < total) {
+                setProcessingStatus({
+                  active: true,
+                  message: `Processing... ${completed} of ${total} calls completed`
+                });
+              }
+
+              if (completed >= total && total > 0) {
                 clearInterval(progressInterval);
                 setProcessingStatus({
                   active: false,
-                  message: `Processing complete: ${progressData.progress.completed} calls processed`
+                  message: `✅ Processing complete! ${completed} calls have been queued for transcription and analysis.`
                 });
+                // Play a sound or notification
+                console.log('🎉 Batch processing complete!');
                 // Refresh calls to show updated status
-                fetchCalls();
+                setTimeout(() => fetchCalls(), 2000);
               }
             }
           }, 2000);
@@ -415,29 +435,69 @@ export default function AdminCallsPage() {
                 </div>
               )}
             </div>
-            {!processingStatus.active && (
+            {!processingStatus.active && processingStatus.message.includes('✅') && (
               <button
-                onClick={triggerBatchProcessing}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+                onClick={() => {
+                  setProcessingStatus(null);
+                  setBatchProgress(null);
+                }}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition"
               >
-                <RefreshCw className="w-4 h-4" />
-                Process Again
+                Start New Batch
               </button>
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-white font-medium mb-1">Call Processing</div>
-              <div className="text-sm text-gray-400">Click to process unprocessed calls with recordings (10+ seconds)</div>
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-white font-medium mb-1">Call Processing</div>
+                <div className="text-sm text-gray-400">Process unprocessed calls with recordings</div>
+              </div>
             </div>
-            <button
-              onClick={triggerBatchProcessing}
-              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center gap-2 font-medium"
-            >
-              <RefreshCw className="w-5 h-5" />
-              Start Processing
-            </button>
+
+            {/* Processing Options */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Batch Size</label>
+                <select
+                  value={batchSize}
+                  onChange={(e) => setBatchSize(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value={10}>10 calls</option>
+                  <option value={25}>25 calls</option>
+                  <option value={50}>50 calls</option>
+                  <option value={100}>100 calls</option>
+                  <option value={250}>250 calls</option>
+                  <option value={500}>500 calls</option>
+                  <option value={1000}>1000 calls</option>
+                  <option value={5000}>5000 calls (Large)</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={includeShortCalls}
+                    onChange={(e) => setIncludeShortCalls(e.target.checked)}
+                    className="rounded border-gray-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-gray-900"
+                  />
+                  <span className="text-gray-300">Include calls under 10 seconds</span>
+                </label>
+              </div>
+
+              <div className="flex items-end justify-end">
+                <button
+                  onClick={triggerBatchProcessing}
+                  className="px-8 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition flex items-center gap-2 font-medium"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  Start Processing
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

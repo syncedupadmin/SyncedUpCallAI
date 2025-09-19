@@ -23,24 +23,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, progress });
   }
 
+  // Get batch size from query params, default to 50
+  const batchSize = parseInt(req.nextUrl.searchParams.get('batch_size') || '50');
+  const includeShortCalls = req.nextUrl.searchParams.get('include_short') === 'true';
+
+  // Build query based on options
+  const durationCondition = includeShortCalls ? '' : 'and c.duration_sec >= 10';
+
   const { rows } = await db.query(`
     with eligible as (
       select c.id, c.recording_url, c.duration_sec, c.created_at
       from calls c
       left join transcripts t on t.call_id = c.id
       left join transcription_queue tq on tq.call_id = c.id
-      where c.started_at > now() - interval '7 days'  -- Extended from 2 to 7 days
-        and c.duration_sec >= 10
+      where c.started_at > now() - interval '30 days'  -- Extended to 30 days
+        ${durationCondition}
         and c.recording_url is not null
         and t.call_id is null
         and (tq.call_id is null or tq.status = 'failed')  -- Not already in queue or failed
       order by
         c.created_at desc,  -- Prioritize recent calls
         c.duration_sec desc  -- Then longer calls (likely more important)
-      limit 10
+      limit $1
     )
     select * from eligible
-  `);
+  `, [batchSize]);
 
   let scanned = rows.length;
   let posted = 0;
