@@ -105,8 +105,8 @@ export async function GET(req: NextRequest) {
           WHERE status = 'pending'
             AND transcription_queue.attempts < 3
           ORDER BY
-            priority DESC,
-            created_at ASC
+            transcription_queue.priority DESC,
+            transcription_queue.created_at ASC
           LIMIT 1
           FOR UPDATE SKIP LOCKED
         ) next_job

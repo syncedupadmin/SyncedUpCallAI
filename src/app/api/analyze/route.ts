@@ -50,12 +50,18 @@ export async function POST(req: NextRequest) {
       transcript
     );
 
-    const finalJson = await runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up });
-
-    finalJson.talk_metrics = talk;
-    finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
-
-    return NextResponse.json(finalJson);
+    try {
+      const finalJson = await runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up });
+      finalJson.talk_metrics = talk;
+      finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
+      return NextResponse.json(finalJson);
+    } catch (e: any) {
+      // Zod error signature
+      if (e?.issues) {
+        return NextResponse.json({ error: "Validation failed", issues: e.issues }, { status: 422 });
+      }
+      throw e; // will be caught by the outer catch and become 500
+    }
   } catch (e: any) {
     return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
   }

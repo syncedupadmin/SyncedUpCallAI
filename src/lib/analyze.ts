@@ -2,9 +2,9 @@
 import { AnalysisSchema } from "@/lib/analysis-schema";
 
 const MODEL_CANDIDATES = [
-  process.env.OPENAI_MODEL,        // prefer env override
-  "gpt-4o-mini",                   // cheap + JSON-friendly
-  "gpt-4o"                         // heavier, if you have it
+  process.env.OPENAI_MODEL,
+  "gpt-4o-mini",
+  "gpt-4o"
 ].filter(Boolean) as string[];
 
 async function callOpenAI(model: string, systemPrompt: string, userPrompt: string) {
@@ -24,32 +24,61 @@ async function callOpenAI(model: string, systemPrompt: string, userPrompt: strin
       ]
     })
   });
-
-  // If model is missing, OpenAI returns 404 with a helpful JSON error.
   if (!r.ok) {
-    const err = await r.text().catch(() => "");
-    const e = new Error(`OpenAI ${r.status} for model ${model}: ${err}`);
-    // Tag status so we can fallback only on model-not-found cases
-    // @ts-ignore
-    (e as any).status = r.status;
-    throw e;
+    const text = await r.text().catch(() => "");
+    const err: any = new Error(`OpenAI ${r.status} (${model}): ${text}`);
+    err.status = r.status;
+    throw err;
   }
   const data = await r.json();
   const txt = data.choices?.[0]?.message?.content ?? "{}";
   return JSON.parse(txt);
 }
 
+function firstStr(x: any): any {
+  return Array.isArray(x) ? String(x[0] ?? "") : x;
+}
+
+function normalize(o: any) {
+  if (!o || typeof o !== "object") return o;
+
+  // enums: single string
+  o.reason_primary   = firstStr(o.reason_primary);
+  o.purchase_intent  = firstStr(o.purchase_intent);
+  if (Array.isArray(o.key_quotes)) {
+    o.key_quotes = o.key_quotes.slice(0, 4).map((q: any) => ({
+      ts: String(q?.ts ?? ""),
+      speaker: firstStr(q?.speaker),
+      quote: String(q?.quote ?? "")
+    }));
+  }
+
+  // integers: round
+  const roundInt = (n: any) => Math.max(0, Math.min(100, Math.round(Number(n ?? 0))));
+  o.qa_score = roundInt(o.qa_score);
+  o.script_adherence = roundInt(o.script_adherence);
+  if (o.qa_breakdown) {
+    o.qa_breakdown.greeting = roundInt(o.qa_breakdown.greeting);
+    o.qa_breakdown.discovery = roundInt(o.qa_breakdown.discovery);
+    o.qa_breakdown.benefit_explanation = roundInt(o.qa_breakdown.benefit_explanation);
+    o.qa_breakdown.objection_handling = roundInt(o.qa_breakdown.objection_handling);
+    o.qa_breakdown.compliance = roundInt(o.qa_breakdown.compliance);
+    o.qa_breakdown.closing = roundInt(o.qa_breakdown.closing);
+  }
+
+  return o;
+}
+
 export async function runAnalysis({ systemPrompt, userPrompt }: { systemPrompt: string; userPrompt: string; }) {
   let lastError: any = null;
   for (const m of MODEL_CANDIDATES) {
     try {
-      const parsed = await callOpenAI(m, systemPrompt, userPrompt);
-      return AnalysisSchema.parse(parsed);
+      const raw = await callOpenAI(m, systemPrompt, userPrompt);
+      const fixed = normalize(raw);
+      return AnalysisSchema.parse(fixed);
     } catch (e: any) {
       lastError = e;
-      // Only fallback if it's a 404 (model not found). Otherwise, surface the error.
-      if (e?.status !== 404) break;
-      continue;
+      if (e?.status !== 404) break; // only fall back on model-not-found
     }
   }
   throw lastError || new Error("No usable OpenAI model found.");
