@@ -162,15 +162,40 @@ function normalize(o: any) {
 
 export async function runAnalysis({ systemPrompt, userPrompt }: { systemPrompt: string; userPrompt: string; }) {
   let lastError: any = null;
+
   for (const m of MODEL_CANDIDATES) {
     try {
       const raw = await callOpenAI(m, systemPrompt, userPrompt);
       const fixed = normalize(raw);
-      return AnalysisSchema.parse(fixed);
+
+      const parsed = AnalysisSchema.safeParse(fixed);
+      if (parsed.success) {
+        return parsed.data;
+      }
+
+      // Lenient fallback: patch the most common missing bits and try again once
+      const draft: any = {
+        ...fixed,
+        version: fixed?.version ?? "2.0",
+        model: fixed?.model ?? m,
+        key_quotes: fixed?.key_quotes ?? [],
+        risk_flags: fixed?.risk_flags ?? [],
+        compliance_flags: fixed?.compliance_flags ?? [],
+        actions: fixed?.actions ?? [],
+      };
+
+      const second = AnalysisSchema.safeParse(draft);
+      if (second.success) return second.data;
+
+      // if still not valid, surface the issues for the 422 handler
+      const err: any = new Error("Zod validation failed");
+      err.issues = parsed.error.issues;
+      throw err;
     } catch (e: any) {
       lastError = e;
-      if (e?.status !== 404) break; // only fall back on model-not-found
+      if (e?.status !== 404) break; // only model-not-found falls through
     }
   }
+
   throw lastError || new Error("No usable OpenAI model found.");
 }

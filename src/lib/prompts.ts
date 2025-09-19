@@ -70,6 +70,7 @@ Rules:
 - All *_score fields and qa_breakdown values must be integers. Round before output.
 - key_quotes[*].speaker is a single string "agent" or "customer" (not an array).
 - Redact any 7+ consecutive digits in quotes as #######.
+- If unsure about a field, set it to null, [], or omit (never hallucinate).
 - Output ONLY the JSON object.
 - For evidence, set evidence.reason_primary_span to [startMs,endMs] for the utterance that triggered reason_primary, and copy that line into evidence.reason_primary_quote.
 

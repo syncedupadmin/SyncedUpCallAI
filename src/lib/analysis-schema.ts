@@ -19,7 +19,8 @@ export const SignalsSchema = z.object({
   card_last4: z.string().regex(/^\d{4}$/).nullable().default(null)
 }).partial();
 
-export const AnalysisSchema = z.object({
+export const AnalysisSchema = z
+  .object({
   version: z.literal("2.0"),
   model: z.string(),
   reason_primary: z.enum([
@@ -53,12 +54,12 @@ export const AnalysisSchema = z.object({
   risk_flags: z.array(z.enum([
     "at_risk","payment_issue","confused","unhappy","callback_needed",
     "dnc","consent_missing","misrepresentation_risk","pii_exposed"
-  ])),
-  compliance_flags: z.array(z.string()),
+  ])).default([]),
+  compliance_flags: z.array(z.string()).default([]),
   actions: z.array(z.enum([
     "schedule_callback","send_benefits_breakdown","send_trust_builder_email",
     "retry_payment","mark_dnc","escalate_compliance","escalate_supervisor","manual_review"
-  ])),
+  ])).default([]),
   best_callback_window: z.object({
     local_start: z.string(),
     local_end: z.string()
@@ -69,19 +70,24 @@ export const AnalysisSchema = z.object({
     callback_time_local: z.string().nullable(),
     dnc: z.boolean()
   }),
+  // ✅ Make key_quotes optional & min(0)
   key_quotes: z.array(z.object({
     ts: z.string(),
     speaker: z.enum(["agent","customer"]),
     quote: z.string()
-  })).min(0).max(4),
-  asr_quality: z.enum(["poor","fair","good","excellent"]),
-  summary: z.string().max(200),
-  notes: z.string().max(200).nullable(),
+  })).min(0).max(4).optional(),
+  asr_quality: z.enum(["poor","fair","good","excellent"]).optional(),
+  // ✅ Make summary optional (keep the cap if present)
+  summary: z.string().max(200).optional(),
+  notes: z.string().max(200).nullable().optional(),
+  // ✅ Evidence is optional
   evidence: z.object({
-    // fixed-length array (minItems=2, maxItems=2) that OpenAI accepts
-    reason_primary_span: z.array(z.number().int().nonnegative()).length(2).nullable(),
-    reason_primary_quote: z.string()                  // required key
-  }).strict().nullable(),                             // required at root; nullable value; strict inner object
+    reason_primary_span: z.tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative()
+    ]).nullable(),
+    reason_primary_quote: z.string().optional()
+  }).optional(),
 
   // Openings & control
   opening_score: z.number().int().min(0).max(100).optional(),
@@ -127,17 +133,18 @@ export const AnalysisSchema = z.object({
     ts: z.string(),
     speaker: z.enum(["agent","customer"])
   })).optional(),
+
   facts: z.object({
     pricing: z.object({
-      premium_amount: z.number().nullable(),
-      premium_unit: z.literal("monthly"),
-      signup_fee: z.number().nullable(),
-      discount_amount: z.number().nullable()
-    }).optional(),
+      premium_amount: z.number().nullable().optional(),
+      premium_unit: z.literal("monthly").optional(),
+      signup_fee: z.number().nullable().optional(),
+      discount_amount: z.number().nullable().optional(),
+    }).partial().optional(),
     plan: z.object({
-      plan_name: z.string().nullable()
-    }).optional()
-  }).optional(),
+      plan_name: z.string().nullable().optional(),
+    }).partial().optional()
+  }).partial().optional(),
 
 
   // Coaching flags
@@ -157,40 +164,39 @@ export const AnalysisSchema = z.object({
     email: z.string().nullable()
   }).optional(),
 
-  // Outcome classification driven by explicit "sale vs post-date" logic
+  // These blocks are added by the rule-engine; allow them if present
   outcome: z.object({
-    sale_status: z.enum(["none","sale","post_date"]).default("none"),
-    payment_confirmed: z.boolean().default(false),             // "charged/approved/processed"
-    post_date_iso: z.string().nullable().default(null),        // ISO string when we caught a scheduled date
-    evidence_quote: z.string().optional(),                     // short quote that triggered the status
+    sale_status: z.enum(["sale","post_date","none"]),
+    payment_confirmed: z.boolean(),
+    post_date_iso: z.string().nullable()
   }).optional(),
 
-  // Low-level signals we derive before/outside the LLM so you can audit the why
   signals: z.object({
-    card_provided: z.boolean().default(false),
-    card_last4: z.string().regex(/^\d{4}$/).nullable().default(null),
-    esign_sent: z.boolean().default(false),                    // "I texted you a link", "e-sign", etc.
-    esign_confirmed: z.boolean().default(false),               // "I signed it", "sent it back"
-    charge_confirmed_phrase: z.boolean().default(false),       // "payment processed/approved/charged"
-    post_date_phrase: z.boolean().default(false),              // "post date", "charge on the 15th…"
+    card_provided: z.boolean().optional(),
+    card_last4: z.string().regex(/^\d{4}$/).nullable().optional(),
+    esign_sent: z.boolean().optional(),
+    esign_confirmed: z.boolean().optional(),
+    charge_confirmed_phrase: z.boolean().optional(),
+    post_date_phrase: z.boolean().optional()
   }).optional(),
 
-  // Rebuttals (used + missed) for the "Key Quotes" panel
   rebuttals: z.object({
     used: z.array(z.object({
-      type: z.enum(["pricing","spouse","benefits","trust","callback","already_covered","bank","other"]),
-      ts: z.string(),                 // MM:SS
+      type: z.string(),
+      ts: z.string(),
       quote: z.string()
-    })).max(6).default([]),
+    })).optional(),
     missed: z.array(z.object({
-      type: z.enum(["pricing","spouse","benefits","trust","callback","already_covered","bank","other"]),
-      at_ts: z.string(),              // where the stall happened and no rebuttal followed
+      type: z.string(),
+      at_ts: z.string(),
       stall_quote: z.string()
-    })).max(6).default([]),
+    })).optional(),
     counts: z.object({
-      used: z.number().int().nonnegative().default(0),
-      missed: z.number().int().nonnegative().default(0),
-      asked_for_card_after_last_rebuttal: z.boolean().default(false)
-    }).default({ used:0, missed:0, asked_for_card_after_last_rebuttal:false })
+      used: z.number().int().nonnegative(),
+      missed: z.number().int().nonnegative(),
+      asked_for_card_after_last_rebuttal: z.boolean()
+    }).optional()
   }).optional()
-});
+  })
+  // ✅ Don't fail on extra keys from the model or rule engine
+  .passthrough();
