@@ -1,6 +1,24 @@
 // src/lib/analysis-schema.ts
 import { z } from "zod";
 
+// Export additional schemas for reuse
+export const OutcomeSchema = z.object({
+  sale_status: z.enum(["sale","post_date","none"]),
+  payment_confirmed: z.boolean(),
+  post_date_iso: z.string().nullable()
+});
+
+export const RebuttalItemSchema = z.object({
+  ts: z.string().default(""),
+  type: z.string().default(""),
+  quote: z.string().default("")
+});
+
+export const SignalsSchema = z.object({
+  card_provided: z.boolean().default(false),
+  card_last4: z.string().regex(/^\d{4}$/).nullable().default(null)
+}).partial();
+
 export const AnalysisSchema = z.object({
   version: z.literal("2.0"),
   model: z.string(),

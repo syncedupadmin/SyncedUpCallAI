@@ -9,6 +9,8 @@ import { openingAndControl } from "@/lib/opening-control";
 import { extractPriceEvents } from "@/lib/price-events";
 import { choosePremiumAndFee } from "@/lib/money";
 import { detectRebuttals } from "@/lib/rebuttal-detect";
+import { computeSignals, decideOutcome } from "@/lib/rules-engine";
+import { PLAYBOOK } from "@/domain/playbook";
 import type { Segment } from "@/lib/asr-nova2";
 
 // Let this function actually run long enough and never get cached
@@ -43,6 +45,11 @@ function luhn(num:string){
   }
   return sum%10===0;
 }
+
+const msToMMSS = (ms:number) => {
+  const s = Math.round(ms/1000);
+  return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,7 +98,76 @@ export async function POST(req: NextRequest) {
 
     const talk = computeTalkMetrics(segments);
 
-    // Detect rebuttals and escapes
+    // Use new rules engine if enabled
+    const USE_RULE_ENGINE = process.env.USE_RULE_ENGINE === "true";
+
+    if (USE_RULE_ENGINE) {
+      // New deterministic rule engine path
+      const signals = computeSignals(segments);
+
+      // Build user prompt with signals
+      const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, signals);
+
+      try {
+        // LLM with timeout
+        const finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
+        finalJson.talk_metrics = talk;
+        finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
+
+        // Apply policy overrides
+        const o = decideOutcome(signals);
+        finalJson.outcome = { sale_status: o.sale_status, payment_confirmed: o.payment_confirmed, post_date_iso: o.post_date_iso };
+
+        if (!finalJson.facts) {
+          finalJson.facts = {} as any;
+        }
+        const facts = finalJson.facts as any;
+        if (!facts.pricing) {
+          facts.pricing = {};
+        }
+        facts.pricing.premium_unit = "monthly";
+        if (signals.price_monthly_cents != null) facts.pricing.premium_amount = signals.price_monthly_cents / 100;
+        if (signals.enrollment_fee_cents != null) facts.pricing.signup_fee = signals.enrollment_fee_cents / 100;
+
+        finalJson.signals = {
+          ...(finalJson.signals ?? {}),
+          card_provided: !!signals.card_spoken,
+          card_last4: signals.card_last4,
+          esign_sent: signals.esign_sent,
+          esign_confirmed: signals.esign_confirmed,
+          charge_confirmed_phrase: signals.sale_confirm_phrase,
+          post_date_phrase: signals.post_date_phrase
+        };
+
+        finalJson.rebuttals = {
+          used: signals.rebuttals_used.map(r => ({
+            ts: msToMMSS(r.ts),
+            type: r.type as ("other" | "pricing" | "already_covered" | "spouse" | "benefits" | "trust" | "bank" | "callback"),
+            quote: r.text
+          })),
+          missed: signals.rebuttals_missed.map(r => ({
+            ts: msToMMSS(r.ts),
+            type: r.type as ("other" | "pricing" | "already_covered" | "spouse" | "benefits" | "trust" | "bank" | "callback"),
+            at_ts: msToMMSS(r.ts),
+            stall_quote: r.text
+          })),
+          counts: {
+            used: signals.rebuttals_used.length,
+            missed: signals.rebuttals_missed.length,
+            asked_for_card_after_last_rebuttal: signals.asked_for_card_after_last_rebuttal
+          }
+        };
+
+        return NextResponse.json(finalJson);
+      } catch (e: any) {
+        if (e?.issues) {
+          return NextResponse.json({ error: "Validation failed", issues: e.issues }, { status: 422 });
+        }
+        throw e;
+      }
+    }
+
+    // Legacy path - existing rebuttal detection
     const { escapes, rebuttalsUsed, rebuttalsMissed, summary } =
       await detectRebuttalsAndEscapes(segments);
 

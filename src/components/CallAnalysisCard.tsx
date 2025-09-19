@@ -64,6 +64,17 @@ export type Analysis = {
     charge_confirmed_phrase: boolean;
     post_date_phrase: boolean;
   };
+  facts?: {
+    pricing?: {
+      premium_amount: number | null;
+      premium_unit: "monthly";
+      signup_fee: number | null;
+      discount_amount?: number | null;
+    };
+    plan?: {
+      plan_name: string | null;
+    };
+  };
   rebuttals?: {
     used: Array<{type: string; ts: string; quote: string}>;
     missed: Array<{type: string; at_ts: string; stall_quote: string}>;
@@ -126,6 +137,7 @@ export default function CallAnalysisCard({
             {d.outcome?.sale_status === "post_date" && (
               <Badge tone="amber">POST DATE{d.outcome?.post_date_iso ? `: ${new Date(d.outcome.post_date_iso).toLocaleDateString()}` : ""}</Badge>
             )}
+            {d.outcome?.sale_status === "none" && <Badge tone="slate">NO SALE</Badge>}
             {d.purchase_intent && <Badge tone="emerald">intent: {d.purchase_intent}</Badge>}
             <Badge tone="slate">lead score: {d.lead_score}</Badge>
           </div>
@@ -155,8 +167,50 @@ export default function CallAnalysisCard({
               </div>
             </Section>
 
-            <Section title="Rebuttals Used">
-              {d.rebuttals_used?.length ? (
+            <Section title="Rebuttals">
+              {/* New rebuttals format */}
+              {d.rebuttals?.used?.length ? (
+                <>
+                  <div className="text-xs font-semibold text-slate-700 mb-2">Used ({d.rebuttals.used.length})</div>
+                  <ul className="space-y-2">
+                    {d.rebuttals.used.map((r, i) => (
+                      <li key={i} className="rounded-lg border border-slate-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span>{r.ts}</span>
+                          <span>•</span>
+                          <span className="rounded-full bg-green-100 px-2 py-[2px] text-[10px] font-medium text-green-800">
+                            {r.type}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-sm text-slate-900">"{r.quote.substring(0, 100)}..."</div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {d.rebuttals?.missed?.length ? (
+                <>
+                  <div className="text-xs font-semibold text-slate-700 mt-3 mb-2">Missed ({d.rebuttals.missed.length})</div>
+                  <ul className="space-y-2">
+                    {d.rebuttals.missed.map((m, i) => (
+                      <li key={i} className="rounded-lg border border-rose-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span>{(m as any).at_ts || (m as any).ts}</span>
+                          <span>•</span>
+                          <span className="rounded-full bg-rose-100 px-2 py-[2px] text-[10px] font-medium text-rose-800">
+                            {m.type}
+                          </span>
+                        </div>
+                        {m.stall_quote && <div className="mt-1 text-sm text-slate-900">"{m.stall_quote.substring(0, 100)}..."</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {/* Legacy format fallback */}
+              {!d.rebuttals && d.rebuttals_used?.length ? (
                 <ul className="space-y-3">
                   {d.rebuttals_used.map((r, i) => (
                     <li key={i} className="rounded-lg border border-slate-200 p-3">
@@ -182,32 +236,34 @@ export default function CallAnalysisCard({
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : null}
+
+              {!d.rebuttals && !d.rebuttals_used?.length && (
                 <div className="text-sm text-slate-500">No rebuttals detected.</div>
               )}
 
-              {!!d.rebuttals_missed?.length && (
-                <div className="mt-3 text-xs text-rose-600">
-                  Missed rebuttals: {d.rebuttals_missed.map(m => `${m.escape_type} @ ${m.ts}`).join(", ")}
-                </div>
-              )}
-
-              {d.rebuttal_summary && (
+              {d.rebuttals?.counts && (
                 <div className="mt-3 text-xs text-slate-600">
-                  Used: {d.rebuttal_summary.total_used} • Missed: {d.rebuttal_summary.total_missed} • Asked for card after last
-                  rebuttal: {d.rebuttal_summary.asked_for_card_after_last_rebuttal ? "Yes" : "No"}
+                  Asked for card after last rebuttal: {d.rebuttals.counts.asked_for_card_after_last_rebuttal ? "Yes" : "No"}
                 </div>
               )}
             </Section>
           </div>
 
           <div className="space-y-4">
-            <Section title="Outcome & Risks">
+            <Section title="Outcome & Pricing">
               <div className="text-sm text-slate-700">
                 {d.outcome?.sale_status === "sale" && <>Payment confirmed{d.signals?.card_last4 ? ` • card **** ${d.signals.card_last4}` : ""}</>}
                 {d.outcome?.sale_status === "post_date" && <>Payment scheduled{d.outcome?.post_date_iso ? ` for ${toLocal(d.outcome.post_date_iso)}` : ""}</>}
                 {!d.outcome?.sale_status || d.outcome.sale_status === "none" ? "No outcome detected" : null}
               </div>
+              {(d.facts?.pricing?.premium_amount || d.facts?.pricing?.signup_fee) && (
+                <div className="text-sm text-slate-700 mt-2">
+                  {d.facts.pricing?.premium_amount && <span>${d.facts.pricing.premium_amount.toFixed(2)}/mo</span>}
+                  {d.facts.pricing?.premium_amount && d.facts.pricing?.signup_fee && <span> + </span>}
+                  {d.facts.pricing?.signup_fee && <span>${d.facts.pricing.signup_fee.toFixed(2)} enrollment fee</span>}
+                </div>
+              )}
               {d.outcome?.evidence_quote && <div className="text-xs text-slate-500 mt-1">Evidence: "{d.outcome.evidence_quote}"</div>}
               <div className="flex flex-wrap gap-2 mt-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
               {!!d.compliance_flags?.length && <div className="flex flex-wrap gap-2">{d.compliance_flags.map((r, i) => <Chip key={i} text={`compliance: ${r}`} />)}</div>}

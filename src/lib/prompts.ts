@@ -95,22 +95,33 @@ Signals:
 - "requested_cancel": "cancel," "stop," "no more calls," "refund," etc.
 - "duplicate_policy": multiple policies, accidental duplicate, double-charged narrative.`;
 
-export const userPrompt = (meta: Record<string, any>, transcript: string) =>
-`CALL METADATA:
-Agent: ${meta.agent_id ?? 'Unknown'}
-Agent Name: ${meta.agent_name ?? 'Unknown'}
-Campaign: ${meta.campaign ?? 'N/A'}
-Duration: ${meta.duration_sec ?? 0} seconds
-Disposition: ${meta.disposition ?? 'Unknown'}
-Direction: ${meta.direction ?? 'outbound'}
-Local Timezone: ${meta.tz ?? 'America/New_York'}
-Customer State: ${meta.customer_state ?? 'Unknown'}
-Expected Script: ${meta.expected_script ?? 'greeting -> discovery -> benefits -> close -> compliance'}
-Product Catalog: ${Array.isArray(meta.products) ? meta.products.join(', ') : (meta.products ?? 'N/A')}
-Callback Hours Policy (local): ${meta.callback_hours ?? 'Mon–Sat 09:00–20:00'}
-Important Compliance: ${meta.compliance ?? 'Honor DNC; disclose license; avoid misleading claims'}
+export const userPrompt = (meta: Record<string, any>, transcript: string, signals?: any) => `
+BUSINESS RULES:
+- Outcome precedence: POST_DATE > SALE > NONE.
+- Price = Signals.price_monthly_cents (monthly, keep cents). Enrollment fee from Signals.enrollment_fee_cents.
+- Rebuttals used = stalls addressed within 30s; missed otherwise. Quotes must be customer verbatim.
 
-TRANSCRIPT (speaker-tagged if available; timestamps allowed):
+SIGNALS:
+${JSON.stringify(signals ?? {}, null, 2)}
+
+CALL META:
+${JSON.stringify({
+  agent_id: meta.agent_id ?? 'Unknown',
+  agent_name: meta.agent_name ?? 'Unknown',
+  campaign: meta.campaign ?? 'N/A',
+  duration_sec: meta.duration_sec ?? 0,
+  disposition: meta.disposition ?? 'Unknown',
+  direction: meta.direction ?? 'outbound',
+  customer_state: meta.customer_state ?? 'Unknown',
+  expected_script: meta.expected_script ?? 'greeting -> discovery -> benefits -> close -> compliance',
+  products: Array.isArray(meta.products) ? meta.products : (meta.products ?? 'N/A'),
+  callback_hours: meta.callback_hours ?? 'Mon–Sat 09:00–20:00',
+  compliance: meta.compliance ?? 'Honor DNC; disclose license; avoid misleading claims',
+  tz: meta.tz ?? 'America/New_York'
+}, null, 2)}
+
+TRANSCRIPT:
 ${transcript}
 
-Analyze this call using ANALYSIS_SYSTEM and return the JSON response ONLY.`;
+Return STRICT JSON only.
+`;
