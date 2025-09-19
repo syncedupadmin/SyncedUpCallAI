@@ -14,6 +14,15 @@ interface ControlSettings {
   next_sync?: string;
 }
 
+interface Agent {
+  user_id: string;
+  name: string;
+  email?: string;
+  campaigns?: string[];
+  lastActivity?: string;
+  totalEvents?: number;
+}
+
 export default function ConvosoControlBoard() {
   const [settings, setSettings] = useState<ControlSettings>({
     system_enabled: false,
@@ -24,12 +33,24 @@ export default function ConvosoControlBoard() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [switchSaving, setSwitchSaving] = useState(false);
+
+  // Date range for agent fetching
+  const today = new Date().toISOString().split('T')[0];
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+
+  // Agent management
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [agentSearch, setAgentSearch] = useState('');
 
   // Available options (these would come from API in production)
   const availableCampaigns = ['PHS Dialer', 'Medicare Sales', 'Final Expense'];
   const availableLists = ['PHS DATA - M3 Demon', 'PHS DATA - INX Overnight', 'Fresh Leads'];
   const availableDispositions = ['SALE', 'CALLBACK', 'NO ANSWER', 'AA', 'BUSY', 'DNC'];
-  const availableAgents = ['401 ----JOE----', '402 ----ROB---', '404 ---KAREEM---', '405 ---MIKE---'];
+  // Agents will now be dynamically loaded
+  const availableAgents = agents.map(a => a.name);
 
   useEffect(() => {
     loadSettings();
@@ -54,6 +75,42 @@ export default function ConvosoControlBoard() {
       toast.error('Failed to load control settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAgents = async () => {
+    if (!dateFrom || !dateTo) {
+      toast.error('Please select both start and end dates');
+      return;
+    }
+
+    setLoadingAgents(true);
+    try {
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      const response = await fetch(`/api/convoso/get-agents?${params}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch agents');
+      }
+
+      const data = await response.json();
+      const fetchedAgents = data.agents || [];
+      setAgents(fetchedAgents);
+
+      // Update settings to include only valid agents
+      setSettings(prev => ({
+        ...prev,
+        active_agents: prev.active_agents.filter(agentName =>
+          fetchedAgents.some((a: Agent) => a.name === agentName)
+        )
+      }));
+
+      toast.success(`Loaded ${fetchedAgents.length} agents`);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+      toast.error('Failed to fetch agents');
+    } finally {
+      setLoadingAgents(false);
     }
   };
 
@@ -83,11 +140,52 @@ export default function ConvosoControlBoard() {
     }
   };
 
-  const toggleSystem = () => {
+  const toggleSystem = async () => {
+    if (switchSaving) return; // Prevent multiple clicks
+
+    const newEnabledState = !settings.system_enabled;
+    setSwitchSaving(true);
+
+    // Update local state immediately for UI responsiveness
     setSettings(prev => ({
       ...prev,
-      system_enabled: !prev.system_enabled
+      system_enabled: newEnabledState
     }));
+
+    // Auto-save the system enabled state
+    try {
+      const response = await fetch('/api/convoso/control-noauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...settings,
+          system_enabled: newEnabledState
+        })
+      });
+
+      if (response.ok) {
+        toast.success(`Auto-sync ${newEnabledState ? 'ENABLED' : 'DISABLED'}!`);
+        // Reload to get updated timestamps
+        setTimeout(loadSettings, 500);
+      } else {
+        // Revert on failure
+        setSettings(prev => ({
+          ...prev,
+          system_enabled: !newEnabledState
+        }));
+        toast.error('Failed to update system status');
+      }
+    } catch (error) {
+      console.error('Error toggling system:', error);
+      // Revert on error
+      setSettings(prev => ({
+        ...prev,
+        system_enabled: !newEnabledState
+      }));
+      toast.error('Failed to update system status');
+    } finally {
+      setSwitchSaving(false);
+    }
   };
 
   const selectAll = (filterType: keyof ControlSettings) => {
@@ -216,8 +314,9 @@ export default function ConvosoControlBoard() {
             <Switch
               checked={settings.system_enabled}
               onChange={toggleSystem}
+              disabled={switchSaving}
               style={{
-                background: settings.system_enabled ? '#10b981' : '#d1d5db',
+                background: switchSaving ? '#9ca3af' : (settings.system_enabled ? '#10b981' : '#d1d5db'),
                 position: 'relative',
                 display: 'inline-flex',
                 height: '32px',
@@ -225,7 +324,8 @@ export default function ConvosoControlBoard() {
                 alignItems: 'center',
                 borderRadius: '9999px',
                 transition: 'background-color 0.2s',
-                cursor: 'pointer'
+                cursor: switchSaving ? 'wait' : 'pointer',
+                opacity: switchSaving ? 0.7 : 1
               }}
             >
               <span className="sr-only">Enable system</span>
@@ -240,7 +340,19 @@ export default function ConvosoControlBoard() {
                   transition: 'transform 0.2s',
                   boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
                 }}
-              />
+              >
+                {switchSaving && (
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    fontSize: '12px'
+                  }}>
+                    ⏳
+                  </span>
+                )}
+              </span>
             </Switch>
           </div>
         </div>
@@ -248,6 +360,95 @@ export default function ConvosoControlBoard() {
 
       {/* Main Content */}
       <div style={{ padding: '32px' }}>
+        {/* Agent Loading Section */}
+        <div style={{
+          padding: '20px',
+          borderRadius: '8px',
+          background: '#f0f9ff',
+          border: '1px solid #3b82f6',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#1e40af',
+            marginBottom: '16px'
+          }}>
+            Load Agents from Convoso
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr auto',
+            gap: '12px',
+            alignItems: 'end'
+          }}>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '4px'
+              }}>
+                End Date
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff'
+                }}
+              />
+            </div>
+            <button
+              onClick={fetchAgents}
+              disabled={loadingAgents}
+              style={{
+                padding: '8px 20px',
+                background: loadingAgents ? '#9ca3af' : '#3b82f6',
+                color: '#ffffff',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: loadingAgents ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loadingAgents ? 'Loading...' : agents.length > 0 ? `Refresh (${agents.length} loaded)` : 'Load Agents'}
+            </button>
+          </div>
+        </div>
+
         {/* Status Card */}
         <div style={{
           padding: '20px',
@@ -291,8 +492,7 @@ export default function ConvosoControlBoard() {
           {[
             { key: 'active_campaigns', label: 'Active Campaigns', icon: '📢', options: availableCampaigns },
             { key: 'active_lists', label: 'Active Lists', icon: '📋', options: availableLists },
-            { key: 'active_dispositions', label: 'Active Dispositions', icon: '✅', options: availableDispositions },
-            { key: 'active_agents', label: 'Active Agents', icon: '👤', options: availableAgents }
+            { key: 'active_dispositions', label: 'Active Dispositions', icon: '✅', options: availableDispositions }
           ].map(({ key, label, icon, options }) => (
             <div key={key} style={{ marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -361,6 +561,126 @@ export default function ConvosoControlBoard() {
               </div>
             </div>
           ))}
+
+          {/* Agent Section with Search */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>👤</span> Active Agents {agents.length > 0 && `(${agents.length} available)`}
+              </h3>
+              {agents.length > 0 && (
+                <button
+                  onClick={() => selectAll('active_agents' as keyof ControlSettings)}
+                  style={{
+                    fontSize: '12px',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    background: '#f3f4f6',
+                    border: '1px solid #e5e7eb',
+                    color: '#4b5563',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#e5e7eb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#f3f4f6';
+                  }}
+                >
+                  Select All
+                </button>
+              )}
+            </div>
+
+            {agents.length === 0 ? (
+              <div style={{
+                padding: '20px',
+                background: '#f9fafb',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb',
+                textAlign: 'center',
+                color: '#6b7280',
+                fontSize: '14px'
+              }}>
+                Please load agents using the date selector above
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search agents..."
+                  value={agentSearch}
+                  onChange={(e) => setAgentSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    background: '#ffffff',
+                    marginBottom: '12px'
+                  }}
+                />
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                  gap: '8px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  padding: '2px'
+                }}>
+                  {availableAgents
+                    .filter(agent => !agentSearch || agent.toLowerCase().includes(agentSearch.toLowerCase()))
+                    .map(option => (
+                      <label
+                        key={option}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: settings.active_agents.includes(option) ? '#f0f9ff' : '#f9fafb',
+                          border: `1px solid ${settings.active_agents.includes(option) ? '#bfdbfe' : '#e5e7eb'}`,
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!settings.active_agents.includes(option)) {
+                            e.currentTarget.style.background = '#f3f4f6';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = settings.active_agents.includes(option) ? '#f0f9ff' : '#f9fafb';
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={settings.active_agents.includes(option)}
+                          onChange={() => toggleFilter('active_agents' as keyof ControlSettings, option)}
+                          style={{
+                            marginRight: '10px',
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span style={{ fontSize: '14px', color: '#374151' }}>{option}</span>
+                      </label>
+                    ))}
+                </div>
+                {agentSearch && (
+                  <p style={{
+                    fontSize: '12px',
+                    color: '#6b7280',
+                    marginTop: '8px'
+                  }}>
+                    Showing {availableAgents.filter(a => a.toLowerCase().includes(agentSearch.toLowerCase())).length} of {availableAgents.length} agents
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Action Buttons */}
