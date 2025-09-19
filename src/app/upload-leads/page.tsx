@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface UploadStats {
   total: number;
@@ -21,7 +20,6 @@ interface ProgressUpdate {
 }
 
 export default function UploadLeadsPage() {
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -206,19 +204,11 @@ export default function UploadLeadsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header - Simplified without navigation */}
       <div className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.back()}
-                className="mr-4 rounded-lg p-2 hover:bg-gray-100"
-              >
-                ←
-              </button>
-              <h1 className="text-2xl font-semibold text-gray-900">Upload Lead IDs</h1>
-            </div>
+          <div className="py-6">
+            <h1 className="text-2xl font-semibold text-gray-900">Upload Lead IDs</h1>
           </div>
         </div>
       </div>
