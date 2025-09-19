@@ -75,19 +75,16 @@ export default function ProcessedCallsPage() {
       }
 
       // Fetch calls with transcripts/analysis
-      const response = await fetch('/api/ui/library');
+      const response = await fetch('/api/ui/processed-calls');
       const data = await response.json();
 
-      if (data.ok || data.data) {
-        // Process and enrich the data
-        const processedCalls = (data.data || []).map((call: any) => ({
-          ...call,
-          processing_status: call.analysis ? 'analyzed' :
-                           call.transcript ? 'transcribed' :
-                           'pending'
-        }));
+      console.log('Fetched processed calls:', data);
 
-        setCalls(processedCalls);
+      if (data.ok && data.data) {
+        setCalls(data.data);
+        console.log(`Loaded ${data.data.length} processed calls`);
+      } else {
+        console.error('Failed to fetch processed calls:', data.error);
       }
     } catch (error) {
       console.error('Error fetching processed calls:', error);
