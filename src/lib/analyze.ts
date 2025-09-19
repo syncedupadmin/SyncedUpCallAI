@@ -1,27 +1,57 @@
 // src/lib/analyze.ts
-import { AnalysisSchema } from "@/lib/analysis-schema";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { AnalysisSchema } from "@/lib/analysis-schema";
 
-// Build a root object schema OpenAI will accept
-const raw = zodToJsonSchema(AnalysisSchema, "CallAnalysis") as any;
-const schemaPayload =
-  raw?.definitions?.CallAnalysis
-    ? {
-        $schema: "http://json-schema.org/draft-07/schema#",
-        $defs: raw.definitions,
-        $ref: "#/$defs/CallAnalysis"
-      }
-    : raw?.$defs?.CallAnalysis
-    ? {
-        $schema: "http://json-schema.org/draft-07/schema#",
-        $defs: raw.$defs,
-        $ref: "#/$defs/CallAnalysis"
-      }
-    : raw; // already a plain object
+// Turn Zod into JSON Schema and always end up with a plain "object" schema
+function schemaFromZod() {
+  // Name makes zod-to-json-schema put the shape under definitions/$defs.CallAnalysis
+  const raw = zodToJsonSchema(AnalysisSchema, { name: "CallAnalysis" }) as any;
 
-if (Array.isArray(schemaPayload)) {
-  throw new Error("Schema payload is unexpectedly an array. Check tuple/array fields.");
+  // 1) Grab the concrete object for the named schema if present
+  const named =
+    raw?.definitions?.CallAnalysis ??
+    raw?.$defs?.CallAnalysis ??
+    raw;
+
+  // 2) Guardrails: must be an object
+  if (!named || typeof named !== "object" || Array.isArray(named)) {
+    throw new Error("JSON Schema root is not an object. Check zod->JSON conversion.");
+  }
+
+  // 3) Harden for Structured Outputs rules:
+  //    - add required: [] everywhere
+  //    - set additionalProperties: false on every object
+  const harden = (s: any): any => {
+    if (!s || typeof s !== "object") return s;
+
+    // objects
+    if (s.type === "object" && s.properties && typeof s.properties === "object") {
+      if (!Array.isArray(s.required)) {
+        s.required = Object.keys(s.properties);
+      }
+      s.additionalProperties = false;
+      for (const k of Object.keys(s.properties)) {
+        s.properties[k] = harden(s.properties[k]);
+      }
+    }
+
+    // arrays
+    if (s.type === "array" && s.items) {
+      s.items = harden(s.items);
+    }
+
+    // unions used by zod-to-json-schema
+    if (Array.isArray(s.anyOf)) s.anyOf = s.anyOf.map(harden);
+    if (Array.isArray(s.oneOf)) s.oneOf = s.oneOf.map(harden);
+    if (s.allOf) s.allOf = s.allOf.map(harden);
+
+    return s;
+  };
+
+  return harden(named);
 }
+
+const schemaPayload = schemaFromZod();
 
 const MODEL_CANDIDATES = [
   process.env.OPENAI_MODEL,
@@ -42,7 +72,11 @@ async function callOpenAI(model: string, systemPrompt: string, userPrompt: strin
       seed: 7, // repeatability for QA
       response_format: {
         type: "json_schema",
-        json_schema: { name: "CallAnalysis", schema: schemaPayload, strict: true }
+        json_schema: {
+          name: "CallAnalysis",
+          schema: schemaPayload,
+          strict: true
+        }
       },
       messages: [
         { role: "system", content: systemPrompt },
