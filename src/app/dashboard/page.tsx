@@ -148,14 +148,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center space-x-6">
-            <a href="/calls" className="text-gray-400 hover:text-white transition">
-              Calls
+            <a href="/dashboard" className="text-gray-400 hover:text-white transition">
+              Dashboard
             </a>
-            <a href="/analytics" className="text-gray-400 hover:text-white transition">
-              Analytics
+            <a href="/search" className="text-gray-400 hover:text-white transition">
+              Search
             </a>
-            <a href="/reports" className="text-gray-400 hover:text-white transition">
-              Reports
+            <a href="/library" className="text-gray-400 hover:text-white transition">
+              Library
+            </a>
+            <a href="/kpi" className="text-gray-400 hover:text-white transition">
+              KPI
             </a>
             <button
               onClick={handleSignOut}
