@@ -34,7 +34,12 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
       })
 
       if (error) {
-        toast.error(error.message || 'Failed to create agency. Please try again.')
+        // Handle duplicate key errors specifically
+        if ((error as any).code === '23505' || (error as any).status === 409) {
+          toast.error('That agency already exists. Try a different name.')
+        } else {
+          toast.error(error.message || 'Failed to create agency. Please try again.')
+        }
         return
       }
 
@@ -56,7 +61,7 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
       <div className="mb-4">
         <h2 className="text-xl font-bold">Create Agency</h2>
         <p className="text-sm text-gray-400 mt-1">
-          Add a new agency to the system. The slug will be auto-generated.
+          Add a new agency to the system. A unique slug will be auto-generated from the name.
         </p>
       </div>
       <div>
@@ -77,8 +82,8 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
                 {errors.name.message}
               </p>
             )}
-            <p className="text-sm text-muted-foreground">
-              The slug will be auto-generated in the database
+            <p className="text-sm text-gray-500">
+              A unique slug will be generated automatically (e.g., "PHS" → "phs", "phs-2", "phs-3")
             </p>
           </div>
           <button type="submit" disabled={isSubmitting} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
