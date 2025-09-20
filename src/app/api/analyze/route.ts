@@ -10,6 +10,7 @@ import { extractPriceEvents } from "@/lib/price-events";
 import { choosePremiumAndFee } from "@/lib/money";
 import { detectRebuttals } from "@/lib/rebuttal-detect";
 import { computeSignals, decideOutcome } from "@/lib/rules-engine";
+import { detectRebuttalsV3, type Segment as RSeg } from "@/lib/rebuttal-detect-v3";
 import { PLAYBOOK } from "@/domain/playbook";
 import type { Segment } from "@/lib/asr-nova2";
 
@@ -140,40 +141,22 @@ export async function POST(req: NextRequest) {
           post_date_phrase: signals.post_date_phrase
         };
 
-        finalJson.rebuttals = {
-          used: signals.rebuttals_used.map(r => ({
-            ts: msToMMSS(r.ts),
-            type: r.type as ("other" | "pricing" | "already_covered" | "spouse" | "benefits" | "trust" | "bank" | "callback"),
-            quote: r.text
-          })),
-          missed: signals.rebuttals_missed.map(r => ({
-            ts: msToMMSS(r.ts),
-            type: r.type as ("other" | "pricing" | "already_covered" | "spouse" | "benefits" | "trust" | "bank" | "callback"),
-            at_ts: msToMMSS(r.ts),
-            stall_quote: r.text
-          })),
-          counts: {
-            used: signals.rebuttals_used.length,
-            missed: signals.rebuttals_missed.length,
-            asked_for_card_after_last_rebuttal: signals.asked_for_card_after_last_rebuttal
-          }
-        };
 
-        // Add opening rebuttals from signals
-        finalJson.rebuttals_opening = {
-          used: signals.opening_rebuttals_used.map(r => ({
-            ts: msToMMSS(r.ts),
-            type: r.type,
-            quote: r.text
-          })),
-          missed: signals.opening_rebuttals_missed.map(r => ({
-            at_ts: msToMMSS(r.ts),
-            type: r.type,
-            stall_quote: r.text
-          })),
+        // Use the new V3 rebuttal detection
+        const rb3 = detectRebuttalsV3(segments as unknown as RSeg[]);
+
+        // Attach the two sections
+        finalJson.rebuttals_opening = rb3.opening;
+        finalJson.rebuttals_money = rb3.money;
+
+        // For backward-compat UI, merge the views
+        finalJson.rebuttals = {
+          used: [...rb3.opening.used, ...rb3.money.used],
+          missed: [...rb3.opening.missed, ...rb3.money.missed],
           counts: {
-            used: signals.opening_rebuttals_used.length,
-            missed: signals.opening_rebuttals_missed.length
+            used: rb3.opening.counts.used + rb3.money.counts.used,
+            missed: rb3.opening.counts.missed + rb3.money.counts.missed,
+            asked_for_card_after_last_rebuttal: rb3.money.counts.asked_for_card_after_last_rebuttal
           }
         };
 

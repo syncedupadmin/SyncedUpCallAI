@@ -86,10 +86,19 @@ export type Analysis = {
   };
   rebuttals_opening?: {
     used: Array<{type: string; ts: string; quote: string}>;
-    missed: Array<{type: string; at_ts: string; stall_quote: string}>;
+    missed: Array<{type: string; ts: string; stall_quote: string}>;
     counts: {
       used: number;
       missed: number;
+    };
+  };
+  rebuttals_money?: {
+    used: Array<{type: string; ts: string; quote: string}>;
+    missed: Array<{type: string; ts: string; stall_quote: string}>;
+    counts: {
+      used: number;
+      missed: number;
+      asked_for_card_after_last_rebuttal?: boolean;
     };
   };
 };
@@ -178,50 +187,90 @@ export default function CallAnalysisCard({
               </div>
             </Section>
 
-            <Section title="Opening Rebuttals (First 30s)">
-              {/* Opening rebuttals */}
-              {d.rebuttals_opening?.used?.length ? (
+            <Section title="Opening Rebuttals (first 30s)">
+              {!!d.rebuttals_opening?.used?.length && (
                 <>
-                  <div className="text-xs font-semibold text-black mb-2">Handled ({d.rebuttals_opening.used.length})</div>
+                  <div className="text-xs font-semibold text-gray-700 mb-2">
+                    Used ({d.rebuttals_opening.used.length})
+                  </div>
                   <ul className="space-y-2">
-                    {d.rebuttals_opening.used.map((r, i) => (
-                      <li key={i} className="rounded-lg border border-emerald-200 p-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span>{r.ts}</span>
-                          <span>•</span>
-                          <span className="rounded-full bg-emerald-100 px-2 py-[2px] text-[10px] font-medium text-emerald-800">
-                            {r.type}
-                          </span>
+                    {d.rebuttals_opening.used.map((r:any, i:number) => (
+                      <li key={i} className="rounded-lg border border-gray-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{r.ts}</span><span>•</span>
+                          <span className="rounded-full bg-green-100 px-2 py-[2px] text-[10px] font-medium text-green-800">{r.type}</span>
                         </div>
-                        <div className="mt-1 text-sm text-black">"{safe(r.quote).substring(0, 100)}..."</div>
+                        <div className="mt-1 text-sm text-gray-900">"{r.quote?.slice(0,100)}..."</div>
                       </li>
                     ))}
                   </ul>
                 </>
-              ) : null}
-
-              {d.rebuttals_opening?.missed?.length ? (
+              )}
+              {!!d.rebuttals_opening?.missed?.length && (
                 <>
-                  <div className="text-xs font-semibold text-black mt-3 mb-2">Missed ({d.rebuttals_opening.missed.length})</div>
+                  <div className="text-xs font-semibold text-gray-700 mt-3 mb-2">
+                    Missed ({d.rebuttals_opening.missed.length})
+                  </div>
                   <ul className="space-y-2">
-                    {d.rebuttals_opening.missed.map((m, i) => (
-                      <li key={i} className="rounded-lg border border-amber-200 p-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span>{(m as any).at_ts || (m as any).ts}</span>
-                          <span>•</span>
-                          <span className="rounded-full bg-amber-100 px-2 py-[2px] text-[10px] font-medium text-amber-800">
-                            {m.type}
-                          </span>
+                    {d.rebuttals_opening.missed.map((m:any, i:number) => (
+                      <li key={i} className="rounded-lg border border-rose-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{m.ts}</span><span>•</span>
+                          <span className="rounded-full bg-rose-100 px-2 py-[2px] text-[10px] font-medium text-rose-800">{m.type}</span>
                         </div>
-                        {m.stall_quote && <div className="mt-1 text-sm text-black">"{safe(m.stall_quote).substring(0, 100)}..."</div>}
+                        {!!m.stall_quote && <div className="mt-1 text-sm text-gray-900">"{m.stall_quote?.slice(0,100)}..."</div>}
                       </li>
                     ))}
                   </ul>
                 </>
-              ) : null}
-
+              )}
               {!d.rebuttals_opening?.used?.length && !d.rebuttals_opening?.missed?.length && (
-                <div className="text-sm text-gray-600">No opening objections detected.</div>
+                <div className="text-sm text-gray-500">No opening rebuttals detected.</div>
+              )}
+            </Section>
+
+            <Section title="Money/Close Rebuttals">
+              {!!d.rebuttals_money?.used?.length && (
+                <>
+                  <div className="text-xs font-semibold text-gray-700 mb-2">
+                    Used ({d.rebuttals_money.used.length})
+                  </div>
+                  <ul className="space-y-2">
+                    {d.rebuttals_money.used.map((r:any, i:number) => (
+                      <li key={i} className="rounded-lg border border-gray-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{r.ts}</span><span>•</span>
+                          <span className="rounded-full bg-green-100 px-2 py-[2px] text-[10px] font-medium text-green-800">{r.type}</span>
+                        </div>
+                        <div className="mt-1 text-sm text-gray-900">"{r.quote?.slice(0,100)}..."</div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {!!d.rebuttals_money?.missed?.length && (
+                <>
+                  <div className="text-xs font-semibold text-gray-700 mt-3 mb-2">
+                    Missed ({d.rebuttals_money.missed.length})
+                  </div>
+                  <ul className="space-y-2">
+                    {d.rebuttals_money.missed.map((m:any, i:number) => (
+                      <li key={i} className="rounded-lg border border-rose-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{m.ts}</span><span>•</span>
+                          <span className="rounded-full bg-rose-100 px-2 py-[2px] text-[10px] font-medium text-rose-800">{m.type}</span>
+                        </div>
+                        {!!m.stall_quote && <div className="mt-1 text-sm text-gray-900">"{m.stall_quote?.slice(0,100)}..."</div>}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 text-xs text-gray-600">
+                    Asked for card after last rebuttal: {d.rebuttals_money?.counts?.asked_for_card_after_last_rebuttal ? "Yes" : "No"}
+                  </div>
+                </>
+              )}
+              {!d.rebuttals_money?.used?.length && !d.rebuttals_money?.missed?.length && (
+                <div className="text-sm text-gray-500">No money/close rebuttals detected.</div>
               )}
             </Section>
 
