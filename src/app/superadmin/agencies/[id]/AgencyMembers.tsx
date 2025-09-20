@@ -63,23 +63,36 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
       // Get unique user IDs
       const userIds = memberData.map(m => m.user_id)
 
-      // Try to fetch from profiles table first
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .in('id', userIds)
+      // Try to fetch from profiles table first - skip if it doesn't exist
+      let profilesMap = new Map()
 
-      // Map profiles by ID for quick lookup
-      const profilesMap = new Map()
-      if (!profilesError && profiles) {
-        profiles.forEach(p => profilesMap.set(p.id, p))
+      if (userIds.length > 0) {
+        try {
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', userIds)
+
+          // Only process if no error and we got data
+          if (!profilesError && profiles && profiles.length > 0) {
+            profiles.forEach(p => {
+              profilesMap.set(p.id, {
+                email: p.email || p.user_email || null,
+                full_name: p.full_name || p.name || null
+              })
+            })
+          }
+        } catch (err) {
+          // Silently ignore - profiles table might not exist
+          console.log('Profiles table not available, showing user IDs only')
+        }
       }
 
-      // Combine member data with profile data
+      // Combine member data with profile data (if available)
       const enrichedMembers = memberData.map(member => ({
         ...member,
-        email: profilesMap.get(member.user_id)?.email,
-        full_name: profilesMap.get(member.user_id)?.full_name,
+        email: profilesMap.get(member.user_id)?.email || null,
+        full_name: profilesMap.get(member.user_id)?.full_name || null,
       }))
 
       setMembers(enrichedMembers)
@@ -100,21 +113,39 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
 
     setAdding(true)
     try {
-      // First, try to find user by email in profiles
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email.toLowerCase())
-        .single()
-
       let userId: string | null = null
 
-      if (profile && !profileError) {
-        userId = profile.id
-      } else {
-        // If no profile found, try an RPC that searches auth.users (if available)
-        // For now, we'll show an error since auth.users is not directly accessible
-        toast.error('User not found. Make sure they have an account.')
+      // First, try to find user by email in profiles (with multiple possible column names)
+      try {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .or(`email.eq.${email.toLowerCase()},user_email.eq.${email.toLowerCase()}`)
+          .limit(1)
+
+        if (profiles && profiles.length > 0) {
+          userId = profiles[0].id
+        }
+      } catch (profileErr) {
+        console.log('Could not search profiles table')
+      }
+
+      // If no profile found, try using an RPC function if available
+      if (!userId) {
+        try {
+          const { data: rpcResult } = await supabase
+            .rpc('get_user_id_by_email', { p_email: email.toLowerCase() })
+
+          if (rpcResult) {
+            userId = rpcResult
+          }
+        } catch (rpcErr) {
+          // RPC might not exist, that's okay
+        }
+      }
+
+      if (!userId) {
+        toast.error('User not found. Please make sure they have an account or enter a valid email.')
         setAdding(false)
         return
       }
