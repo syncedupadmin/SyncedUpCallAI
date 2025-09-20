@@ -29,28 +29,17 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
     setIsSubmitting(true)
 
     try {
-      let { data: agency, error } = await supabase.rpc('create_agency_with_owner', {
-        p_name: data.name,
-      })
+      const { data: agency, error } = await supabase
+        .rpc('create_agency_with_owner', { p_name: data.name })
+        .single()
 
-      // If we get a 409 conflict (duplicate), try with a suffix
-      if (error && ((error as any).code === '23505' || (error as any).status === 409)) {
-        const timestamp = Date.now().toString().slice(-4)
-        const modifiedName = `${data.name} ${timestamp}`
-
-        const retryResult = await supabase.rpc('create_agency_with_owner', {
-          p_name: modifiedName,
-        })
-
-        if (retryResult.error) {
-          toast.error('That agency already exists. Please try a different name.')
-          return
+      if (error) {
+        // Show nicer duplicate message
+        if ((error as any).code === '23505' || (error as any).status === 409) {
+          toast.error('Name/slug already exists—try another name.')
+        } else {
+          toast.error(error.message || 'Failed to create agency.')
         }
-
-        agency = retryResult.data
-        error = null
-      } else if (error) {
-        toast.error(error.message || 'Failed to create agency. Please try again.')
         return
       }
 
