@@ -108,9 +108,10 @@ export async function POST(req: NextRequest) {
       // Build user prompt with signals
       const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, signals);
 
+      let finalJson: any;
       try {
         // LLM with timeout
-        const finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
+        finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
         finalJson.talk_metrics = talk;
         finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
 
@@ -160,8 +161,16 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json(finalJson);
       } catch (e: any) {
+        // Log validation errors but don't fail the request
         if (e?.issues) {
-          return NextResponse.json({ error: "Validation failed", issues: e.issues }, { status: 422 });
+          console.error("Validation error in rule engine path:", e.issues);
+          console.error("Failed model output:", finalJson);
+          // Return partial data with validation flag
+          return NextResponse.json({
+            ...finalJson,
+            validation: "failed",
+            validation_issues: e.issues
+          }, { status: 200 }); // Return 200 to avoid breaking UI
         }
         throw e;
       }
@@ -215,9 +224,10 @@ export async function POST(req: NextRequest) {
       transcript
     );
 
+    let finalJson: any;
     try {
       // LLM with timeout
-      const finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
+      finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
       finalJson.talk_metrics = talk;
       finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
 
@@ -301,9 +311,16 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(finalJson);
     } catch (e: any) {
-      // Zod error signature
+      // Log validation errors but don't fail the request
       if (e?.issues) {
-        return NextResponse.json({ error: "Validation failed", issues: e.issues }, { status: 422 });
+        console.error("Validation error in legacy path:", e.issues);
+        console.error("Failed model output:", finalJson);
+        // Return partial data with validation flag
+        return NextResponse.json({
+          ...finalJson,
+          validation: "failed",
+          validation_issues: e.issues
+        }, { status: 200 }); // Return 200 to avoid breaking UI
       }
       throw e; // will be caught by the outer catch and become 500
     }

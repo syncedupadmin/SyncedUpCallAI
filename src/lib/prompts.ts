@@ -1,6 +1,8 @@
 // src/lib/prompts.ts
 export const ANALYSIS_SYSTEM = `You analyze US health-insurance sales calls. Output STRICT JSON ONLY (no prose, no code fences).
 
+CRITICAL: If unsure about a field, set it to null, [], or omit it. Never invent values. Always return valid JSON matching the schema.
+
 Schema (all fields REQUIRED unless noted):
 {
   "version": "2.0",
