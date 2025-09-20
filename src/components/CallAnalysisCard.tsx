@@ -105,11 +105,11 @@ function Badge({ tone = "slate", children }: { tone?: keyof typeof badgeMap; chi
 }
 function Progress({ value }: { value: number }) { const safe = Math.max(0, Math.min(100, value)); return <div className="w-full h-2 rounded bg-slate-200"><div className="h-2 rounded bg-slate-800" style={{ width: `${safe}%` }} /></div>; }
 function Meter({ label, value }: { label: string; value: number }) {
-  return (<div className="space-y-1"><div className="flex items-center justify-between text-sm"><span className="text-slate-600">{label}</span><span className="font-semibold">{value}</span></div><Progress value={value} /></div>);
+  return (<div className="space-y-1"><div className="flex items-center justify-between text-sm"><span className="text-gray-700">{label}</span><span className="font-semibold text-black">{value}</span></div><Progress value={value} /></div>);
 }
-function Chip({ text }: { text: string }) { return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-800">{text}</span>; }
+function Chip({ text }: { text: string }) { return <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-1 text-xs font-medium text-black">{text}</span>; }
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (<div className="rounded-2xl border border-slate-200 p-4"><h3 className="text-sm font-semibold text-slate-900 mb-3">{title}</h3><div className="space-y-3">{children}</div></div>);
+  return (<div className="rounded-2xl border border-gray-300 bg-gray-50 p-4"><h3 className="text-sm font-semibold text-black mb-3">{title}</h3><div className="space-y-3">{children}</div></div>);
 }
 
 const reasonTone: Record<string, keyof typeof badgeMap> = { pricing:"amber", spouse_approval:"blue", bank_decline:"rose", benefits_confusion:"violet", trust_scam_fear:"rose" };
@@ -130,10 +130,10 @@ export default function CallAnalysisCard({
   const d = data;
   const tone = reasonTone[d.reason_primary] || "slate";
   return (
-    <div className="bg-white p-6">
+    <div className="bg-white text-black p-6">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-start justify-between">
-          <div><h1 className="text-xl font-bold text-slate-900">Call Analysis</h1><p className="text-sm text-slate-600">Model {d.model} • v{d.version} • Confidence {Math.round(d.confidence * 100)}%</p></div>
+          <div><h1 className="text-xl font-bold text-black">Call Analysis</h1><p className="text-sm text-gray-700">Model {d.model} • v{d.version} • Confidence {Math.round(d.confidence * 100)}%</p></div>
           <div className="flex items-center gap-2">
             <Badge tone={tone}>{safe(d.reason_primary).replaceAll?.("_", " ")}</Badge>
             {d.outcome?.sale_status === "sale" && <Badge tone="emerald">SALE</Badge>}
@@ -146,10 +146,10 @@ export default function CallAnalysisCard({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 p-4">
+        <div className="rounded-2xl border border-gray-300 bg-gray-50 p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-slate-900 font-medium">{safe(d.summary)}</div>
-            <div className="text-sm text-slate-600">Callback window: {d.best_callback_window ? `${toLocal(d.best_callback_window.local_start)} → ${toLocal(d.best_callback_window.local_end)}` : "—"}</div>
+            <div className="text-black font-medium">{safe(d.summary)}</div>
+            <div className="text-sm text-gray-700">Callback window: {d.best_callback_window ? `${toLocal(d.best_callback_window.local_start)} → ${toLocal(d.best_callback_window.local_end)}` : "—"}</div>
           </div>
         </div>
 
@@ -158,7 +158,7 @@ export default function CallAnalysisCard({
             <Section title="Scores">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3"><Meter label="QA Score" value={d.qa_score} /><Meter label="Script Adherence" value={d.script_adherence} /></div>
-                <div className="space-y-3"><div className="text-sm text-slate-600">Sentiment (agent/customer)</div><div className="flex gap-2 text-sm"><Chip text={`agent ${d.sentiment_agent.toFixed(2)}`} /><Chip text={`customer ${d.sentiment_customer.toFixed(2)}`} /><Chip text={`ASR ${d.asr_quality}`} /></div></div>
+                <div className="space-y-3"><div className="text-sm text-gray-700">Sentiment (agent/customer)</div><div className="flex gap-2 text-sm"><Chip text={`agent ${d.sentiment_agent.toFixed(2)}`} /><Chip text={`customer ${d.sentiment_customer.toFixed(2)}`} /><Chip text={`ASR ${d.asr_quality}`} /></div></div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2">
                 <Meter label="Greeting" value={d.qa_breakdown.greeting} />
@@ -174,18 +174,18 @@ export default function CallAnalysisCard({
               {/* New rebuttals format */}
               {d.rebuttals?.used?.length ? (
                 <>
-                  <div className="text-xs font-semibold text-slate-700 mb-2">Used ({d.rebuttals.used.length})</div>
+                  <div className="text-xs font-semibold text-black mb-2">Used ({d.rebuttals.used.length})</div>
                   <ul className="space-y-2">
                     {d.rebuttals.used.map((r, i) => (
                       <li key={i} className="rounded-lg border border-slate-200 p-2">
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
                           <span>{r.ts}</span>
                           <span>•</span>
                           <span className="rounded-full bg-green-100 px-2 py-[2px] text-[10px] font-medium text-green-800">
                             {r.type}
                           </span>
                         </div>
-                        <div className="mt-1 text-sm text-slate-900">"{safe(r.quote).substring(0, 100)}..."</div>
+                        <div className="mt-1 text-sm text-black">"{safe(r.quote).substring(0, 100)}..."</div>
                       </li>
                     ))}
                   </ul>
@@ -194,18 +194,18 @@ export default function CallAnalysisCard({
 
               {d.rebuttals?.missed?.length ? (
                 <>
-                  <div className="text-xs font-semibold text-slate-700 mt-3 mb-2">Missed ({d.rebuttals.missed.length})</div>
+                  <div className="text-xs font-semibold text-black mt-3 mb-2">Missed ({d.rebuttals.missed.length})</div>
                   <ul className="space-y-2">
                     {d.rebuttals.missed.map((m, i) => (
                       <li key={i} className="rounded-lg border border-rose-200 p-2">
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
                           <span>{(m as any).at_ts || (m as any).ts}</span>
                           <span>•</span>
                           <span className="rounded-full bg-rose-100 px-2 py-[2px] text-[10px] font-medium text-rose-800">
                             {m.type}
                           </span>
                         </div>
-                        {m.stall_quote && <div className="mt-1 text-sm text-slate-900">"{safe(m.stall_quote).substring(0, 100)}..."</div>}
+                        {m.stall_quote && <div className="mt-1 text-sm text-black">"{safe(m.stall_quote).substring(0, 100)}..."</div>}
                       </li>
                     ))}
                   </ul>
@@ -217,7 +217,7 @@ export default function CallAnalysisCard({
                 <ul className="space-y-3">
                   {d.rebuttals_used.map((r, i) => (
                     <li key={i} className="rounded-lg border border-slate-200 p-3">
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
                         <span>{r.ts}</span>
                         <span>•</span>
                         <span className="uppercase">AGENT</span>
@@ -235,18 +235,18 @@ export default function CallAnalysisCard({
                           </>
                         )}
                       </div>
-                      <div className="mt-1 text-slate-900">"{r.quote_agent}"</div>
+                      <div className="mt-1 text-black">"{r.quote_agent}"</div>
                     </li>
                   ))}
                 </ul>
               ) : null}
 
               {!d.rebuttals && !d.rebuttals_used?.length && (
-                <div className="text-sm text-slate-500">No rebuttals detected.</div>
+                <div className="text-sm text-gray-600">No rebuttals detected.</div>
               )}
 
               {d.rebuttals?.counts && (
-                <div className="mt-3 text-xs text-slate-600">
+                <div className="mt-3 text-xs text-gray-700">
                   Asked for card after last rebuttal: {d.rebuttals.counts.asked_for_card_after_last_rebuttal ? "Yes" : "No"}
                 </div>
               )}
@@ -255,31 +255,31 @@ export default function CallAnalysisCard({
 
           <div className="space-y-4">
             <Section title="Outcome & Pricing">
-              <div className="text-sm text-slate-700">
+              <div className="text-sm text-black">
                 {d.outcome?.sale_status === "sale" && <>Payment confirmed{d.signals?.card_last4 ? ` • card **** ${d.signals.card_last4}` : ""}</>}
                 {d.outcome?.sale_status === "post_date" && <>Payment scheduled{d.outcome?.post_date_iso ? ` for ${toLocal(d.outcome.post_date_iso)}` : ""}</>}
                 {!d.outcome?.sale_status || d.outcome.sale_status === "none" ? "No outcome detected" : null}
               </div>
               {(d.facts?.pricing?.premium_amount || d.facts?.pricing?.signup_fee) && (
-                <div className="text-sm text-slate-700 mt-2">
+                <div className="text-sm text-black mt-2">
                   {d.facts.pricing?.premium_amount && <span>${d.facts.pricing.premium_amount.toFixed(2)}/mo</span>}
                   {d.facts.pricing?.premium_amount && d.facts.pricing?.signup_fee && <span> + </span>}
                   {d.facts.pricing?.signup_fee && <span>${d.facts.pricing.signup_fee.toFixed(2)} enrollment fee</span>}
                 </div>
               )}
-              {d.outcome?.evidence_quote && <div className="text-xs text-slate-500 mt-1">Evidence: "{safe(d.outcome.evidence_quote)}"</div>}
+              {d.outcome?.evidence_quote && <div className="text-xs text-gray-600 mt-1">Evidence: "{safe(d.outcome.evidence_quote)}"</div>}
               <div className="flex flex-wrap gap-2 mt-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
               {!!d.compliance_flags?.length && <div className="flex flex-wrap gap-2">{d.compliance_flags.map((r, i) => <Chip key={i} text={`compliance: ${r}`} />)}</div>}
-              {d.reason_secondary ? <div className="text-sm text-slate-700">Detail: {safe(d.reason_secondary)}</div> : null}
+              {d.reason_secondary ? <div className="text-sm text-black">Detail: {safe(d.reason_secondary)}</div> : null}
               {d.evidence?.reason_primary_quote && (
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-gray-600">
                   Evidence: "{safe(d.evidence.reason_primary_quote)}"
                 </div>
               )}
             </Section>
 
             <Section title="Talk Metrics">
-              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700">
+              <div className="grid grid-cols-1 gap-3 text-sm text-black">
                 <div>Agent: {minutes(d.talk_metrics.talk_time_agent_sec)}</div>
                 <div>Customer: {minutes(d.talk_metrics.talk_time_customer_sec)}</div>
                 <div>Silence: {minutes(d.talk_metrics.silence_time_sec)}</div>
@@ -290,12 +290,12 @@ export default function CallAnalysisCard({
             <Section title="Actions">
               <div className="flex flex-wrap gap-2">
                 {d.actions.map((a, i) => (
-                  <button key={i} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50" onClick={() => alert(`${a} (wire to CRM/GHL)`)}>
+                  <button key={i} className="rounded-xl border border-gray-400 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-gray-100" onClick={() => alert(`${a} (wire to CRM/GHL)`)}>
                     {safe(a).replaceAll?.("_", " ")}
                   </button>
                 ))}
               </div>
-              <div className="text-xs text-slate-500">Wire these to: schedule callback, benefits email, trust email, payment retry, DNC, etc.</div>
+              <div className="text-xs text-gray-600">Wire these to: schedule callback, benefits email, trust email, payment retry, DNC, etc.</div>
             </Section>
 
             <Section title="CRM Updates">
