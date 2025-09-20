@@ -159,6 +159,24 @@ export async function POST(req: NextRequest) {
           }
         };
 
+        // Add opening rebuttals from signals
+        finalJson.rebuttals_opening = {
+          used: signals.opening_rebuttals_used.map(r => ({
+            ts: msToMMSS(r.ts),
+            type: r.type,
+            quote: r.text
+          })),
+          missed: signals.opening_rebuttals_missed.map(r => ({
+            at_ts: msToMMSS(r.ts),
+            type: r.type,
+            stall_quote: r.text
+          })),
+          counts: {
+            used: signals.opening_rebuttals_used.length,
+            missed: signals.opening_rebuttals_missed.length
+          }
+        };
+
         return NextResponse.json(finalJson);
       } catch (e: any) {
         // Log validation errors but don't fail the request

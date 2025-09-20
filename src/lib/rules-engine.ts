@@ -16,11 +16,35 @@ export type Signals = {
   rebuttals_used: Array<{ ts:number; type:string; text:string }>;
   rebuttals_missed: Array<{ ts:number; type:string; text:string }>;
   asked_for_card_after_last_rebuttal: boolean;
+  opening_rebuttals_used: Array<{ ts:number; type:string; text:string }>;
+  opening_rebuttals_missed: Array<{ ts:number; type:string; text:string }>;
 };
 
 const isES = (t:string) =>
   /[áéíóúñ]|(usted|firm(a|é)|correo|mañana|cobrar|cuota|plan)/i.test(t);
 const cents = (d:number) => Math.round(d * 100);
+
+// ---------- fuzzy token similarity (simple, fast) ----------
+function tokenSim(a: string, b: string) {
+  const T = (s: string) =>
+    new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean));
+  const A = T(a), B = T(b);
+  const inter = [...A].filter(x => B.has(x)).length;
+  const denom = Math.max(1, Math.sqrt(A.size * B.size));
+  return inter / denom; // 0..1
+}
+
+function bestOpeningType(utterance: string): { type: keyof typeof PLAYBOOK.opening_objections; score: number } {
+  let bestType: keyof typeof PLAYBOOK.opening_objections = "other";
+  let best = 0;
+  for (const [type, examples] of Object.entries(PLAYBOOK.opening_objections) as any) {
+    for (const ex of examples) {
+      const s = tokenSim(utterance, ex);
+      if (s > best) { best = s; bestType = type; }
+    }
+  }
+  return { type: bestType, score: best };
+}
 
 export function extractMoneyCents(text:string): number[] {
   const out:number[] = [];
@@ -47,11 +71,51 @@ export function computeSignals(segments: Segment[]): Signals {
     stalls: [],
     rebuttals_used: [],
     rebuttals_missed: [],
-    asked_for_card_after_last_rebuttal: false
+    asked_for_card_after_last_rebuttal: false,
+    opening_rebuttals_used: [],
+    opening_rebuttals_missed: []
   };
 
   const joined = segments.map(x => x.text).join(" ");
   s.lang = isES(joined) ? "es" : "en";
+
+  // Opening objections detection (0-30s)
+  const openingEnd = PLAYBOOK.opening_window_ms;
+  const openingWindowSec = 10; // 10 second window for agent response
+
+  // Scan customer utterances in first window for opening objections
+  for (const seg of segments) {
+    if (seg.speaker !== "customer") continue;
+    const start = seg.startMs ?? 0;
+    if (start > openingEnd) break;
+
+    // Use fuzzy matching to classify the objection type
+    const { type, score } = bestOpeningType(seg.text);
+
+    // Only match if above threshold
+    if (score >= PLAYBOOK.opening_fuzzy_threshold) {
+      // Look for agent response within window
+      const agentResponse = segments.find(s =>
+        s.speaker === "agent" &&
+        s.startMs >= start &&
+        s.startMs <= start + (openingWindowSec * 1000)
+      );
+
+      if (agentResponse) {
+        s.opening_rebuttals_used.push({
+          ts: agentResponse.startMs,
+          type,
+          text: agentResponse.text
+        });
+      } else {
+        s.opening_rebuttals_missed.push({
+          ts: start,
+          type,
+          text: seg.text
+        });
+      }
+    }
+  }
 
   // price: last agent amounts near end
   const agent = segments.filter(x => x.speaker === "agent");

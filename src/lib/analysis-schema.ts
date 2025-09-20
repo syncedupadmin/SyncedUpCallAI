@@ -19,6 +19,40 @@ export const SignalsSchema = z.object({
   card_last4: z.string().regex(/^\d{4}$/).nullable().default(null)
 }).partial();
 
+// Opening rebuttals: early objections handled during the first ~30s
+export const OpeningRebuttalType = z.enum([
+  "greeting",         // who is this / what company
+  "why_call",         // why are you calling / what's this about
+  "identity",         // who are you calling for / verify me
+  "wrong_person",     // not me / wrong number
+  "busy",             // I'm busy / can't talk / driving / at work
+  "callback",         // call me later / later today
+  "dnc",              // do not call / stop calling / take me off the list
+  "already_covered",  // I already bought a plan / already have insurance
+  "other",
+]);
+
+export const OpeningRebuttalUsedItem = z.object({
+  ts: z.string().default(""),
+  type: OpeningRebuttalType.default("other"),
+  quote: z.string().default(""),
+});
+
+export const OpeningRebuttalMissedItem = z.object({
+  at_ts: z.string().default(""),
+  type: OpeningRebuttalType.default("other"),
+  stall_quote: z.string().default(""),
+});
+
+export const OpeningRebuttalsSchema = z.object({
+  used: z.array(OpeningRebuttalUsedItem).default([]),
+  missed: z.array(OpeningRebuttalMissedItem).default([]),
+  counts: z.object({
+    used: z.number().default(0),
+    missed: z.number().default(0),
+  }).default({ used: 0, missed: 0 }),
+}).optional();
+
 // Safe schema with comprehensive defaults
 export const AnalysisSchema = z
   .object({
@@ -212,7 +246,10 @@ export const AnalysisSchema = z
         missed: z.number().int().nonnegative().default(0),
         asked_for_card_after_last_rebuttal: z.boolean().default(false)
       }).default({})
-    }).default({})
+    }).default({}),
+
+    // Opening rebuttals (first 30s)
+    rebuttals_opening: OpeningRebuttalsSchema
   })
   // ✅ Don't fail on extra keys from the model or rule engine
   .passthrough();

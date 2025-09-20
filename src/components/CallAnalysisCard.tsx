@@ -84,6 +84,14 @@ export type Analysis = {
       asked_for_card_after_last_rebuttal: boolean;
     };
   };
+  rebuttals_opening?: {
+    used: Array<{type: string; ts: string; quote: string}>;
+    missed: Array<{type: string; at_ts: string; stall_quote: string}>;
+    counts: {
+      used: number;
+      missed: number;
+    };
+  };
 };
 
 // Safe string helper to prevent crashes
@@ -168,6 +176,53 @@ export default function CallAnalysisCard({
                 <Meter label="Compliance" value={d.qa_breakdown.compliance} />
                 <Meter label="Closing" value={d.qa_breakdown.closing} />
               </div>
+            </Section>
+
+            <Section title="Opening Rebuttals (First 30s)">
+              {/* Opening rebuttals */}
+              {d.rebuttals_opening?.used?.length ? (
+                <>
+                  <div className="text-xs font-semibold text-black mb-2">Handled ({d.rebuttals_opening.used.length})</div>
+                  <ul className="space-y-2">
+                    {d.rebuttals_opening.used.map((r, i) => (
+                      <li key={i} className="rounded-lg border border-emerald-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>{r.ts}</span>
+                          <span>•</span>
+                          <span className="rounded-full bg-emerald-100 px-2 py-[2px] text-[10px] font-medium text-emerald-800">
+                            {r.type}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-sm text-black">"{safe(r.quote).substring(0, 100)}..."</div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {d.rebuttals_opening?.missed?.length ? (
+                <>
+                  <div className="text-xs font-semibold text-black mt-3 mb-2">Missed ({d.rebuttals_opening.missed.length})</div>
+                  <ul className="space-y-2">
+                    {d.rebuttals_opening.missed.map((m, i) => (
+                      <li key={i} className="rounded-lg border border-amber-200 p-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>{(m as any).at_ts || (m as any).ts}</span>
+                          <span>•</span>
+                          <span className="rounded-full bg-amber-100 px-2 py-[2px] text-[10px] font-medium text-amber-800">
+                            {m.type}
+                          </span>
+                        </div>
+                        {m.stall_quote && <div className="mt-1 text-sm text-black">"{safe(m.stall_quote).substring(0, 100)}..."</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {!d.rebuttals_opening?.used?.length && !d.rebuttals_opening?.missed?.length && (
+                <div className="text-sm text-gray-600">No opening objections detected.</div>
+              )}
             </Section>
 
             <Section title="Rebuttals">
