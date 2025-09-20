@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Calendar, Building2 } from 'lucide-react'
-import { AgencyMembers } from './AgencyMembers'
+import { AgencyMembers } from './AgencyMembersSimple'
 import { AgencySettings } from './AgencySettings'
 
 interface PageProps {
