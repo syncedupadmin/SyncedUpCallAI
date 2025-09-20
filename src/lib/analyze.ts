@@ -187,10 +187,14 @@ export async function runAnalysis({ systemPrompt, userPrompt }: { systemPrompt: 
       const second = AnalysisSchema.safeParse(draft);
       if (second.success) return second.data;
 
-      // if still not valid, surface the issues for the 422 handler
-      const err: any = new Error("Zod validation failed");
-      err.issues = parsed.error.issues;
-      throw err;
+      // If still not valid, return best-effort partial with validation flag
+      console.error("Zod validation failed after patching:", parsed.error.issues);
+      const partial = {
+        ...draft,
+        validation: "failed",
+        validation_issues: parsed.error.issues.slice(0, 5) // Limit issues for response size
+      };
+      return partial;
     } catch (e: any) {
       lastError = e;
       if (e?.status !== 404) break; // only model-not-found falls through

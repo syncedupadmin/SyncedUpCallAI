@@ -86,6 +86,9 @@ export type Analysis = {
   };
 };
 
+// Safe string helper to prevent crashes
+const safe = (s?: string | null) => s ?? "";
+
 function toLocal(dt?: string | null) { if (!dt) return ""; const d = new Date(dt); return isNaN(d.valueOf()) ? dt : d.toLocaleString(); }
 const minutes = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
@@ -132,7 +135,7 @@ export default function CallAnalysisCard({
         <div className="flex items-start justify-between">
           <div><h1 className="text-xl font-bold text-slate-900">Call Analysis</h1><p className="text-sm text-slate-600">Model {d.model} • v{d.version} • Confidence {Math.round(d.confidence * 100)}%</p></div>
           <div className="flex items-center gap-2">
-            <Badge tone={tone}>{d.reason_primary.replaceAll("_", " ")}</Badge>
+            <Badge tone={tone}>{safe(d.reason_primary).replaceAll?.("_", " ")}</Badge>
             {d.outcome?.sale_status === "sale" && <Badge tone="emerald">SALE</Badge>}
             {d.outcome?.sale_status === "post_date" && (
               <Badge tone="amber">POST DATE{d.outcome?.post_date_iso ? `: ${new Date(d.outcome.post_date_iso).toLocaleDateString()}` : ""}</Badge>
@@ -145,7 +148,7 @@ export default function CallAnalysisCard({
 
         <div className="rounded-2xl border border-slate-200 p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-slate-900 font-medium">{d.summary}</div>
+            <div className="text-slate-900 font-medium">{safe(d.summary)}</div>
             <div className="text-sm text-slate-600">Callback window: {d.best_callback_window ? `${toLocal(d.best_callback_window.local_start)} → ${toLocal(d.best_callback_window.local_end)}` : "—"}</div>
           </div>
         </div>
@@ -182,7 +185,7 @@ export default function CallAnalysisCard({
                             {r.type}
                           </span>
                         </div>
-                        <div className="mt-1 text-sm text-slate-900">"{r.quote.substring(0, 100)}..."</div>
+                        <div className="mt-1 text-sm text-slate-900">"{safe(r.quote).substring(0, 100)}..."</div>
                       </li>
                     ))}
                   </ul>
@@ -202,7 +205,7 @@ export default function CallAnalysisCard({
                             {m.type}
                           </span>
                         </div>
-                        {m.stall_quote && <div className="mt-1 text-sm text-slate-900">"{m.stall_quote.substring(0, 100)}..."</div>}
+                        {m.stall_quote && <div className="mt-1 text-sm text-slate-900">"{safe(m.stall_quote).substring(0, 100)}..."</div>}
                       </li>
                     ))}
                   </ul>
@@ -264,13 +267,13 @@ export default function CallAnalysisCard({
                   {d.facts.pricing?.signup_fee && <span>${d.facts.pricing.signup_fee.toFixed(2)} enrollment fee</span>}
                 </div>
               )}
-              {d.outcome?.evidence_quote && <div className="text-xs text-slate-500 mt-1">Evidence: "{d.outcome.evidence_quote}"</div>}
+              {d.outcome?.evidence_quote && <div className="text-xs text-slate-500 mt-1">Evidence: "{safe(d.outcome.evidence_quote)}"</div>}
               <div className="flex flex-wrap gap-2 mt-2">{d.risk_flags?.length ? d.risk_flags.map((r, i) => <Chip key={i} text={r} />) : <Chip text="no risk flags" />}</div>
               {!!d.compliance_flags?.length && <div className="flex flex-wrap gap-2">{d.compliance_flags.map((r, i) => <Chip key={i} text={`compliance: ${r}`} />)}</div>}
-              {d.reason_secondary ? <div className="text-sm text-slate-700">Detail: {d.reason_secondary}</div> : null}
+              {d.reason_secondary ? <div className="text-sm text-slate-700">Detail: {safe(d.reason_secondary)}</div> : null}
               {d.evidence?.reason_primary_quote && (
                 <div className="text-xs text-slate-500">
-                  Evidence: "{d.evidence.reason_primary_quote}"
+                  Evidence: "{safe(d.evidence.reason_primary_quote)}"
                 </div>
               )}
             </Section>
@@ -288,7 +291,7 @@ export default function CallAnalysisCard({
               <div className="flex flex-wrap gap-2">
                 {d.actions.map((a, i) => (
                   <button key={i} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50" onClick={() => alert(`${a} (wire to CRM/GHL)`)}>
-                    {a.replaceAll("_", " ")}
+                    {safe(a).replaceAll?.("_", " ")}
                   </button>
                 ))}
               </div>

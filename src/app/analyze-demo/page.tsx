@@ -29,11 +29,13 @@ export default function AnalyzeDemo() {
         setErr(`HTTP ${r.status}. Body: ${raw.slice(0, 200)}`);
         return;
       }
-      if (!r.ok) {
+      if (!r.ok && r.status !== 200) {
         setErr(j?.error || `HTTP ${r.status}`);
         return;
       }
-      setData(j);
+      // Accept partial data with validation flag
+      const analysisData = j.validation === "failed" && j.partial ? j.partial : j;
+      setData(analysisData);
     } catch (e:any) {
       setErr(e.message || String(e));
     } finally {
