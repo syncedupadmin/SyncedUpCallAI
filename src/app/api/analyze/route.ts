@@ -11,6 +11,7 @@ import { choosePremiumAndFee } from "@/lib/money";
 import { detectRebuttals } from "@/lib/rebuttal-detect";
 import { computeSignals, decideOutcome } from "@/lib/rules-engine";
 import { detectRebuttalsV3, type Segment as RSeg } from "@/lib/rebuttal-detect-v3";
+import { chooseCustomerName } from "@/lib/name-merge";
 import { PLAYBOOK } from "@/domain/playbook";
 import type { Segment } from "@/lib/asr-nova2";
 
@@ -158,6 +159,28 @@ export async function POST(req: NextRequest) {
             missed: rb3.opening.counts.missed + rb3.money.counts.missed,
             asked_for_card_after_last_rebuttal: rb3.money.counts.asked_for_card_after_last_rebuttal
           }
+        };
+
+        // Name detection using merger logic
+        const nameChoice = chooseCustomerName(
+          {
+            customer_first_name: meta?.customer_first_name,
+            customer_last_name: meta?.customer_last_name,
+            customer_full_name: meta?.customer_full_name,
+            agent_name: meta?.agent_name
+          },
+          segments.map(s => ({ speaker: s.speaker, text: s.text, startMs: s.startMs }))
+        );
+
+        // Surface on the JSON payload for UI
+        finalJson.contact_guess = {
+          first_name: nameChoice.first_name,
+          last_name: nameChoice.last_name,
+          confidence: nameChoice.confidence,
+          evidence_ts: nameChoice.evidence_ts,
+          evidence_quote: nameChoice.evidence_quote,
+          source: nameChoice.source,
+          alternate: nameChoice.alternate ?? null
         };
 
         return NextResponse.json(finalJson);

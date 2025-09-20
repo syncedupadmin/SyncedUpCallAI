@@ -101,6 +101,22 @@ export type Analysis = {
       asked_for_card_after_last_rebuttal?: boolean;
     };
   };
+  contact_guess?: {
+    first_name: string | null;
+    last_name: string | null;
+    confidence: number;
+    evidence_ts: string | null;
+    evidence_quote: string | null;
+    source: "convoso_meta" | "audio_extract" | "llm_backstop";
+    alternate?: {
+      first_name: string | null;
+      last_name: string | null;
+      confidence: number;
+      source: "convoso_meta" | "audio_extract" | "llm_backstop";
+      evidence_ts: string | null;
+      evidence_quote: string | null;
+    } | null;
+  };
 };
 
 // Safe string helper to prevent crashes
@@ -152,6 +168,11 @@ export default function CallAnalysisCard({
         <div className="flex items-start justify-between">
           <div><h1 className="text-xl font-bold text-black">Call Analysis</h1><p className="text-sm text-gray-700">Model {d.model} • v{d.version} • Confidence {Math.round(d.confidence * 100)}%</p></div>
           <div className="flex items-center gap-2">
+            {d.contact_guess?.first_name && (
+              <Badge tone="blue">
+                {d.contact_guess.first_name}{d.contact_guess.last_name ? ` ${d.contact_guess.last_name}` : ""} · {(d.contact_guess.confidence*100).toFixed(0)}% · {d.contact_guess.source}
+              </Badge>
+            )}
             <Badge tone={tone}>{safe(d.reason_primary).replaceAll?.("_", " ")}</Badge>
             {d.outcome?.sale_status === "sale" && <Badge tone="emerald">SALE</Badge>}
             {d.outcome?.sale_status === "post_date" && (
