@@ -23,7 +23,8 @@
       "Bash(vercel:*)",
       "Bash(dir)",
       "Bash(mv:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(powershell:*)"
     ]
   },
   "outputStyle": "default"
