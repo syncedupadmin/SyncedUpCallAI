@@ -201,7 +201,14 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
               ) : (
                 filteredAgencies.map((agency) => (
                   <tr key={agency.id} className="hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-4 font-medium">{agency.name}</td>
+                    <td className="px-6 py-4 font-medium">
+                      <Link
+                        href={`/superadmin/agencies/${agency.id}`}
+                        className="hover:text-blue-400 transition-colors"
+                      >
+                        {agency.name}
+                      </Link>
+                    </td>
                     <td className="px-6 py-4">
                       {agency.slug ? (
                         <span className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded">
