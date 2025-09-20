@@ -44,8 +44,9 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
       }
 
       if (agency) {
-        onAgencyCreated(agency as Agency)
-        toast.success(`Successfully created ${agency.name}`)
+        const newAgency = agency as Agency
+        onAgencyCreated(newAgency)
+        toast.success(`Successfully created ${newAgency.name}`)
         reset()
       }
     } catch (error) {
