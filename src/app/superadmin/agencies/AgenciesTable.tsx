@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Agency } from './types'
 import toast from 'react-hot-toast'
-import { Copy, MoreVertical, RefreshCw, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { Copy, MoreVertical, RefreshCw, Search, ChevronLeft, ChevronRight, Trash2, Settings } from 'lucide-react'
+import Link from 'next/link'
 
 interface AgenciesTableProps {
   initialData: Agency[]
@@ -227,7 +228,14 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/superadmin/agencies/${agency.id}`}
+                          className="p-1 text-blue-500 hover:bg-gray-800 rounded transition-colors"
+                          title="Manage agency"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Link>
                         <button
                           onClick={() => {
                             setDeleteAgencyId(agency.id)
