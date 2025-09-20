@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -46,7 +46,7 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
   })
 
   // Load additional agency data
-  useState(() => {
+  useEffect(() => {
     const loadAgencyData = async () => {
       const { data } = await supabase
         .from('agencies')
@@ -59,7 +59,7 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
       }
     }
     loadAgencyData()
-  })
+  }, [agencyId, supabase])
 
   const onSubmit = async (data: UpdateAgencyInput) => {
     setIsUpdating(true)
