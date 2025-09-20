@@ -1,17 +1,19 @@
 // src/app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { transcribeFromUrl } from "@/lib/asr-nova2";
-import { computeTalkMetrics, isVoicemailLike } from "@/lib/metrics";
+import { computeTalkMetrics, isVoicemailLike, computeHoldStats, isWastedCall } from "@/lib/metrics";
 import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/lib/prompts";
 import { runAnalysis } from "@/lib/analyze";
 import { detectRebuttalsAndEscapes } from "@/lib/rebuttal-detector";
 import { openingAndControl } from "@/lib/opening-control";
-import { extractPriceEvents } from "@/lib/price-events";
+import { extractPriceEvents, extractPriceTimeline, detectPriceChanges } from "@/lib/price-events";
 import { choosePremiumAndFee } from "@/lib/money";
 import { detectRebuttals } from "@/lib/rebuttal-detect";
 import { computeSignals, decideOutcome } from "@/lib/rules-engine";
 import { detectRebuttalsV3, type Segment as RSeg } from "@/lib/rebuttal-detect-v3";
 import { chooseCustomerName } from "@/lib/name-merge";
+import { scoreSections } from "@/lib/score-sections";
+import { sbAdmin } from "@/lib/supabase-admin";
 import { PLAYBOOK } from "@/domain/playbook";
 import type { Segment } from "@/lib/asr-nova2";
 
@@ -99,6 +101,10 @@ export async function POST(req: NextRequest) {
       .join("\n");
 
     const talk = computeTalkMetrics(segments);
+    const hold = computeHoldStats(segments);
+    const wasted = isWastedCall(talk, segments);
+    const ptl = extractPriceTimeline(segments);
+    const pc = detectPriceChanges(ptl);
 
     // Use new rules engine if enabled
     const USE_RULE_ENGINE = process.env.USE_RULE_ENGINE === "true";
@@ -146,9 +152,9 @@ export async function POST(req: NextRequest) {
         // Use the new V3 rebuttal detection
         const rb3 = detectRebuttalsV3(segments as unknown as RSeg[]);
 
-        // Attach the two sections
+        // Make opening vs closing rebuttals explicit
         finalJson.rebuttals_opening = rb3.opening;
-        finalJson.rebuttals_money = rb3.money;
+        finalJson.rebuttals_closing = rb3.money;  // money phase = closing phase
 
         // For backward-compat UI, merge the views
         finalJson.rebuttals = {
@@ -160,6 +166,22 @@ export async function POST(req: NextRequest) {
             asked_for_card_after_last_rebuttal: rb3.money.counts.asked_for_card_after_last_rebuttal
           }
         };
+
+        // Lock section scores to deterministic scorer
+        const sec = scoreSections(segments, {
+          missed: finalJson.rebuttals.counts.missed,
+          askedForCard: finalJson.rebuttals.counts.asked_for_card_after_last_rebuttal
+        }, finalJson?.outcome?.sale_status);
+
+        finalJson.qa_breakdown = {
+          greeting: sec.greeting,
+          discovery: sec.discovery,
+          benefit_explanation: sec.benefits,
+          objection_handling: sec.objections,
+          compliance: sec.compliance,
+          closing: sec.closing,
+        };
+        finalJson.qa_score = sec.qa_score;
 
         // Name detection using merger logic
         const nameChoice = chooseCustomerName(
@@ -182,6 +204,29 @@ export async function POST(req: NextRequest) {
           source: nameChoice.source,
           alternate: nameChoice.alternate ?? null
         };
+
+        // Add new metrics
+        finalJson.hold = hold;
+        finalJson.price_change = pc.price_change;
+        finalJson.price_direction = pc.direction;
+        finalJson.discount_cents_total = pc.discount_cents_total;
+        finalJson.upsell_cents_total = pc.upsell_cents_total;
+        finalJson.wasted_call = wasted;
+        finalJson.questions_first_minute = talk.questions_first_minute;
+
+        // Persist call analysis with sbAdmin
+        await sbAdmin
+          .from("calls")
+          .upsert(
+            {
+              id: meta?.call_id,               // <-- your call primary key
+              agency_id: meta?.agency_id,      // needed for rollups
+              agent_id: meta?.agent_id ?? null,
+              analyzed_at: new Date().toISOString(),
+              analysis_json: finalJson,
+            },
+            { onConflict: "id" }
+          );
 
         return NextResponse.json(finalJson);
       } catch (e: any) {
@@ -275,7 +320,7 @@ export async function POST(req: NextRequest) {
       finalJson.opening_feedback = oc.opening_feedback;
 
       // Extract price events
-      const { events: priceEvents, facts } = extractPriceEvents(segments);
+      const { price_events: priceEvents, facts } = extractPriceEvents(segments);
       finalJson.price_events = priceEvents;
       finalJson.facts = { ...(finalJson.facts||{}), ...facts };
 
@@ -332,6 +377,50 @@ export async function POST(req: NextRequest) {
         ...(finalJson.crm_updates ?? {}),
         disposition: crmDisposition
       };
+
+      // Add new metrics
+      finalJson.hold = hold;
+      finalJson.price_change = pc.price_change;
+      finalJson.price_direction = pc.direction;
+      finalJson.discount_cents_total = pc.discount_cents_total;
+      finalJson.upsell_cents_total = pc.upsell_cents_total;
+      finalJson.wasted_call = wasted;
+      finalJson.questions_first_minute = talk.questions_first_minute;
+
+      // Use V3 rebuttal detection for explicit opening/closing phases
+      const rb3 = detectRebuttalsV3(segments as unknown as RSeg[]);
+      finalJson.rebuttals_opening = rb3.opening;
+      finalJson.rebuttals_closing = rb3.money;  // money phase = closing phase
+
+      // Lock section scores to deterministic scorer (legacy path)
+      const sec = scoreSections(segments, {
+        missed: rb3.opening.counts.missed + rb3.money.counts.missed,
+        askedForCard: rb3.money.counts.asked_for_card_after_last_rebuttal
+      }, finalJson?.outcome?.sale_status);
+
+      finalJson.qa_breakdown = {
+        greeting: sec.greeting,
+        discovery: sec.discovery,
+        benefit_explanation: sec.benefits,
+        objection_handling: sec.objections,
+        compliance: sec.compliance,
+        closing: sec.closing,
+      };
+      finalJson.qa_score = sec.qa_score;
+
+      // Persist call analysis with sbAdmin
+      await sbAdmin
+        .from("calls")
+        .upsert(
+          {
+            id: meta?.call_id,               // <-- your call primary key
+            agency_id: meta?.agency_id,      // needed for rollups
+            agent_id: meta?.agent_id ?? null,
+            analyzed_at: new Date().toISOString(),
+            analysis_json: finalJson,
+          },
+          { onConflict: "id" }
+        );
 
       return NextResponse.json(finalJson);
     } catch (e: any) {

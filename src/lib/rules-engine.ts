@@ -18,6 +18,8 @@ export type Signals = {
   asked_for_card_after_last_rebuttal: boolean;
   opening_rebuttals_used: Array<{ ts:number; type:string; text:string }>;
   opening_rebuttals_missed: Array<{ ts:number; type:string; text:string }>;
+  callback_set: boolean;
+  call_type: "outbound"|"inbound"|"transfer"|"unknown";
 };
 
 const isES = (t:string) =>
@@ -73,7 +75,9 @@ export function computeSignals(segments: Segment[]): Signals {
     rebuttals_missed: [],
     asked_for_card_after_last_rebuttal: false,
     opening_rebuttals_used: [],
-    opening_rebuttals_missed: []
+    opening_rebuttals_missed: [],
+    callback_set: false,
+    call_type: "unknown"
   };
 
   const joined = segments.map(x => x.text).join(" ");
@@ -170,6 +174,24 @@ export function computeSignals(segments: Segment[]): Signals {
       seg.startMs >= lastReb.ts &&
       /card|tarjeta|payment|pago/i.test(seg.text)
     );
+  }
+
+  // Callback set if agent proposes a time and customer agrees OR agent confirms a scheduled time
+  const lowerSegs = segments.map(seg => ({...seg, t: seg.text.toLowerCase()}));
+  s.callback_set = lowerSegs.some(seg =>
+    seg.speaker === "agent" && /\b(callback|call you back|tomorrow|later today|this evening|at \d{1,2}(:\d{2})?\s?(am|pm))\b/.test(seg.t)
+  );
+
+  // Call type inference (simple heuristic - can be enhanced with metadata)
+  const firstAgentText = segments.find(seg => seg.speaker === "agent")?.text.toLowerCase() || "";
+  if (/transfer|transferred|connecting you/i.test(firstAgentText)) {
+    s.call_type = "transfer";
+  } else if (/thank you for calling|how can i help/i.test(firstAgentText)) {
+    s.call_type = "inbound";
+  } else if (/this is|my name is|calling from/i.test(firstAgentText)) {
+    s.call_type = "outbound";
+  } else {
+    s.call_type = "unknown";
   }
 
   return s;
