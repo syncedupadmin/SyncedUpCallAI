@@ -38,14 +38,22 @@ function Delta({ now, base, fmt = "pct" }: { now:number; base:number; fmt?:"pct"
 export default function KPIPage() {
   const [data, setData] = useState<Summary | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  // TODO: plug actual agencyId from session/tenant
-  const agencyId = typeof window !== "undefined" ? localStorage.getItem("agencyId") || "" : "";
+  const [agencyId, setAgencyId] = useState<string>("");
 
   useEffect(() => {
-    const id = agencyId || "00000000-0000-0000-0000-000000000000"; // replace for your test
-    fetch(`/api/kpi/summary?agencyId=${id}`)
-      .then(r => r.json()).then(setData).catch(e => setErr(String(e)));
+    // Get agency ID from localStorage or use a default for testing
+    if (typeof window !== "undefined") {
+      const storedId = localStorage.getItem("agencyId");
+      // For testing, you can set a default agency ID here
+      const id = storedId || "00000000-0000-0000-0000-000000000000";
+      setAgencyId(id);
+
+      // Fetch KPI data
+      fetch(`/api/kpi/summary?agencyId=${id}`)
+        .then(r => r.json())
+        .then(setData)
+        .catch(e => setErr(String(e)));
+    }
   }, []);
 
   if (err) return <div className="p-6 text-rose-600">{err}</div>;

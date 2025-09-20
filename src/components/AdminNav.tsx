@@ -19,7 +19,8 @@ import {
   Crown,
   Upload,
   Activity,
-  Mic
+  Mic,
+  TrendingUp
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -59,6 +60,12 @@ export default function AdminNav() {
         href: '/admin/agents',
         icon: Users,
         description: 'Agent management'
+      },
+      {
+        name: 'KPI',
+        href: '/kpi',
+        icon: TrendingUp,
+        description: 'Key performance indicators'
       },
       {
         name: 'Calls',

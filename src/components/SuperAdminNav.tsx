@@ -20,7 +20,8 @@ import {
   Activity,
   Mic,
   Building2,
-  CheckCircle2
+  CheckCircle2,
+  TrendingUp
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -61,6 +62,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/agencies',
       icon: Shield,
       description: 'All users & admins'
+    },
+    {
+      name: 'KPI',
+      href: '/kpi',
+      icon: TrendingUp,
+      description: 'Key performance indicators'
     },
     {
       name: 'Calls',
