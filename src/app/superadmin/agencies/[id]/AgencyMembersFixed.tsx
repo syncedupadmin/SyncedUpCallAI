@@ -121,66 +121,38 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
         })
 
         const json = await res.json()
+        console.log('Invite response:', json)
 
         if (!res.ok || !json.ok) {
+          console.error('Failed to invite user:', json)
           toast.error(json.error || 'Failed to invite user')
           return
         }
 
-        toast.success(`Successfully invited ${name || email} and added them to the agency`)
+        toast.success(`Invitation sent to ${email}. They will receive an email to complete signup.`)
       } else {
-        // Add existing user by email lookup
+        // Add existing user by email lookup using RPC only
         const { data, error } = await supabase
           .rpc('add_user_to_agency_by_email', {
             p_agency: agencyId,
             p_email: email.toLowerCase(),
-            p_role: role ?? 'agent'
+            p_role: role || 'agent'
           })
 
         if (error) {
-          // If RPC doesn't exist, try manual lookup
-          if (error.message?.includes('function') || error.message?.includes('does not exist')) {
-            // Look up user by email
-            const { data: user, error: lookupError } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', email.toLowerCase())
-              .single()
+          console.error('Error adding existing user:', error)
 
-            if (lookupError || !user) {
-              toast.error('User not found. Check the email or create a new user.')
-              return
-            }
-
-            // Add to agency
-            const { error: addError } = await supabase
-              .from('user_agencies')
-              .insert({
-                user_id: user.id,
-                agency_id: agencyId,
-                role: role
-              })
-
-            if (addError) {
-              if (addError.code === '23505' || addError.message?.includes('duplicate')) {
-                toast.error('User is already a member of this agency')
-              } else {
-                toast.error('Failed to add user to agency')
-              }
-              return
-            }
-
-            toast.success(`Successfully added ${email} to the agency`)
+          if (error.message?.includes('duplicate') || error.code === '23505') {
+            toast.error('User is already a member of this agency')
+          } else if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
+            toast.error('User not found. Check the email or create a new user.')
           } else {
             toast.error(error.message || 'Failed to add member')
-            return
           }
-        } else if (data && !data.success) {
-          toast.error(data.error || 'Failed to add member')
           return
-        } else {
-          toast.success(`Successfully added ${email} to the agency`)
         }
+
+        toast.success(`Successfully added ${email} to the agency`)
       }
 
       // Reset form
