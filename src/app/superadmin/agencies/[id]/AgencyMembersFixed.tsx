@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { UserPlus, Trash2, RefreshCw, Users, Mail, Shield, Calendar } from 'lucide-react'
+import { UserPlus, Trash2, RefreshCw, Users, Mail, Shield, Calendar, CheckCircle, X, Send } from 'lucide-react'
 
 interface AgencyMembersProps {
   agencyId: string
@@ -24,6 +24,8 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
   const [removing, setRemoving] = useState<string | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState({ email: '', name: '', isInvite: false })
 
   // Form state
   const [email, setEmail] = useState('')
@@ -129,7 +131,13 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
           return
         }
 
-        toast.success(`Invitation sent to ${email}. They will receive an email to complete signup.`)
+        // Show success modal for invite
+        setSuccessMessage({
+          email: email.toLowerCase(),
+          name: name || email.split('@')[0],
+          isInvite: true
+        })
+        setShowSuccessModal(true)
       } else {
         // Add existing user by email lookup using RPC only
         const { data, error } = await supabase
@@ -152,7 +160,13 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
           return
         }
 
-        toast.success(`Successfully added ${email} to the agency`)
+        // Show success modal for adding existing user
+        setSuccessMessage({
+          email: email.toLowerCase(),
+          name: email.split('@')[0],
+          isInvite: false
+        })
+        setShowSuccessModal(true)
       }
 
       // Reset form
@@ -423,6 +437,90 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                 Remove
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-gray-900 rounded-xl p-8 max-w-md w-full mx-4 border border-gray-800 shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Success Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-green-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
+                <div className="relative bg-green-500/20 p-4 rounded-full border-2 border-green-500">
+                  {successMessage.isInvite ? (
+                    <Send className="h-8 w-8 text-green-400" />
+                  ) : (
+                    <CheckCircle className="h-8 w-8 text-green-400" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-2xl font-bold text-center mb-4 text-white">
+              {successMessage.isInvite ? 'Invitation Sent! 🎉' : 'Member Added! ✅'}
+            </h3>
+
+            {/* Message */}
+            <div className="space-y-4 mb-6">
+              {successMessage.isInvite ? (
+                <>
+                  <p className="text-gray-300 text-center">
+                    An invitation email has been sent to:
+                  </p>
+                  <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <Mail className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-white">{successMessage.email}</div>
+                        {successMessage.name && successMessage.name !== successMessage.email.split('@')[0] && (
+                          <div className="text-sm text-gray-400">{successMessage.name}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <p className="text-sm text-blue-300">
+                      <strong className="text-blue-400">What happens next:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-300 mt-2 space-y-1 ml-4">
+                      <li>• They'll receive an email invitation</li>
+                      <li>• They'll click the link to set up their account</li>
+                      <li>• They'll automatically be added to this agency</li>
+                    </ul>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-300 text-center">
+                    Successfully added to the agency:
+                  </p>
+                  <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <Mail className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      <div className="font-medium text-white">{successMessage.email}</div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-400 text-center">
+                    They can now access agency resources and data.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowSuccessModal(false)
+                setSuccessMessage({ email: '', name: '', isInvite: false })
+              }}
+              className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+            >
+              Got it!
+            </button>
           </div>
         </div>
       )}
