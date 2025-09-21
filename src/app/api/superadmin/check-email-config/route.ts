@@ -70,20 +70,11 @@ export async function GET() {
       }
     }
 
-    // Get auth configuration
-    const { data: authConfig } = await admin.auth.admin.getConfig()
-
     return NextResponse.json({
       ok: true,
       config,
       emailTest: emailTestResult,
-      authSettings: {
-        smtp_configured: authConfig?.smtp?.enable || false,
-        email_enabled: authConfig?.mailer?.autoconfirm === false,
-        site_url: authConfig?.site_url,
-        redirect_urls: authConfig?.redirect_urls
-      },
-      recommendations: getRecommendations(config, emailTestResult, authConfig)
+      recommendations: getRecommendations(config, emailTestResult)
     })
   } catch (error) {
     console.error('[check-email-config] Unexpected error:', error)
@@ -95,7 +86,7 @@ export async function GET() {
   }
 }
 
-function getRecommendations(config: any, emailTest: any, authConfig: any) {
+function getRecommendations(config: any, emailTest: any) {
   const recommendations = []
 
   if (!config.hasServiceKey) {
@@ -106,19 +97,28 @@ function getRecommendations(config: any, emailTest: any, authConfig: any) {
     recommendations.push('⚠️ Set NEXT_PUBLIC_SITE_URL or APP_URL for proper email redirects')
   }
 
-  if (!authConfig?.smtp?.enable) {
-    recommendations.push('❌ SMTP not configured in Supabase. Emails will not be sent in production.')
-    recommendations.push('   Go to Supabase Dashboard → Settings → Auth → SMTP Settings')
-    recommendations.push('   Or use a service like SendGrid, Resend, or AWS SES')
-  }
-
   if (emailTest.inviteError?.code === 'over_email_send_rate_limit') {
     recommendations.push('⚠️ Email rate limit reached. Default Supabase limit is 4 emails/hour')
     recommendations.push('   Configure custom SMTP to remove this limit')
+    recommendations.push('   Go to Supabase Dashboard → Settings → Auth → SMTP Settings')
   }
 
   if (!emailTest.inviteSuccess && emailTest.inviteError) {
     recommendations.push(`❌ Email invite failed: ${emailTest.inviteError.message}`)
+
+    if (emailTest.inviteError.message?.includes('SMTP')) {
+      recommendations.push('   Configure SMTP in Supabase Dashboard → Settings → Auth → SMTP Settings')
+    }
+  }
+
+  if (emailTest.inviteSuccess) {
+    recommendations.push('✅ Email invite test successful!')
+    if (emailTest.emailDetails?.confirmation_sent_at) {
+      recommendations.push('✅ Confirmation email was sent')
+    } else {
+      recommendations.push('⚠️ User created but confirmation email may not have been sent')
+      recommendations.push('   Check SMTP configuration in Supabase')
+    }
   }
 
   if (recommendations.length === 0) {
