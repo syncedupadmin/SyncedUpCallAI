@@ -1,10 +1,32 @@
 'use client';
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
+import { UserNav } from '@/components/UserNav';
+import { useAgencyContext, useCurrentAgency } from '@/contexts/AgencyContext';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 export default function LibraryPage() {
-  const { data, error, isLoading } = useSWR('/api/ui/library/simple', url => fetch(url).then(r => r.json()));
+  const { selectedAgencyId, loading: agencyLoading } = useAgencyContext();
+  const currentAgency = useCurrentAgency();
+  const router = useRouter();
+  const supabase = createClient();
+
+  // Modify the SWR call to include agency filtering when selectedAgencyId is available
+  const { data, error, isLoading } = useSWR(
+    selectedAgencyId ? `/api/ui/library/simple?agencyId=${selectedAgencyId}` : null,
+    url => fetch(url).then(r => r.json())
+  );
   const [activeTab, setActiveTab] = useState<'best' | 'worst' | 'recent'>('best');
+
+  useEffect(() => {
+    // Check authentication
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push('/login');
+      }
+    });
+  }, []);
 
   const formatDuration = (seconds: number) => {
     if (!seconds) return '0s';
@@ -19,25 +41,39 @@ export default function LibraryPage() {
     return '#ef4444';
   };
 
-  return (
-    <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 40 }}>
-        <h1 style={{ 
-          fontSize: 32, 
-          fontWeight: 700,
-          background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          marginBottom: 8
-        }}>
-          Call Library
-        </h1>
-        <p style={{ color: '#6b6b7c', fontSize: 14 }}>
-          Curated collection of notable calls for training and quality assurance
-        </p>
+  if (agencyLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900">
+      <UserNav currentPath="/library" />
+
+      <div className="fade-in" style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: 40 }}>
+          <h1 style={{
+            fontSize: 32,
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #ffffff 0%, #a8a8b3 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            marginBottom: 8
+          }}>
+            Call Library
+          </h1>
+          <p style={{ color: '#6b6b7c', fontSize: 14 }}>
+            {currentAgency
+              ? `Curated collection of notable calls for ${currentAgency.agency_name}`
+              : 'Curated collection of notable calls for training and quality assurance'
+            }
+          </p>
+        </div>
 
       {/* Stats Cards */}
       <div style={{ 
@@ -211,6 +247,7 @@ export default function LibraryPage() {
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

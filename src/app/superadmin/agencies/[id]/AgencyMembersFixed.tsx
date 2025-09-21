@@ -27,7 +27,9 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
 
   // Form state
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'admin' | 'member'>('member')
+  const [name, setName] = useState('')
+  const [role, setRole] = useState<'admin' | 'agent'>('agent')
+  const [createNewUser, setCreateNewUser] = useState(false)
 
   const supabase = createClient()
 
@@ -98,37 +100,131 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
       return
     }
 
+    if (createNewUser && !name.trim()) {
+      toast.error('Please enter a name for the new user')
+      return
+    }
+
     setAdding(true)
     try {
-      // Use the new RPC that handles email lookup and adding in one call
-      const { data, error } = await supabase
-        .rpc('add_user_to_agency_by_email', {
-          p_agency: agencyId,
-          p_email: email.toLowerCase(),
-          p_role: role
-        })
+      if (createNewUser) {
+        // Create a new user and add them to the agency
+        const { data, error } = await supabase
+          .rpc('create_user_and_add_to_agency', {
+            p_email: email.toLowerCase(),
+            p_name: name,
+            p_agency_id: agencyId,
+            p_role: role ?? 'agent'
+          })
 
-      if (error) {
-        toast.error(error.message || 'Failed to add member')
-        return
+        if (error) {
+          // If the RPC doesn't exist, fall back to creating user then adding
+          if (error.message?.includes('function') || error.message?.includes('does not exist')) {
+            // First, create the user in profiles
+            const { data: newUser, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                email: email.toLowerCase(),
+                name: name
+              })
+              .select()
+              .single()
+
+            if (createError) {
+              if (createError.code === '23505' || createError.message?.includes('duplicate')) {
+                toast.error('A user with this email already exists. Uncheck "Create new user" to add them.')
+              } else {
+                toast.error('Failed to create user: ' + createError.message)
+              }
+              return
+            }
+
+            // Then add them to the agency
+            const { error: addError } = await supabase
+              .from('user_agencies')
+              .insert({
+                user_id: newUser.id,
+                agency_id: agencyId,
+                role: role
+              })
+
+            if (addError) {
+              toast.error('User created but failed to add to agency: ' + addError.message)
+              return
+            }
+
+            toast.success(`Successfully created user ${name} and added them to the agency`)
+          } else {
+            toast.error(error.message || 'Failed to create user')
+            return
+          }
+        } else {
+          toast.success(`Successfully created user ${name} and added them to the agency`)
+        }
+      } else {
+        // Add existing user by email lookup
+        const { data, error } = await supabase
+          .rpc('add_user_to_agency_by_email', {
+            p_agency: agencyId,
+            p_email: email.toLowerCase(),
+            p_role: role ?? 'agent'
+          })
+
+        if (error) {
+          // If RPC doesn't exist, try manual lookup
+          if (error.message?.includes('function') || error.message?.includes('does not exist')) {
+            // Look up user by email
+            const { data: user, error: lookupError } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', email.toLowerCase())
+              .single()
+
+            if (lookupError || !user) {
+              toast.error('User not found. Check the email or create a new user.')
+              return
+            }
+
+            // Add to agency
+            const { error: addError } = await supabase
+              .from('user_agencies')
+              .insert({
+                user_id: user.id,
+                agency_id: agencyId,
+                role: role
+              })
+
+            if (addError) {
+              if (addError.code === '23505' || addError.message?.includes('duplicate')) {
+                toast.error('User is already a member of this agency')
+              } else {
+                toast.error('Failed to add user to agency')
+              }
+              return
+            }
+
+            toast.success(`Successfully added ${email} to the agency`)
+          } else {
+            toast.error(error.message || 'Failed to add member')
+            return
+          }
+        } else if (data && !data.success) {
+          toast.error(data.error || 'Failed to add member')
+          return
+        } else {
+          toast.success(`Successfully added ${email} to the agency`)
+        }
       }
 
-      if (data && !data.success) {
-        toast.error(data.error || 'Failed to add member')
-        return
-      }
-
-      toast.success(`Successfully added ${email} to the agency`)
+      // Reset form
       setEmail('')
-      setRole('member')
+      setName('')
+      setRole('agent')
+      setCreateNewUser(false)
       await loadMembers()
     } catch (error: any) {
       console.error('Error adding member:', error)
-      if (error.message?.includes('duplicate key')) {
-        toast.error('User is already a member of this agency')
-      } else {
-        toast.error('Failed to add member')
-      }
+      toast.error('An unexpected error occurred')
     } finally {
       setAdding(false)
     }
@@ -195,38 +291,74 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
             <UserPlus className="h-5 w-5" />
             Add Member
           </h3>
-          <form onSubmit={handleAddMember} className="flex gap-3">
-            <div className="flex-1">
+
+          {/* Checkbox to toggle between adding existing vs creating new */}
+          <div className="mb-4">
+            <label className="flex items-center gap-2 text-sm">
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter user email"
+                type="checkbox"
+                checked={createNewUser}
+                onChange={(e) => setCreateNewUser(e.target.checked)}
                 disabled={adding}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
               />
+              <span className="text-gray-300">Create new user</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1 ml-6">
+              {createNewUser
+                ? "Create a brand new user and add them to this agency"
+                : "Add an existing user by their email address"}
+            </p>
+          </div>
+
+          <form onSubmit={handleAddMember} className="space-y-3">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  disabled={adding}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              {createNewUser && (
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full name"
+                    disabled={adding}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+                    required={createNewUser}
+                  />
+                </div>
+              )}
+
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'admin' | 'agent')}
+                disabled={adding}
+                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+              >
+                <option value="agent">Agent</option>
+                <option value="admin">Admin</option>
+              </select>
+
+              <button
+                type="submit"
+                disabled={adding}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {adding && <RefreshCw className="h-4 w-4 animate-spin" />}
+                {createNewUser ? 'Create & Add' : 'Add Member'}
+              </button>
             </div>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as 'admin' | 'member')}
-              disabled={adding}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button
-              type="submit"
-              disabled={adding}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {adding && <RefreshCw className="h-4 w-4 animate-spin" />}
-              Add Member
-            </button>
           </form>
-          <p className="text-xs text-gray-500 mt-2">
-            Add users who already have an account by entering their email address.
-          </p>
         </div>
 
         {/* Members Table */}
@@ -283,11 +415,13 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 text-xs rounded ${
-                          member.role === 'admin'
+                          member.role === 'owner'
+                            ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700'
+                            : member.role === 'admin'
                             ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
                             : 'bg-gray-800 text-gray-300'
                         } flex items-center gap-1 w-fit`}>
-                          {member.role === 'admin' && <Shield className="h-3 w-3" />}
+                          {(member.role === 'admin' || member.role === 'owner') && <Shield className="h-3 w-3" />}
                           {member.role}
                         </span>
                       </td>

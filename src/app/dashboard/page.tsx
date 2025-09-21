@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { UserNav } from '@/components/UserNav';
+import { useAgencyContext, useCurrentAgency } from '@/contexts/AgencyContext';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -30,42 +32,52 @@ export default function DashboardPage() {
 
   const supabase = createClient();
   const router = useRouter();
+  const { selectedAgencyId, loading: agencyLoading } = useAgencyContext();
+  const currentAgency = useCurrentAgency();
 
   const fetchDashboardData = async () => {
+    if (!selectedAgencyId) return;
+
     try {
-      // Fetch calls data
-      const response = await fetch('/api/calls');
-      if (response.ok) {
-        const data = await response.json();
+      // Fetch calls data filtered by agency
+      const { data: calls, error } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('agency_id', selectedAgencyId)
+        .order('created_at', { ascending: false });
 
-        // Calculate stats
-        const totalCalls = data.calls?.length || 0;
-        const avgDuration = totalCalls > 0
-          ? data.calls.reduce((acc: number, call: any) => acc + (call.duration || 0), 0) / totalCalls
-          : 0;
-
-        // Get today's calls
-        const today = new Date().toDateString();
-        const todayCalls = data.calls?.filter((call: any) =>
-          new Date(call.date).toDateString() === today
-        ).length || 0;
-
-        // Get unique agents
-        const uniqueAgents = new Set();
-        data.calls?.forEach((call: any) => {
-          if (call.agent) uniqueAgents.add(call.agent);
-        });
-
-        setStats({
-          totalCalls,
-          avgDuration: Math.round(avgDuration),
-          todayCalls,
-          activeAgents: uniqueAgents.size
-        });
-
-        // Get recent calls (last 10)
-        setRecentCalls(data.calls?.slice(0, 10) || []);
+      if (error) {
+        console.error('Error fetching calls:', error);
+        return;
       }
+
+      // Calculate stats
+      const totalCalls = calls?.length || 0;
+      const avgDuration = totalCalls > 0
+        ? calls.reduce((acc: number, call: any) => acc + (call.duration || 0), 0) / totalCalls
+        : 0;
+
+      // Get today's calls
+      const today = new Date().toDateString();
+      const todayCalls = calls?.filter((call: any) =>
+        new Date(call.created_at).toDateString() === today
+      ).length || 0;
+
+      // Get unique agents
+      const uniqueAgents = new Set();
+      calls?.forEach((call: any) => {
+        if (call.agent_name) uniqueAgents.add(call.agent_name);
+      });
+
+      setStats({
+        totalCalls,
+        avgDuration: Math.round(avgDuration),
+        todayCalls,
+        activeAgents: uniqueAgents.size
+      });
+
+      // Get recent calls (last 10)
+      setRecentCalls(calls?.slice(0, 10) || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -85,10 +97,16 @@ export default function DashboardPage() {
         router.push('/');
       } else {
         setUser(user);
-        fetchDashboardData();
       }
     });
   }, []);
+
+  // Fetch data when agency changes
+  useEffect(() => {
+    if (selectedAgencyId && !agencyLoading) {
+      fetchDashboardData();
+    }
+  }, [selectedAgencyId, agencyLoading]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -127,7 +145,7 @@ export default function DashboardPage() {
     }
   ];
 
-  if (isLoading) {
+  if (isLoading || agencyLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
@@ -137,39 +155,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900">
-      {/* Header */}
-      <nav className="border-b border-gray-800 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-8 h-8 text-cyan-400" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent">
-              SyncedUp AI
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-6">
-            <a href="/dashboard" className="text-gray-400 hover:text-white transition">
-              Dashboard
-            </a>
-            <a href="/search" className="text-gray-400 hover:text-white transition">
-              Search
-            </a>
-            <a href="/library" className="text-gray-400 hover:text-white transition">
-              Library
-            </a>
-            <a href="/kpi" className="text-gray-400 hover:text-white transition">
-              KPI
-            </a>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center space-x-2 text-gray-400 hover:text-white transition"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+      <UserNav currentPath="/dashboard" />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -183,7 +169,10 @@ export default function DashboardPage() {
             Welcome back, {user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'}!
           </h1>
           <p className="text-gray-400">
-            Here's your call center performance overview
+            {currentAgency
+              ? `Viewing ${currentAgency.agency_name} performance overview`
+              : 'Here\'s your call center performance overview'
+            }
           </p>
         </motion.div>
 
@@ -241,14 +230,14 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="font-medium text-white mb-1">
-                        {call.phone_number || 'Unknown Number'}
+                        {call.customer_phone || call.phone_number || 'Unknown Number'}
                       </div>
                       <div className="text-sm text-gray-400">
-                        Agent: {call.agent || 'Unknown'} • {formatDuration(call.duration || 0)}
+                        Agent: {call.agent_name || call.agent || 'Unknown'} • {formatDuration(call.duration || 0)}
                       </div>
                     </div>
                     <div className="text-sm text-gray-500">
-                      {new Date(call.date).toLocaleDateString()}
+                      {new Date(call.created_at || call.date).toLocaleDateString()}
                     </div>
                   </div>
                 </motion.a>

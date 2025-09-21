@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Calendar, Building2 } from 'lucide-react'
+import { AgencyHeader } from './AgencyHeader'
 import { AgencyMembers } from './AgencyMembersFixed'
 import { AgencySettings } from './AgencySettings'
 
@@ -31,36 +31,10 @@ export default async function AgencyDetailsPage({ params, searchParams }: PagePr
 
   const activeTab = searchParams.tab || 'members'
 
-  const formatDate = (date: string) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(new Date(date))
-  }
-
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Building2 className="h-8 w-8" />
-              {agency.name}
-            </h1>
-            {agency.slug && (
-              <p className="text-gray-400 mt-2">
-                Slug: <span className="font-mono bg-gray-800 px-2 py-1 rounded text-sm">{agency.slug}</span>
-              </p>
-            )}
-          </div>
-          <div className="text-sm text-gray-400 flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Created {formatDate(agency.created_at)}
-          </div>
-        </div>
-      </div>
+      <AgencyHeader agency={agency} />
 
       {/* Tabs */}
       <div className="mb-6">
