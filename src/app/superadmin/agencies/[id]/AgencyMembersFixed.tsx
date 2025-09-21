@@ -108,59 +108,26 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
     setAdding(true)
     try {
       if (createNewUser) {
-        // Create a new user and add them to the agency
-        const { data, error } = await supabase
-          .rpc('create_user_and_add_to_agency', {
-            p_email: email.toLowerCase(),
-            p_name: name,
-            p_agency_id: agencyId,
-            p_role: role ?? 'agent'
+        // Use the new API route to invite and add user
+        const res = await fetch('/api/superadmin/invite-and-add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.toLowerCase(),
+            name,
+            agencyId,
+            role
           })
+        })
 
-        if (error) {
-          // If the RPC doesn't exist, fall back to creating user then adding
-          if (error.message?.includes('function') || error.message?.includes('does not exist')) {
-            // First, create the user in profiles
-            const { data: newUser, error: createError } = await supabase
-              .from('profiles')
-              .insert({
-                email: email.toLowerCase(),
-                name: name
-              })
-              .select()
-              .single()
+        const json = await res.json()
 
-            if (createError) {
-              if (createError.code === '23505' || createError.message?.includes('duplicate')) {
-                toast.error('A user with this email already exists. Uncheck "Create new user" to add them.')
-              } else {
-                toast.error('Failed to create user: ' + createError.message)
-              }
-              return
-            }
-
-            // Then add them to the agency
-            const { error: addError } = await supabase
-              .from('user_agencies')
-              .insert({
-                user_id: newUser.id,
-                agency_id: agencyId,
-                role: role
-              })
-
-            if (addError) {
-              toast.error('User created but failed to add to agency: ' + addError.message)
-              return
-            }
-
-            toast.success(`Successfully created user ${name} and added them to the agency`)
-          } else {
-            toast.error(error.message || 'Failed to create user')
-            return
-          }
-        } else {
-          toast.success(`Successfully created user ${name} and added them to the agency`)
+        if (!res.ok || !json.ok) {
+          toast.error(json.error || 'Failed to invite user')
+          return
         }
+
+        toast.success(`Successfully invited ${name || email} and added them to the agency`)
       } else {
         // Add existing user by email lookup
         const { data, error } = await supabase
