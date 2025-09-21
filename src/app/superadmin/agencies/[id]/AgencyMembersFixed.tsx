@@ -110,6 +110,7 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
     setAdding(true)
     try {
       if (createNewUser) {
+        console.log('Creating new user with invite...')
         // Use the new API route to invite and add user
         const res = await fetch('/api/superadmin/invite-and-add', {
           method: 'POST',
@@ -123,14 +124,30 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
         })
 
         const json = await res.json()
-        console.log('Invite response:', json)
+        console.log('Full invite response:', {
+          status: res.status,
+          ok: res.ok,
+          json
+        })
 
         if (!res.ok || !json.ok) {
-          console.error('Failed to invite user:', json)
-          toast.error(json.error || 'Failed to invite user')
+          console.error('Failed to invite user - Full details:', {
+            status: res.status,
+            response: json,
+            error: json.error,
+            details: json.details
+          })
+
+          // Show more detailed error
+          const errorMessage = json.details?.code === 'email_exists'
+            ? 'A user with this email already exists. Try unchecking "Create new user" to add them.'
+            : json.error || 'Failed to invite user. Check console for details.'
+
+          toast.error(errorMessage)
           return
         }
 
+        console.log('Success! Showing modal...')
         // Show success modal for invite
         setSuccessMessage({
           email: email.toLowerCase(),
@@ -138,6 +155,7 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
           isInvite: true
         })
         setShowSuccessModal(true)
+        console.log('Modal state set:', { showSuccessModal: true })
       } else {
         // Add existing user by email lookup using RPC only
         const { data, error } = await supabase

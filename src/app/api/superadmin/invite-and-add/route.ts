@@ -38,6 +38,9 @@ export async function POST(req: Request) {
     console.log('[invite-and-add] Using redirectTo:', redirectTo)
 
     // 1) Invite the user via Supabase Auth Admin API
+    console.log('[invite-and-add] Attempting to invite user with email:', email)
+    console.log('[invite-and-add] Admin client created, calling inviteUserByEmail...')
+
     const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       data: {
         name: name || email.split('@')[0]
@@ -45,24 +48,50 @@ export async function POST(req: Request) {
       redirectTo
     })
 
+    console.log('[invite-and-add] Invite response:', {
+      hasData: !!invited,
+      hasError: !!inviteErr,
+      errorMessage: inviteErr?.message,
+      userId: invited?.user?.id,
+      userEmail: invited?.user?.email
+    })
+
     if (inviteErr) {
-      console.error('[invite-and-add] Failed to invite user:', inviteErr)
+      console.error('[invite-and-add] Failed to invite user - Full error:', {
+        message: inviteErr.message,
+        status: inviteErr.status,
+        code: inviteErr.code,
+        name: inviteErr.name
+      })
       return NextResponse.json(
-        { ok: false, error: inviteErr.message },
+        {
+          ok: false,
+          error: inviteErr.message,
+          details: {
+            code: inviteErr.code,
+            status: inviteErr.status
+          }
+        },
         { status: 400 }
       )
     }
 
-    const userId = invited.user?.id
+    const userId = invited?.user?.id
     if (!userId) {
-      console.error('[invite-and-add] No user ID returned from invitation')
+      console.error('[invite-and-add] No user ID returned from invitation. Full response:', invited)
       return NextResponse.json(
         { ok: false, error: 'Failed to create user - no ID returned' },
         { status: 500 }
       )
     }
 
-    console.log('[invite-and-add] User invited successfully, ID:', userId)
+    console.log('[invite-and-add] User created/invited successfully, ID:', userId)
+    console.log('[invite-and-add] User details:', {
+      id: invited.user.id,
+      email: invited.user.email,
+      email_confirmed_at: invited.user.email_confirmed_at,
+      confirmation_sent_at: invited.user.confirmation_sent_at
+    })
 
     // 2) Add user to profiles table
     const { error: profileError } = await admin
