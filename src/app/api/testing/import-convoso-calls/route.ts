@@ -30,39 +30,39 @@ export async function POST(req: NextRequest) {
     }
 
     // Check Convoso credentials
-    if (!process.env.CONVOSO_API_KEY || !process.env.CONVOSO_API_SECRET) {
+    const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
+    if (!CONVOSO_AUTH_TOKEN) {
       return NextResponse.json(
-        { error: 'Convoso API credentials not configured' },
+        { error: 'Convoso AUTH_TOKEN not configured' },
         { status: 500 }
       );
     }
 
     console.log('[Convoso Import] Fetching recent calls from Convoso...');
 
-    // Step 1: Get recent calls from Convoso
+    // Step 1: Get recent calls from Convoso using the working /log/retrieve endpoint
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days_back);
     const endDate = new Date();
 
-    const convosoUrl = `https://api.convoso.com/v1/calls/search`;
-    const authHeader = `Basic ${Buffer.from(`${process.env.CONVOSO_API_KEY}:${process.env.CONVOSO_API_SECRET}`).toString('base64')}`;
+    // Format dates exactly like the working ConvosoService
+    const formatDateTime = (date: Date, isEnd: boolean = false) => {
+      const dateStr = date.toISOString().split('T')[0];
+      return isEnd ? `${dateStr} 23:59:59` : `${dateStr} 00:00:00`;
+    };
 
-    const convosoResponse = await fetch(convosoUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        limit: limit * 2, // Get extra to filter
-        sort: 'call_date',
-        sort_order: 'desc',
-        include_recordings: true
-      })
+    const params = new URLSearchParams({
+      auth_token: CONVOSO_AUTH_TOKEN,
+      start_time: formatDateTime(startDate),
+      end_time: formatDateTime(endDate, true),
+      include_recordings: '1',
+      limit: String(limit * 2), // Get extra to filter
+      offset: '0'
     });
+
+    const convosoUrl = `https://api.convoso.com/v1/log/retrieve?${params.toString()}`;
+
+    const convosoResponse = await fetch(convosoUrl);
 
     if (!convosoResponse.ok) {
       const errorText = await convosoResponse.text();
@@ -74,7 +74,17 @@ export async function POST(req: NextRequest) {
     }
 
     const convosoData = await convosoResponse.json();
-    const convosoCalls = convosoData.data || convosoData.calls || [];
+
+    // Check for API error (matching ConvosoService)
+    if (convosoData.success === false) {
+      console.error('[Convoso Import] API returned failure:', convosoData.text);
+      return NextResponse.json(
+        { error: convosoData.text || 'Convoso API returned failure' },
+        { status: 502 }
+      );
+    }
+
+    const convosoCalls = convosoData.data?.results || [];
 
     if (convosoCalls.length === 0) {
       return NextResponse.json({
@@ -84,15 +94,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Step 2: Filter calls suitable for testing
+    // Step 2: Filter calls suitable for testing (matching log/retrieve format)
     const testCandidates = convosoCalls.filter((call: any) => {
-      const duration = call.duration || call.talk_time || 0;
-      return (
-        duration >= min_duration &&
-        duration <= max_duration &&
-        call.recording_url &&
-        (call.disposition !== 'No Answer' && call.disposition !== 'Busy')
-      );
+      // Parse duration - it might be null, string, or number
+      const duration = call.call_length ? parseInt(call.call_length) : 0;
+
+      // Check for recording URL in various formats
+      const hasRecording = call.recording && call.recording.length > 0 &&
+                          (call.recording[0].public_url ||
+                           call.recording[0].src ||
+                           call.recording[0].url);
+
+      // Skip certain dispositions but be less restrictive
+      const skipDispositions = ['Call in Progress', 'No Answer AutoDial'];
+      const disposition = call.status_name || call.status || '';
+
+      // Allow calls with valid duration OR valid recording
+      // Be more lenient to get some test data
+      return hasRecording &&
+             !skipDispositions.includes(disposition) &&
+             (duration === 0 || (duration >= min_duration && duration <= max_duration));
     }).slice(0, limit);
 
     console.log(`[Convoso Import] Found ${testCandidates.length} suitable calls for testing`);
@@ -104,19 +125,25 @@ export async function POST(req: NextRequest) {
     for (const convosoCall of testCandidates) {
       try {
         // First, check if this call already exists in our system
+        // Extract recording URL from log/retrieve format
+        const recordingUrl = convosoCall.recording?.[0]?.public_url ||
+                           convosoCall.recording?.[0]?.src ||
+                           convosoCall.recording?.[0]?.url || '';
+        const convosoCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
+
         const existingCall = await db.oneOrNone(`
           SELECT id FROM calls
           WHERE convoso_call_id = $1
           OR (recording_url = $2 AND recording_url IS NOT NULL)
-        `, [convosoCall.call_id, convosoCall.recording_url]);
+        `, [convosoCallId, recordingUrl]);
 
         let callId;
 
         if (existingCall) {
           callId = existingCall.id;
-          console.log(`[Convoso Import] Call ${convosoCall.call_id} already exists as ${callId}`);
+          console.log(`[Convoso Import] Call ${convosoCallId} already exists as ${callId}`);
         } else {
-          // Create a new call record
+          // Create a new call record (using log/retrieve data structure)
           const newCall = await db.one(`
             INSERT INTO calls (
               convoso_call_id,
@@ -132,17 +159,17 @@ export async function POST(req: NextRequest) {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), false)
             RETURNING id
           `, [
-            convosoCall.call_id,
-            convosoCall.recording_url,
-            convosoCall.duration || convosoCall.talk_time,
-            convosoCall.agent_name || convosoCall.agent,
-            convosoCall.campaign || convosoCall.queue,
-            convosoCall.disposition,
+            convosoCallId,
+            recordingUrl,
+            convosoCall.call_length ? parseInt(convosoCall.call_length) : 30, // Default to 30 seconds if null
+            convosoCall.user || 'Unknown',
+            convosoCall.campaign || 'Unknown Campaign',
+            convosoCall.status_name || convosoCall.status || 'UNKNOWN',
             'outbound',
-            convosoCall.call_date || convosoCall.start_time || new Date().toISOString()
+            convosoCall.call_date || new Date().toISOString()
           ]);
           callId = newCall.id;
-          console.log(`[Convoso Import] Created new call ${callId} from Convoso ${convosoCall.call_id}`);
+          console.log(`[Convoso Import] Created new call ${callId} from Convoso ${convosoCallId}`);
 
           // Trigger transcription
           await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/api/jobs/transcribe`, {
@@ -153,7 +180,7 @@ export async function POST(req: NextRequest) {
             },
             body: JSON.stringify({
               callId: callId,
-              recordingUrl: convosoCall.recording_url
+              recordingUrl: recordingUrl
             })
           });
         }
@@ -185,16 +212,17 @@ export async function POST(req: NextRequest) {
           RETURNING id
         `, [
           suite_id,
-          `Convoso Call - ${convosoCall.agent_name || 'Unknown'} - ${convosoCall.disposition}`,
-          convosoCall.recording_url,
-          convosoCall.duration || convosoCall.talk_time,
+          `Convoso Call - ${convosoCall.user || 'Unknown'} - ${convosoCall.status_name || 'Unknown'}`,
+          recordingUrl,
+          convosoCall.call_length ? parseInt(convosoCall.call_length) : 30,
           determineTestCategory(convosoCall),
           JSON.stringify({
-            convoso_call_id: convosoCall.call_id,
-            agent: convosoCall.agent_name,
+            convoso_call_id: convosoCallId,
+            agent: convosoCall.user,
             campaign: convosoCall.campaign,
-            disposition: convosoCall.disposition,
+            disposition: convosoCall.status_name || convosoCall.status,
             phone: convosoCall.phone_number,
+            lead_id: convosoCall.lead_id,
             imported_from: 'convoso_direct'
           }),
           3, // Medium difficulty by default
@@ -205,15 +233,16 @@ export async function POST(req: NextRequest) {
         imported.push({
           test_case_id: testCase.id,
           call_id: callId,
-          convoso_id: convosoCall.call_id,
-          agent: convosoCall.agent_name,
-          duration: convosoCall.duration
+          convoso_id: convosoCallId,
+          agent: convosoCall.user,
+          duration: convosoCall.call_length ? parseInt(convosoCall.call_length) : 30
         });
 
       } catch (error: any) {
-        console.error(`[Convoso Import] Failed to import call ${convosoCall.call_id}:`, error);
+        const failedCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
+        console.error(`[Convoso Import] Failed to import call ${failedCallId}:`, error);
         failed.push({
-          convoso_id: convosoCall.call_id,
+          convoso_id: failedCallId,
           error: error.message
         });
       }
@@ -253,37 +282,45 @@ export async function GET(req: NextRequest) {
 
   try {
     // Check if Convoso credentials are configured
-    const hasCredentials = !!(process.env.CONVOSO_API_KEY && process.env.CONVOSO_API_SECRET);
+    const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
+    const hasCredentials = !!CONVOSO_AUTH_TOKEN;
 
     if (!hasCredentials) {
       return NextResponse.json({
         connected: false,
-        message: 'Convoso API credentials not configured',
+        message: 'Convoso AUTH_TOKEN not configured',
         setup_instructions: [
-          '1. Add CONVOSO_API_KEY to your .env.local',
-          '2. Add CONVOSO_API_SECRET to your .env.local',
+          '1. Add CONVOSO_AUTH_TOKEN to your .env.local',
+          '2. The token should be: 8nf3i9mmzoxidg3ntm28gbxvlhdiqo3p',
           '3. Restart the development server'
         ]
       });
     }
 
-    // Test the connection
-    const authHeader = `Basic ${Buffer.from(`${process.env.CONVOSO_API_KEY}:${process.env.CONVOSO_API_SECRET}`).toString('base64')}`;
-
-    const testResponse = await fetch('https://api.convoso.com/v1/account', {
-      headers: {
-        'Authorization': authHeader,
-        'Accept': 'application/json'
-      }
+    // Test the connection using a simple API call
+    const params = new URLSearchParams({
+      auth_token: CONVOSO_AUTH_TOKEN,
+      limit: '1',
+      offset: '0'
     });
 
+    const testResponse = await fetch(`https://api.convoso.com/v1/log/retrieve?${params.toString()}`);
+
     if (testResponse.ok) {
-      const accountData = await testResponse.json();
-      return NextResponse.json({
-        connected: true,
-        message: 'Convoso API connected successfully',
-        account: accountData.account_name || 'Unknown'
-      });
+      const data = await testResponse.json();
+      if (data.success !== false) {
+        return NextResponse.json({
+          connected: true,
+          message: 'Convoso API connected successfully',
+          account: 'Connected'
+        });
+      } else {
+        return NextResponse.json({
+          connected: false,
+          message: `Convoso API error: ${data.text || 'Authentication failed'}`,
+          error: data.text
+        });
+      }
     } else {
       return NextResponse.json({
         connected: false,
@@ -305,15 +342,16 @@ export async function GET(req: NextRequest) {
  * Determine test category based on call characteristics
  */
 function determineTestCategory(call: any): string {
-  const duration = call.duration || call.talk_time || 0;
+  const duration = call.call_length ? parseInt(call.call_length) : 30;
 
   if (duration < 15) return 'rejection_immediate';
   if (duration < 30) return 'short_call';
   if (duration > 180) return 'long_conversation';
 
-  if (call.disposition === 'Sale' || call.disposition === 'SOLD') return 'successful_sale';
-  if (call.disposition === 'Callback') return 'callback_scheduled';
-  if (call.disposition === 'Not Interested') return 'rejection_handled';
+  const disposition = call.status_name || call.status || '';
+  if (disposition === 'Sale' || disposition === 'SOLD') return 'successful_sale';
+  if (disposition === 'Callback') return 'callback_scheduled';
+  if (disposition === 'Not Interested') return 'rejection_handled';
 
   return 'multiple_speakers'; // Default category
 }

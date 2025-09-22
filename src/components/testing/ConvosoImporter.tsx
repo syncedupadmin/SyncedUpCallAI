@@ -131,7 +131,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
           </h2>
           <button
             onClick={() => setIsOpen(false)}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-700 hover:text-gray-600"
           >
             <XCircle className="w-6 h-6" />
           </button>
@@ -146,7 +146,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <div>
                     <p className="font-medium text-gray-900">Connected to Convoso</p>
-                    <p className="text-sm text-gray-500">{connectionStatus.account}</p>
+                    <p className="text-sm text-gray-800">{connectionStatus.account}</p>
                   </div>
                 </>
               ) : connectionStatus ? (
@@ -154,13 +154,13 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   <XCircle className="w-5 h-5 text-red-500" />
                   <div>
                     <p className="font-medium text-gray-900">Not Connected</p>
-                    <p className="text-sm text-gray-500">{connectionStatus.message}</p>
+                    <p className="text-sm text-gray-800">{connectionStatus.message}</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <AlertCircle className="w-5 h-5 text-gray-400" />
-                  <p className="text-gray-500">Checking connection...</p>
+                  <AlertCircle className="w-5 h-5 text-gray-700" />
+                  <p className="text-gray-800">Checking connection...</p>
                 </>
               )}
             </div>

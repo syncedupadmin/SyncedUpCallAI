@@ -101,7 +101,7 @@ export default function TestingDashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">AI Testing Dashboard</h1>
-              <p className="text-sm text-gray-500 mt-1">Test and improve your transcription & analysis accuracy</p>
+              <p className="text-sm text-gray-900 mt-1">Test and improve your transcription & analysis accuracy</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -129,7 +129,7 @@ export default function TestingDashboard() {
                 className={`py-3 px-1 border-b-2 font-medium text-sm capitalize ${
                   activeTab === tab
                     ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-gray-900 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
                 {tab}
@@ -362,16 +362,16 @@ export default function TestingDashboard() {
                   <div key={suite.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
                     <div className="flex-1">
                       <h3 className="text-sm font-medium text-gray-900">{suite.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{suite.description}</p>
+                      <p className="text-sm text-gray-900 mt-1">{suite.description}</p>
                       <div className="flex gap-4 mt-2">
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-900">
                           {suite.test_case_count} tests
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-900">
                           {suite.total_runs} runs
                         </span>
                         {suite.avg_wer_all_runs && (
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-900">
                             Avg WER: {(suite.avg_wer_all_runs * 100).toFixed(1)}%
                           </span>
                         )}
@@ -466,10 +466,10 @@ function MetricCard({
         )}
       </div>
       <div className="mt-4">
-        <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+        <h3 className="text-sm font-medium text-gray-900">{title}</h3>
         <p className="text-2xl font-semibold text-gray-900 mt-1">{value}</p>
         {subtitle && (
-          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          <p className="text-sm text-gray-900 mt-1">{subtitle}</p>
         )}
       </div>
     </div>
@@ -484,7 +484,7 @@ function TestResultsView() {
         <h2 className="text-lg font-semibold">Recent Test Results</h2>
       </div>
       <div className="px-6 py-4">
-        <p className="text-sm text-gray-500">Test results will appear here when tests are run</p>
+        <p className="text-sm text-gray-900">Test results will appear here when tests are run</p>
       </div>
     </div>
   );
@@ -504,16 +504,16 @@ function MetricsView({ metricsData }: any) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                     Tests
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                     Avg WER
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                     Quality Distribution
                   </th>
                 </tr>
@@ -524,10 +524,10 @@ function MetricsView({ metricsData }: any) {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {cat.test_category}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cat.test_count}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {(cat.avg_wer * 100).toFixed(1)}%
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -559,13 +559,13 @@ function MetricsView({ metricsData }: any) {
                   <div className="flex-1">
                     <h3 className="text-sm font-medium text-gray-900">{engine.engine}</h3>
                     <div className="flex gap-4 mt-1">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-900">
                         WER: {(engine.avg_wer * 100).toFixed(1)}%
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-900">
                         Speed: {engine.avg_time_ms}ms
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-900">
                         Cost: ${engine.total_cost_dollars?.toFixed(2) || '0.00'}
                       </span>
                     </div>
@@ -604,7 +604,7 @@ function FeedbackView({ feedbackData }: any) {
                       {item.error_category || 'Uncategorized'}
                     </span>
                     {item.error_severity && (
-                      <span className="ml-2 text-xs text-gray-500">
+                      <span className="ml-2 text-xs text-gray-900">
                         ({item.error_severity})
                       </span>
                     )}
@@ -620,7 +620,7 @@ function FeedbackView({ feedbackData }: any) {
                         {item.thumbs_down}
                       </span>
                     </div>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-gray-900">
                       {item.count} occurrences
                     </span>
                   </div>
@@ -628,7 +628,7 @@ function FeedbackView({ feedbackData }: any) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No feedback data available</p>
+            <p className="text-sm text-gray-900">No feedback data available</p>
           )}
         </div>
       </div>

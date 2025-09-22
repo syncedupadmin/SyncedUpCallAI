@@ -7,8 +7,7 @@ Add these to your `.env.local` file:
 
 ```env
 # Existing (you should already have these)
-CONVOSO_API_KEY=your_convoso_api_key
-CONVOSO_API_SECRET=your_convoso_api_secret
+CONVOSO_AUTH_TOKEN=8nf3i9mmzoxidg3ntm28gbxvlhdiqo3p
 OPENAI_API_KEY=your_openai_key
 DEEPGRAM_API_KEY=your_deepgram_key
 JOBS_SECRET=your_jobs_secret
