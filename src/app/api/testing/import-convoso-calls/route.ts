@@ -17,9 +17,7 @@ export async function POST(req: NextRequest) {
     const {
       suite_id,
       days_back = 1,
-      limit = 10,
-      min_duration = 10,
-      max_duration = 300
+      limit = 10
     } = await req.json();
 
     if (!suite_id) {
@@ -51,12 +49,14 @@ export async function POST(req: NextRequest) {
       return isEnd ? `${dateStr} 23:59:59` : `${dateStr} 00:00:00`;
     };
 
+    // Fetch more calls to find ones with recordings (most don't have recordings)
+    const fetchLimit = 100;  // Balanced to avoid timeout but get enough calls
     const params = new URLSearchParams({
       auth_token: CONVOSO_AUTH_TOKEN,
       start_time: formatDateTime(startDate),
       end_time: formatDateTime(endDate, true),
       include_recordings: '1',
-      limit: String(limit * 2), // Get extra to filter
+      limit: String(fetchLimit),
       offset: '0'
     });
 
@@ -85,6 +85,9 @@ export async function POST(req: NextRequest) {
     }
 
     const convosoCalls = convosoData.data?.results || [];
+    const totalFound = convosoData.data?.total_found || 0;
+
+    console.log(`[Convoso Import] Found ${totalFound} total calls, fetched ${convosoCalls.length} in this page`);
 
     if (convosoCalls.length === 0) {
       return NextResponse.json({
@@ -94,28 +97,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Step 2: Filter calls suitable for testing (matching log/retrieve format)
+    // Step 2: Filter calls suitable for testing - BE VERY LENIENT like the working system
+    let callsWithRecordings = 0;
+    let callsInProgress = 0;
+
     const testCandidates = convosoCalls.filter((call: any) => {
-      // Parse duration - it might be null, string, or number
-      const duration = call.call_length ? parseInt(call.call_length) : 0;
+      // Check for ANY recording URL format (like the working system: src/app/api/convoso/search-by-agent/route.ts:79)
+      const hasRecording = call.recording &&
+                          call.recording.length > 0 &&
+                          (call.recording[0].public_url || call.recording[0].src);
 
-      // Check for recording URL in various formats
-      const hasRecording = call.recording && call.recording.length > 0 &&
-                          (call.recording[0].public_url ||
-                           call.recording[0].src ||
-                           call.recording[0].url);
+      if (hasRecording) callsWithRecordings++;
 
-      // Skip certain dispositions but be less restrictive
-      const skipDispositions = ['Call in Progress', 'No Answer AutoDial'];
+      // Very minimal filtering - just skip calls that are definitely in progress
+      const skipDispositions = ['Call in Progress'];
       const disposition = call.status_name || call.status || '';
 
-      // Allow calls with valid duration OR valid recording
-      // Be more lenient to get some test data
-      return hasRecording &&
-             !skipDispositions.includes(disposition) &&
-             (duration === 0 || (duration >= min_duration && duration <= max_duration));
+      if (skipDispositions.includes(disposition)) callsInProgress++;
+
+      // Be VERY lenient - accept anything with a recording
+      return hasRecording && !skipDispositions.includes(disposition);
     }).slice(0, limit);
 
+    console.log(`[Convoso Import] Stats: ${callsWithRecordings} calls have recordings, ${callsInProgress} in progress`);
     console.log(`[Convoso Import] Found ${testCandidates.length} suitable calls for testing`);
 
     // Step 3: Import each call
@@ -125,17 +129,16 @@ export async function POST(req: NextRequest) {
     for (const convosoCall of testCandidates) {
       try {
         // First, check if this call already exists in our system
-        // Extract recording URL from log/retrieve format
+        // Extract recording URL EXACTLY like the working system (src/app/api/convoso/search-by-agent/route.ts:79)
         const recordingUrl = convosoCall.recording?.[0]?.public_url ||
-                           convosoCall.recording?.[0]?.src ||
-                           convosoCall.recording?.[0]?.url || '';
+                           convosoCall.recording?.[0]?.src || '';
         const convosoCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
 
         const existingCall = await db.oneOrNone(`
           SELECT id FROM calls
-          WHERE convoso_call_id = $1
+          WHERE call_id = $1
           OR (recording_url = $2 AND recording_url IS NOT NULL)
-        `, [convosoCallId, recordingUrl]);
+        `, [`convoso_${convosoCallId}`, recordingUrl]);
 
         let callId;
 
@@ -143,30 +146,45 @@ export async function POST(req: NextRequest) {
           callId = existingCall.id;
           console.log(`[Convoso Import] Call ${convosoCallId} already exists as ${callId}`);
         } else {
-          // Create a new call record (using log/retrieve data structure)
+          // Create a new call record matching the working schema (src/lib/convoso-service.ts:550)
           const newCall = await db.one(`
             INSERT INTO calls (
-              convoso_call_id,
+              call_id,
+              convoso_lead_id,
+              lead_id,
               recording_url,
               duration_sec,
               agent_name,
               campaign,
               disposition,
-              direction,
               started_at,
+              ended_at,
               created_at,
-              is_test
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), false)
+              analyzed_at,
+              office_id,
+              source,
+              phone_number,
+              metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12, $13, $14)
             RETURNING id
           `, [
-            convosoCallId,
-            recordingUrl,
-            convosoCall.call_length ? parseInt(convosoCall.call_length) : 30, // Default to 30 seconds if null
-            convosoCall.user || 'Unknown',
-            convosoCall.campaign || 'Unknown Campaign',
-            convosoCall.status_name || convosoCall.status || 'UNKNOWN',
-            'outbound',
-            convosoCall.call_date || new Date().toISOString()
+            `convoso_${convosoCallId}`,  // call_id
+            convosoCall.lead_id,          // convoso_lead_id
+            convosoCall.lead_id,          // lead_id
+            recordingUrl,                  // recording_url
+            convosoCall.call_length ? parseInt(convosoCall.call_length) : 30, // duration_sec
+            convosoCall.user || 'Unknown', // agent_name
+            convosoCall.campaign || 'Unknown Campaign', // campaign
+            convosoCall.status_name || convosoCall.status || 'UNKNOWN', // disposition
+            convosoCall.call_date || new Date().toISOString(), // started_at
+            convosoCall.call_date || new Date().toISOString(), // ended_at
+            1, // office_id
+            'test_import', // source
+            convosoCall.phone_number || '', // phone_number
+            JSON.stringify({ // metadata
+              imported_for_testing: true,
+              test_import_date: new Date().toISOString()
+            })
           ]);
           callId = newCall.id;
           console.log(`[Convoso Import] Created new call ${callId} from Convoso ${convosoCallId}`);
@@ -339,19 +357,23 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Determine test category based on call characteristics
+ * Determine test category based on call characteristics - using valid enum values
  */
 function determineTestCategory(call: any): string {
   const duration = call.call_length ? parseInt(call.call_length) : 30;
-
-  if (duration < 15) return 'rejection_immediate';
-  if (duration < 30) return 'short_call';
-  if (duration > 180) return 'long_conversation';
-
   const disposition = call.status_name || call.status || '';
-  if (disposition === 'Sale' || disposition === 'SOLD') return 'successful_sale';
-  if (disposition === 'Callback') return 'callback_scheduled';
-  if (disposition === 'Not Interested') return 'rejection_handled';
 
-  return 'multiple_speakers'; // Default category
+  // Map to VALID test categories from the database constraint
+  if (duration < 5) return 'dead_air';
+  if (duration < 15) return 'rejection_immediate';
+
+  // Map dispositions to valid categories
+  if (disposition.toLowerCase().includes('voicemail')) return 'voicemail';
+  if (disposition.toLowerCase().includes('wrong')) return 'wrong_number';
+  if (disposition.toLowerCase().includes('not interested') || disposition.toLowerCase().includes('no')) {
+    return duration > 30 ? 'rejection_with_rebuttal' : 'rejection_immediate';
+  }
+
+  // Default to phone_quality since all Convoso calls are phone calls
+  return 'phone_quality';
 }
