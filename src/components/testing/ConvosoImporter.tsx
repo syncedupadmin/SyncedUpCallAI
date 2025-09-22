@@ -210,7 +210,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   ...importOptions,
                   days_back: parseInt(e.target.value) || 1
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -227,7 +227,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   ...importOptions,
                   limit: parseInt(e.target.value) || 10
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -244,7 +244,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   ...importOptions,
                   min_duration: parseInt(e.target.value) || 10
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -261,7 +261,7 @@ export default function ConvosoImporter({ suiteId, onImport }: ConvosoImporterPr
                   ...importOptions,
                   max_duration: parseInt(e.target.value) || 300
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>
