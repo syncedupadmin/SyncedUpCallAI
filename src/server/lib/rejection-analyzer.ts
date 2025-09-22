@@ -271,7 +271,7 @@ function generateCoachingNotes(analysis: Partial<RejectionAnalysisResult>): stri
     notes.push('Opening not delivered - ensure agent completes greeting before customer speaks');
   }
 
-  if (analysis.rejection_severity === 'hostile' && analysis.professionalism_score > 80) {
+  if (analysis.rejection_severity === 'hostile' && analysis.professionalism_score && analysis.professionalism_score > 80) {
     notes.push('Good job maintaining professionalism with hostile customer');
   }
 
