@@ -126,6 +126,23 @@ export async function runTestSuite(
               AND created_at >= NOW() - INTERVAL '1 minute'
           `, [suiteRunId, testCase.id]);
 
+          // Validate audio URL before running test
+          if (testCase.audio_url) {
+            try {
+              const urlCheck = await fetch(testCase.audio_url, {
+                method: 'HEAD',
+                signal: AbortSignal.timeout(5000)
+              });
+
+              const contentType = urlCheck.headers.get('content-type') || '';
+              if (!urlCheck.ok || (!contentType.includes('audio') && !contentType.includes('mp3'))) {
+                throw new Error(`Invalid audio URL: returns ${contentType} instead of audio`);
+              }
+            } catch (urlError: any) {
+              throw new Error(`Audio URL validation failed: ${urlError.message}`);
+            }
+          }
+
           const result = await runTestCase(testCase);
 
           // Update progress
