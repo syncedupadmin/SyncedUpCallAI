@@ -134,32 +134,11 @@ export async function POST(req: NextRequest) {
                            convosoCall.recording?.[0]?.src || '';
         const convosoCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
 
-        // Validate the recording URL returns actual audio
+        // Skip URL validation for Convoso URLs - they may return different content-types
+        // for HEAD requests or require specific cookies. The transcription service will
+        // handle invalid URLs appropriately.
         if (recordingUrl) {
-          try {
-            console.log(`[Convoso Import] Validating recording URL for ${convosoCallId}...`);
-            const urlCheck = await fetch(recordingUrl, {
-              method: 'HEAD',
-              signal: AbortSignal.timeout(5000) // 5 second timeout
-            });
-
-            const contentType = urlCheck.headers.get('content-type') || '';
-            if (!contentType.includes('audio') && !contentType.includes('mp3') && !contentType.includes('wav')) {
-              console.warn(`[Convoso Import] Invalid recording URL for ${convosoCallId}: Content-Type is ${contentType}`);
-              failed.push({
-                convoso_id: convosoCallId,
-                error: `Invalid recording URL - returns ${contentType} instead of audio`
-              });
-              continue;
-            }
-          } catch (urlError: any) {
-            console.warn(`[Convoso Import] Could not validate recording URL for ${convosoCallId}:`, urlError.message);
-            failed.push({
-              convoso_id: convosoCallId,
-              error: `Recording URL validation failed: ${urlError.message}`
-            });
-            continue;
-          }
+          console.log(`[Convoso Import] Skipping validation for ${convosoCallId} - will let transcription service handle it`);
         }
 
         const existingCall = await db.oneOrNone(`
