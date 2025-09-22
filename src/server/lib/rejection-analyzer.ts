@@ -263,7 +263,7 @@ function generateCoachingNotes(analysis: Partial<RejectionAnalysisResult>): stri
     notes.push('Rebuttal quality needs improvement - practice empathy and value propositions');
   }
 
-  if (analysis.professionalism_score < 80) {
+  if (analysis.professionalism_score && analysis.professionalism_score < 80) {
     notes.push('Professionalism score below standard - review appropriate responses');
   }
 
