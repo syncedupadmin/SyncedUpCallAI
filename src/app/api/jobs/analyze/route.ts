@@ -22,42 +22,166 @@ export async function POST(req: NextRequest) {
   }
   
   const row = await db.oneOrNone(`
-    select c.*, 
-           t.text, 
+    select c.*,
+           t.text,
            t.translated_text,
            t.lang,
-           t.redacted, 
-           ct.primary_phone, 
-           ag.name as agent_name 
-    from calls c 
-    join transcripts t on t.call_id=c.id 
+           t.redacted,
+           t.diarized,
+           ct.primary_phone,
+           ag.name as agent_name
+    from calls c
+    join transcripts t on t.call_id=c.id
     left join contacts ct on ct.id = c.contact_id
     left join agents ag on ag.id = c.agent_id
     where c.id=$1
   `, [callId]);
   if (!row) return NextResponse.json({ ok: false, error: 'no_transcript' }, { status: 404 });
   
-  // Check if call is >= 10s
-  if (row.duration_sec && row.duration_sec < 10) {
-    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_analysis_skipped', $2)`, 
+  // Import rejection analyzer for short calls
+  const { analyzeRejectionCall, saveRejectionAnalysis, updateAgentRejectionMetrics, REJECTION_ANALYSIS_PROMPT } = await import('@/server/lib/rejection-analyzer');
+
+  // Import quality classifier
+  const { shouldAnalyzeCall, saveQualityMetrics } = await import('@/server/lib/call-quality-classifier');
+
+  // Check if this is a short rejection call (3-30 seconds)
+  const isShortRejectionCall = row.duration_sec && row.duration_sec >= 3 && row.duration_sec < 30;
+
+  // Skip only very short calls (< 3 seconds)
+  if (row.duration_sec && row.duration_sec < 3) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'ultra_short_call_skipped', $2)`,
       [callId, { duration_sec: row.duration_sec }]);
-    return NextResponse.json({ ok: false, error: 'short_call' });
+    return NextResponse.json({ ok: false, error: 'ultra_short_call' });
   }
 
-  const meta = {
-    agent_id: row.agent_id, 
-    agent_name: row.agent_name,
-    campaign: row.campaign, 
-    direction: row.direction,
-    disposition: row.disposition, 
-    duration_sec: row.duration_sec, 
-    sale_time: row.sale_time
-  };
-  
   // Use translated text if available, otherwise original
   const textToAnalyze = row.translated_text || row.text;
 
-  // OpenAI primary
+  // NEW: Check call quality and filter out useless calls
+  await saveQualityMetrics(
+    callId,
+    textToAnalyze,
+    row.diarized || [],
+    row.duration_sec,
+    1.0 // ASR confidence (would be from actual ASR service)
+  );
+
+  const qualityCheck = await shouldAnalyzeCall(callId);
+
+  if (!qualityCheck.should_analyze) {
+    // Log filtered call
+    await db.none(`
+      INSERT INTO call_events(call_id, type, payload)
+      VALUES($1, 'analysis_filtered', $2)
+    `, [callId, {
+      classification: qualityCheck.classification,
+      reason: qualityCheck.reason,
+      duration_sec: row.duration_sec
+    }]);
+
+    // Create minimal analysis record for consistency
+    await db.none(`
+      INSERT INTO analyses(call_id, reason_primary, summary, prompt_ver, model, confidence)
+      VALUES($1, $2, $3, 0, 'filtered', 0.1)
+      ON CONFLICT (call_id) DO UPDATE SET
+        reason_primary = $2,
+        summary = $3,
+        model = 'filtered'
+    `, [
+      callId,
+      qualityCheck.classification,
+      `Call filtered: ${qualityCheck.reason}`
+    ]);
+
+    return NextResponse.json({
+      ok: true,
+      filtered: true,
+      classification: qualityCheck.classification,
+      reason: qualityCheck.reason
+    });
+  }
+
+  const meta = {
+    agent_id: row.agent_id,
+    agent_name: row.agent_name,
+    campaign: row.campaign,
+    direction: row.direction,
+    disposition: row.disposition,
+    duration_sec: row.duration_sec,
+    sale_time: row.sale_time
+  };
+
+  // Handle short rejection calls differently (3-30 seconds)
+  if (isShortRejectionCall) {
+    try {
+      // Perform rejection-specific analysis
+      const rejectionAnalysis = await analyzeRejectionCall({
+        id: callId,
+        duration_sec: row.duration_sec,
+        transcript: textToAnalyze,
+        diarized: row.diarized,
+        agent_id: row.agent_id,
+        agent_name: row.agent_name,
+        campaign: row.campaign,
+        disposition: row.disposition
+      });
+
+      // Save rejection analysis
+      await saveRejectionAnalysis(callId, rejectionAnalysis, {
+        id: callId,
+        duration_sec: row.duration_sec,
+        transcript: textToAnalyze,
+        agent_id: row.agent_id,
+        agent_name: row.agent_name,
+        campaign: row.campaign,
+        disposition: row.disposition
+      });
+
+      // Update agent metrics
+      if (row.agent_id) {
+        await updateAgentRejectionMetrics(row.agent_id, row.agent_name);
+      }
+
+      // Also create a simplified analysis record for consistency
+      const simplifiedAnalysis = {
+        reason_primary: rejectionAnalysis.rejection_type || 'rejected_immediately',
+        reason_secondary: rejectionAnalysis.rejection_severity,
+        confidence: 0.9,
+        qa_score: Math.round((rejectionAnalysis.professionalism_score + rejectionAnalysis.script_compliance_score) / 2),
+        script_adherence: rejectionAnalysis.script_compliance_score,
+        summary: `Short rejection call (${row.duration_sec}s). ${rejectionAnalysis.rejection_detected ? 'Rejection detected.' : ''} ${rejectionAnalysis.rebuttal_attempted ? 'Rebuttal attempted.' : 'No rebuttal attempted.'} ${rejectionAnalysis.led_to_pitch ? 'Led to pitch.' : 'Call ended quickly.'}`,
+        risk_flags: rejectionAnalysis.rebuttal_attempted ? [] : ['no_rebuttal_attempted']
+      };
+
+      await db.none(`
+        insert into analyses(call_id, reason_primary, reason_secondary, confidence, qa_score, script_adherence,
+                             summary, prompt_ver, model, risk_flags)
+        values($1,$2,$3,$4,$5,$6,$7,3,'rejection-analyzer',$8)
+        on conflict (call_id) do update set
+          reason_primary=$2, reason_secondary=$3, confidence=$4, qa_score=$5, script_adherence=$6,
+          summary=$7, model='rejection-analyzer', risk_flags=$8
+      `, [callId, simplifiedAnalysis.reason_primary, simplifiedAnalysis.reason_secondary,
+          simplifiedAnalysis.confidence, simplifiedAnalysis.qa_score, simplifiedAnalysis.script_adherence,
+          simplifiedAnalysis.summary, simplifiedAnalysis.risk_flags]);
+
+      await db.none(`insert into call_events(call_id,type,payload) values($1,'rejection_analyzed',$2)`,
+        [callId, rejectionAnalysis]);
+
+      return NextResponse.json({
+        ok: true,
+        created: true,
+        model: 'rejection-analyzer',
+        qa_score: simplifiedAnalysis.qa_score,
+        reason_primary: simplifiedAnalysis.reason_primary,
+        rejection_analysis: rejectionAnalysis
+      });
+    } catch (rejectionError) {
+      console.error('Rejection analysis failed:', rejectionError);
+      // Fall through to regular analysis as fallback
+    }
+  }
+
+  // OpenAI primary (for non-rejection or longer calls)
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method:'POST',
     headers:{ 'Authorization': `Bearer ${process.env.OPENAI_API_KEY!}`, 'Content-Type':'application/json' },

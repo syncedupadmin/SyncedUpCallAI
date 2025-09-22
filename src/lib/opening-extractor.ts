@@ -23,6 +23,13 @@ interface OpeningMetrics {
   agent_name_mentioned: boolean;
   value_prop_mentioned: boolean;
   question_asked: boolean;
+  // Rejection tracking
+  rejection_detected?: boolean;
+  rejection_type?: string;
+  rejection_timestamp_ms?: number;
+  rebuttal_attempted?: boolean;
+  led_to_pitch?: boolean;
+  rebuttal_to_outcome?: string;
 }
 
 /**
@@ -39,6 +46,111 @@ function calculateSilenceRatio(words: WordTiming[], totalDurationMs: number = 30
 
   const silenceMs = totalDurationMs - totalSpeechMs;
   return silenceMs / totalDurationMs;
+}
+
+/**
+ * Detect rejection in opening
+ */
+function detectRejectionInOpening(transcript: string, words?: WordTiming[]): {
+  detected: boolean;
+  type?: string;
+  timestamp_ms?: number;
+} {
+  const rejectionPatterns = {
+    'not_interested': /not interested|don't want|no thanks|not for me/i,
+    'no_time': /don't have time|busy|call.*later|bad time/i,
+    'already_have': /already have|got one|covered|have insurance/i,
+    'spam_fear': /stop calling|take me off|remove.*list|how did you get/i,
+    'hostile': /fuck off|leave.*alone|harassment|hung up on/i,
+    'spouse_decision': /talk.*spouse|wife|husband|partner.*decide/i
+  };
+
+  const lower = transcript.toLowerCase();
+
+  for (const [type, pattern] of Object.entries(rejectionPatterns)) {
+    if (pattern.test(lower)) {
+      // Try to find timestamp if we have word timings
+      let timestamp_ms: number | undefined;
+      if (words && words.length > 0) {
+        const match = lower.match(pattern);
+        if (match) {
+          // Find approximate position of rejection
+          const rejectionPos = match.index || 0;
+          const wordsUpToRejection = transcript.substring(0, rejectionPos).split(' ').length;
+          if (words[wordsUpToRejection]) {
+            timestamp_ms = words[wordsUpToRejection].start;
+          }
+        }
+      }
+
+      return {
+        detected: true,
+        type,
+        timestamp_ms
+      };
+    }
+  }
+
+  return { detected: false };
+}
+
+/**
+ * Detect if rebuttal was attempted after rejection
+ */
+function detectRebuttalAttempt(transcript: string, rejectionPos: number): boolean {
+  // Look for text after rejection position
+  const afterRejection = transcript.substring(rejectionPos);
+
+  // Check for agent continuing to speak (rebuttal indicators)
+  const rebuttalIndicators = [
+    /understand|appreciate|hear you/i,
+    /just.*quick|30 seconds|brief moment/i,
+    /before you go|wait|hold on/i,
+    /may I ask|curious|wondering/i,
+    /save|benefit|help|protect/i
+  ];
+
+  return rebuttalIndicators.some(pattern => pattern.test(afterRejection));
+}
+
+/**
+ * Determine if rebuttal led to successful outcome
+ */
+function determineRebuttalOutcome(call: any): {
+  led_to_pitch: boolean;
+  rebuttal_to_outcome: string;
+} {
+  const duration = call.duration_sec;
+  const disposition = call.disposition?.toUpperCase();
+
+  if (duration < 30) {
+    return {
+      led_to_pitch: false,
+      rebuttal_to_outcome: 'immediate_hangup'
+    };
+  } else if (duration < 120) {
+    return {
+      led_to_pitch: true,
+      rebuttal_to_outcome: 'pitched'
+    };
+  } else {
+    if (disposition === 'SALE') {
+      return {
+        led_to_pitch: true,
+        rebuttal_to_outcome: 'sale'
+      };
+    } else if (disposition === 'APPOINTMENT_SET') {
+      return {
+        led_to_pitch: true,
+        rebuttal_to_outcome: 'appointment'
+      };
+    } else {
+      return {
+        led_to_pitch: true,
+        rebuttal_to_outcome: 'pitched'
+      };
+    }
+  }
 }
 
 /**
@@ -248,6 +360,42 @@ export async function extractOpeningFromCall(callId: string): Promise<any> {
       call.campaign
     ]);
 
+    // Detect rejection in opening
+    const rejection = detectRejectionInOpening(openingText, openingWords);
+    let rebuttal_attempted = false;
+    let rebuttal_outcome = { led_to_pitch: false, rebuttal_to_outcome: 'no_rejection' };
+
+    if (rejection.detected) {
+      // Check if rebuttal was attempted
+      const rejectionPos = openingText.toLowerCase().indexOf(rejection.type || '');
+      rebuttal_attempted = detectRebuttalAttempt(openingText, rejectionPos);
+
+      // Determine outcome if rebuttal was attempted
+      if (rebuttal_attempted) {
+        rebuttal_outcome = determineRebuttalOutcome(call);
+      }
+
+      // Update opening_segments with rejection data
+      await db.none(`
+        UPDATE opening_segments
+        SET rejection_detected = $1,
+            rejection_type = $2,
+            rejection_timestamp_ms = $3,
+            rebuttal_attempted = $4,
+            led_to_pitch = $5,
+            rebuttal_to_outcome = $6
+        WHERE id = $7
+      `, [
+        true,
+        rejection.type,
+        rejection.timestamp_ms,
+        rebuttal_attempted,
+        rebuttal_outcome.led_to_pitch,
+        rebuttal_outcome.rebuttal_to_outcome,
+        result.id
+      ]);
+    }
+
     logInfo({
       event_type: 'opening_extracted',
       call_id: callId,
@@ -257,7 +405,11 @@ export async function extractOpeningFromCall(callId: string): Promise<any> {
       call_continued,
       disposition: call.disposition,
       success_score,
-      engagement_score
+      engagement_score,
+      rejection_detected: rejection.detected,
+      rejection_type: rejection.type,
+      rebuttal_attempted,
+      led_to_pitch: rebuttal_outcome.led_to_pitch
     });
 
     return {
@@ -271,7 +423,11 @@ export async function extractOpeningFromCall(callId: string): Promise<any> {
         greeting_type,
         ...linguisticFeatures,
         success_score,
-        engagement_score
+        engagement_score,
+        rejection_detected: rejection.detected,
+        rejection_type: rejection.type,
+        rebuttal_attempted,
+        ...rebuttal_outcome
       }
     };
 

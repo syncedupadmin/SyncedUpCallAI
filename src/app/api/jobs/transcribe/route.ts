@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'call_not_found' }, { status: 404 });
   }
   
-  // Check duration >= 10s
-  if (!call.duration_sec || call.duration_sec < 10) {
-    await db.none(`insert into call_events(call_id, type, payload) values($1, 'short_call_skipped', $2)`, 
+  // Check duration >= 3s (lowered from 10s to allow rejection analysis)
+  if (!call.duration_sec || call.duration_sec < 3) {
+    await db.none(`insert into call_events(call_id, type, payload) values($1, 'ultra_short_call_skipped', $2)`,
       [callId, { duration_sec: call.duration_sec || 0 }]);
-    return NextResponse.json({ ok: false, error: 'short_call' });
+    return NextResponse.json({ ok: false, error: 'ultra_short_call' });
   }
   
   // Check recording URL present
@@ -65,10 +65,10 @@ export async function POST(req: NextRequest) {
       insert into transcripts(call_id, engine, lang, text, translated_text, redacted, diarized, words, created_at)
       values($1, $2, $3, $4, $5, $4, $6, $7, now())
       on conflict (call_id) do update set
-        engine=$2, lang=$3, text=$4, translated_text=$5, redacted=$4, 
+        engine=$2, lang=$3, text=$4, translated_text=$5, redacted=$4,
         diarized=$6, words=$7, created_at=now()
     `, [
-      callId, 
+      callId,
       result.engine,
       result.lang,
       result.text,
@@ -76,6 +76,16 @@ export async function POST(req: NextRequest) {
       JSON.stringify(result.diarized || []),
       JSON.stringify(result.words || [])
     ]);
+
+    // NEW: Save call quality metrics for filtering
+    const { saveQualityMetrics } = await import('@/server/lib/call-quality-classifier');
+    await saveQualityMetrics(
+      callId,
+      result.text,
+      result.diarized || [],
+      call.duration_sec,
+      1.0 // Default confidence score
+    );
 
     await db.none(`insert into call_events(call_id, type, payload) values($1, 'transcribe_ok', $2)`, 
       [callId, { 

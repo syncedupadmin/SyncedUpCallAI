@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const includeShortCalls = req.nextUrl.searchParams.get('include_short') === 'true';
 
   // Build query based on options
-  const durationCondition = includeShortCalls ? '' : 'and c.duration_sec >= 10';
+  // When includeShortCalls is true, include calls ≥3 seconds for rejection analysis
+  const durationCondition = includeShortCalls ? 'and c.duration_sec >= 3' : 'and c.duration_sec >= 10';
 
   const { rows } = await db.query(`
     with eligible as (
@@ -34,6 +35,8 @@ export async function GET(req: NextRequest) {
         and t.call_id is null
         and (tq.call_id is null or tq.status = 'failed')  -- Not already in queue or failed
       order by
+        -- Prioritize short rejection calls when includeShortCalls is true
+        ${includeShortCalls ? 'case when c.duration_sec between 3 and 30 then 0 else 1 end,' : ''}
         c.created_at desc,  -- Prioritize recent calls
         c.duration_sec desc  -- Then longer calls (likely more important)
       limit $1
@@ -79,6 +82,8 @@ export async function GET(req: NextRequest) {
       logInfo({
         event_type: 'batch_transcription_queued',
         call_id: r.id,
+        duration_sec: r.duration_sec,
+        is_short_call: r.duration_sec < 30,
         priority,
         source: 'batch'
       });

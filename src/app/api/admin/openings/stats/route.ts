@@ -22,7 +22,12 @@ export async function GET(req: NextRequest) {
         AVG(silence_ratio) as avg_silence_ratio,
         SUM(CASE WHEN call_continued THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) as overall_success_rate,
         SUM(CASE WHEN disposition IN ('SALE', 'APPOINTMENT_SET') THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) as conversion_rate,
-        COUNT(DISTINCT agent_name) as unique_agents
+        COUNT(DISTINCT agent_name) as unique_agents,
+        -- Rejection metrics
+        SUM(CASE WHEN rejection_detected THEN 1 ELSE 0 END) as total_rejections,
+        SUM(CASE WHEN rejection_detected AND rebuttal_attempted THEN 1 ELSE 0 END) as rebuttals_attempted,
+        SUM(CASE WHEN rejection_detected AND led_to_pitch THEN 1 ELSE 0 END) as rejections_overcome,
+        SUM(CASE WHEN rejection_detected AND rebuttal_to_outcome = 'sale' THEN 1 ELSE 0 END) as rejections_to_sale
       FROM opening_segments
     `);
 
