@@ -419,6 +419,14 @@ export default function AdminPage() {
           Quick Actions
         </h3>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <a href="/testing/dashboard" className="btn btn-primary" style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            fontWeight: 600,
+            border: 'none'
+          }}>
+            🎯 AI Testing Dashboard
+          </a>
           <a href="/batch" className="btn btn-ghost">
             📊 Batch Monitor
           </a>
@@ -428,8 +436,8 @@ export default function AdminPage() {
           <a href="/api/health" target="_blank" className="btn btn-ghost">
             💓 Health API
           </a>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="btn btn-ghost"
           >
             🔄 Refresh
