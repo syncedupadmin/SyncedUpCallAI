@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Find stuck runs (running for more than 10 minutes)
+    // Clear ALL running runs regardless of time (more aggressive)
     const stuckRuns = await db.manyOrNone(`
       UPDATE ai_suite_runs
       SET
@@ -21,11 +21,10 @@ export async function POST(req: NextRequest) {
         completed_at = NOW()
       WHERE
         status = 'running'
-        AND started_at < NOW() - INTERVAL '10 minutes'
       RETURNING id, suite_id
     `);
 
-    // Also clear any stuck individual test runs
+    // Also clear any stuck individual test runs (more aggressive)
     const stuckTests = await db.manyOrNone(`
       UPDATE ai_test_runs
       SET
@@ -34,7 +33,6 @@ export async function POST(req: NextRequest) {
         completed_at = NOW()
       WHERE
         status = 'running'
-        AND created_at < NOW() - INTERVAL '10 minutes'
       RETURNING id
     `);
 
