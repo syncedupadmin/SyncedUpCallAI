@@ -62,8 +62,9 @@ export async function runTestCase(testCase: TestCase): Promise<TestRunResult> {
         created_at,
         source,
         analyzed_at,
-        is_test
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        is_test,
+        office_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id
     `, [
       testCase.audio_url,
@@ -75,7 +76,8 @@ export async function runTestCase(testCase: TestCase): Promise<TestRunResult> {
       new Date(),
       'ai_test',
       new Date(),
-      true
+      true,
+      1 // Default office_id for test calls
     ]);
     testCallId = testCall.id;
 
