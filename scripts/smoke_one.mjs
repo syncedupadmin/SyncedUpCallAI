@@ -1,5 +1,4 @@
 import { Client } from "pg";
-import fetch from "node-fetch";
 const DB = process.env.DATABASE_URL; const JOBS_SECRET = process.env.JOBS_SECRET;
 const mp3 = process.argv[2] || "https://synced-up-call-ai.vercel.app/test-audio/sample.mp3";
 const client = new Client({ connectionString: DB }); await client.connect();
