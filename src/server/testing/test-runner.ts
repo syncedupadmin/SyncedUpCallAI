@@ -40,7 +40,10 @@ export async function runTestCase({ test_case_id, suite_run_id }:{
 
     // 3) trigger transcription with auth
     const body = { callId, recordingUrl: tc.audio_url };
-    const resp = await fetch(`${process.env.BASE_URL || "http://localhost:3000"}/api/jobs/transcribe`, {
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.BASE_URL || "http://localhost:3000";
+    const resp = await fetch(`${baseUrl}/api/jobs/transcribe`, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": `Bearer ${JOBS_SECRET}` },
       body: JSON.stringify(body)
