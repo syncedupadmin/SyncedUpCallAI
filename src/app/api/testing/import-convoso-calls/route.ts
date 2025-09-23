@@ -135,13 +135,14 @@ export async function POST(req: NextRequest) {
         await db.none(`
           INSERT INTO transcription_queue (
             call_id,
+            recording_url,
             status,
             priority,
             source,
             created_at
-          ) VALUES ($1, 'pending', 2, 'ai_testing', NOW())
+          ) VALUES ($1, $2, 'pending', 2, 'ai_testing', NOW())
           ON CONFLICT (call_id) DO NOTHING
-        `, [savedCall.id]);
+        `, [savedCall.id, savedCall.recording_url]);
 
         imported.push({
           test_case_id: testCase.id,
