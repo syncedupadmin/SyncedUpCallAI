@@ -117,9 +117,20 @@ async function checkConvosoHealth(): Promise<ServiceHealth> {
 
   try {
     const start = Date.now();
+    // Use /leads/get-recordings endpoint with limit=1 for health check
+    const params = new URLSearchParams({
+      auth_token: process.env.CONVOSO_AUTH_TOKEN,
+      limit: '1'
+    });
+
     const response = await fetch(
-      `https://api.convoso.com/v1/users/me?auth_token=${process.env.CONVOSO_AUTH_TOKEN}`,
-      { signal: AbortSignal.timeout(5000) }
+      `https://api.convoso.com/v1/leads/get-recordings?${params.toString()}`,
+      {
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
     );
 
     const latency = Date.now() - start;

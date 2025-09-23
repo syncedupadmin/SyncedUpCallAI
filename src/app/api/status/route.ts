@@ -106,8 +106,11 @@ async function checkExternalAPIs() {
 
   if (process.env.CONVOSO_AUTH_TOKEN) {
     checkPromises.push(
-      fetch(`https://api.convoso.com/v1/users/me?auth_token=${process.env.CONVOSO_AUTH_TOKEN}`, {
+      fetch(`https://api.convoso.com/v1/leads/get-recordings?auth_token=${process.env.CONVOSO_AUTH_TOKEN}&limit=1`, {
         signal: AbortSignal.timeout(3000),
+        headers: {
+          'Accept': 'application/json'
+        }
       })
         .then(res => { checks.convoso = res.ok ? 'operational' : 'degraded'; })
         .catch(() => { checks.convoso = 'down'; })
