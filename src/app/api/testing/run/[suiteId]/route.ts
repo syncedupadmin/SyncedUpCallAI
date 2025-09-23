@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { isAdminAuthenticated } from '@/server/auth/admin';
-import { runTestSuite } from '@/server/testing/bulk-tester';
+import { runSuite } from '@/server/testing/bulk-tester';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for test execution
@@ -33,7 +33,7 @@ export async function POST(
     }
 
     // Get options from request body
-    const options = await req.json().catch(() => ({}));
+    const { parallel = 10, limit = 100 } = await req.json().catch(() => ({}));
 
     // Check if there's already a running test for this suite
     const runningTest = await db.oneOrNone(`
@@ -48,14 +48,10 @@ export async function POST(
       );
     }
 
-    // Run the test suite asynchronously
-    const resultPromise = runTestSuite(suiteId, {
-      parallel: options.parallel || 5,
-      stopOnFailure: options.stopOnFailure || false,
-      testFilter: options.filter
-    });
+    // Run the test suite using our simplified runner
+    await runSuite({ suite_id: suiteId, parallel, limit });
 
-    // Don't wait for completion - return immediately with suite run ID
+    // Get the suite run that was just created
     const suiteRun = await db.one(`
       SELECT id FROM ai_suite_runs
       WHERE suite_id = $1
