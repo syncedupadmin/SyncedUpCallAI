@@ -39,6 +39,14 @@
     {
       "path": "/api/cron/kpi-weekly",
       "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/process-transcriptions",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/queue-bulk-tests",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
@@ -58,6 +66,12 @@
     },
     "src/app/api/admin/backfill/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/process-transcriptions/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/queue-bulk-tests/route.ts": {
+      "maxDuration": 60
     }
   }
 }
