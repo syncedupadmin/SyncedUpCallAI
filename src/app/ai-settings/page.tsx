@@ -214,7 +214,7 @@ export default function AISettingsDashboard() {
                 <p className={`text-2xl font-bold ${
                   analysis?.accuracyScore && analysis.accuracyScore < 70 ? 'text-red-600' : 'text-green-600'
                 }`}>
-                  {analysis?.accuracyScore?.toFixed(0) || 0}%
+                  {analysis?.accuracyScore ? Number(analysis.accuracyScore).toFixed(0) : 0}%
                 </p>
               </div>
               <div className="text-center">
@@ -308,7 +308,7 @@ export default function AISettingsDashboard() {
                   <p className={`text-2xl font-bold ${
                     analysis?.accuracyChange && analysis.accuracyChange < 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
-                    {(analysis?.accuracyChange || 0) > 0 ? '+' : ''}{analysis?.accuracyChange?.toFixed(1) || 0}%
+                    {(analysis?.accuracyChange || 0) > 0 ? '+' : ''}{analysis?.accuracyChange ? Number(analysis.accuracyChange).toFixed(1) : 0}%
                   </p>
                   <p className="text-xs text-gray-500">vs factory default</p>
                 </div>
@@ -332,7 +332,7 @@ export default function AISettingsDashboard() {
                         <div key={idx} className="flex items-center justify-between">
                           <span className="font-mono text-sm">{kw.keyword}</span>
                           <span className="text-sm text-red-600">
-                            Impact: {kw.impact?.toFixed(1)}%
+                            Impact: {kw.impact ? Number(kw.impact).toFixed(1) : 0}%
                           </span>
                         </div>
                       ))}
