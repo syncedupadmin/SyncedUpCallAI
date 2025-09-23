@@ -280,7 +280,7 @@ export default function AuditDashboard() {
             <div className="glass-card" style={{ padding: 16, background: `${getOverallStatusColor()}20`, border: `1px solid ${getOverallStatusColor()}40` }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: getOverallStatusColor() }}>
-                  {audit.overallStatus.toUpperCase()}
+                  {audit.overallStatus ? audit.overallStatus.toUpperCase() : 'UNKNOWN'}
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.75, color: '#a8a8b3' }}>System Status</div>
               </div>
