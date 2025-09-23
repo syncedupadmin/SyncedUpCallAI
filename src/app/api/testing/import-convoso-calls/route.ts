@@ -43,15 +43,30 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Convoso Import] Fetching calls from ${dateFrom} to ${dateTo}`);
 
-    // Use the EXACT same method that works in production
-    const callData = await service.fetchCompleteCallData(dateFrom, dateTo);
+    // Use fetchRecordings instead which is more efficient for smaller requests
+    const recordings = await service.fetchRecordings(dateFrom, dateTo, limit * 2);
 
-    if (!callData || callData.length === 0) {
+    if (!recordings || recordings.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No recent calls found in Convoso',
         imported: 0
       });
+    }
+
+    // Transform recordings to CombinedCallData format
+    const callData: any[] = [];
+    for (const recording of recordings) {
+      // Only process calls with actual recordings and duration
+      if (recording.url && recording.seconds && parseFloat(recording.seconds) > 0) {
+        const lead = await service.fetchLeadData(recording.lead_id);
+        if (lead && lead.user_name !== 'System User' && lead.user_name !== 'System DID User') {
+          const combined = service.combineCallData(recording, lead);
+          callData.push(combined);
+        }
+      }
+      // Stop if we have enough
+      if (callData.length >= limit) break;
     }
 
     // Filter for calls with recordings and reasonable duration
