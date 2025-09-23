@@ -144,7 +144,7 @@ async function testOperationalDashboard() {
   log('Testing operational dashboard...');
 
   try {
-    const response = await fetch(`${BASE_URL}/admin/operations`);
+    const response = await fetch(`${BASE_URL}/superadmin/operations`);
 
     if (response.status === 200) {
       TESTS_PASSED.push('Operations Dashboard');

@@ -21,7 +21,8 @@ import {
   Mic,
   Building2,
   CheckCircle2,
-  TrendingUp
+  TrendingUp,
+  Monitor
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -86,6 +87,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/analytics',
       icon: BarChart3,
       description: 'System analytics'
+    },
+    {
+      name: 'Operations',
+      href: '/superadmin/operations',
+      icon: Monitor,
+      description: 'System health & monitoring'
     },
     {
       name: 'Bulk Upload',

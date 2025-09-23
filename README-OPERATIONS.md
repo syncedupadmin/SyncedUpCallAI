@@ -32,12 +32,12 @@ curl http://localhost:3000/api/health
 curl http://localhost:3000/api/status
 
 # Access dashboard
-open http://localhost:3000/admin/operations
+open http://localhost:3000/superadmin/operations
 ```
 
 ### Key URLs
 
-- **Operations Dashboard**: `/admin/operations`
+- **Operations Dashboard**: `/superadmin/operations`
 - **Health Check**: `/api/health`
 - **System Status**: `/api/status`
 - **System Metrics**: `/api/metrics/system`
@@ -178,7 +178,7 @@ Returns error statistics and trends.
 
 ## Operational Dashboard
 
-The operational dashboard is available at `/admin/operations` and provides:
+The operational dashboard is available at `/superadmin/operations` and provides:
 
 - **Real-time System Status**: Overall health indicator
 - **Service Health Monitoring**: Status of all critical services
