@@ -1,4 +1,4 @@
-import { logError, logWarn, logInfo } from '@/lib/log';
+import { logError, logInfo } from '@/lib/log';
 import { db } from '@/server/db';
 import { withRetry } from './db-utils';
 
@@ -93,14 +93,24 @@ class ErrorTracker {
     this.errorCounts.set(errorKey, (this.errorCounts.get(errorKey) || 0) + 1);
 
     if (severity === ErrorSeverity.CRITICAL) {
-      logError('CRITICAL ERROR', { error: trackedError });
+      logError('CRITICAL ERROR', trackedError);
       await this.flush();
     } else if (severity === ErrorSeverity.HIGH) {
-      logError('High severity error', { error: trackedError });
+      logError('High severity error', trackedError);
     } else if (severity === ErrorSeverity.MEDIUM) {
-      logWarn('Medium severity error', { error: trackedError });
+      const { severity: _, ...errorData } = trackedError;
+      logInfo({
+        level: 'warning',
+        severityLevel: 'medium',
+        ...errorData
+      });
     } else {
-      logInfo('Low severity error', { error: trackedError });
+      const { severity: _, ...errorData } = trackedError;
+      logInfo({
+        level: 'info',
+        severityLevel: 'low',
+        ...errorData
+      });
     }
 
     if (this.errorBuffer.length >= 50) {

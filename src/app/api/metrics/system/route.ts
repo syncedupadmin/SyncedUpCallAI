@@ -144,7 +144,8 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    logInfo('System metrics collected', {
+    logInfo({
+      message: 'System metrics collected',
       duration: Date.now() - startTime,
       memory_used: metrics.memory.heap_used_mb,
       pool_utilization: metrics.database.pool.utilization_percent,
@@ -157,7 +158,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    logInfo('Failed to collect system metrics', { error: error.message });
+    logInfo({ message: 'Failed to collect system metrics', error: error.message });
 
     return NextResponse.json(
       { error: 'Failed to collect metrics', message: error.message },

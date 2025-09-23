@@ -102,7 +102,8 @@ export async function withRetry<T>(
         );
       }
 
-      logInfo(`Retrying database operation (attempt ${attempt}/${opts.maxRetries})`, {
+      logInfo({
+        message: `Retrying database operation (attempt ${attempt}/${opts.maxRetries})`,
         error: error.message,
         code: error.code,
         delay
@@ -269,14 +270,14 @@ export async function preventBuildTimeQuery<T>(
   fallback: T
 ): Promise<T> {
   if (process.env.VERCEL_ENV === 'production' && !process.env.BUILD_TIME_SKIP) {
-    logInfo('Skipping database operation during build time');
+    logInfo({ message: 'Skipping database operation during build time' });
     return fallback;
   }
 
   if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
     const phase = (process as any).env.__NEXT_PHASE;
     if (phase === 'phase-production-build') {
-      logInfo('Skipping database operation during Next.js build phase');
+      logInfo({ message: 'Skipping database operation during Next.js build phase' });
       return fallback;
     }
   }

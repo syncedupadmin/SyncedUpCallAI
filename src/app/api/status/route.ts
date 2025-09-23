@@ -328,7 +328,8 @@ export async function GET(request: NextRequest) {
       recent_activity: activity,
     };
 
-    logInfo('Status check completed', {
+    logInfo({
+      message: 'Status check completed',
       status: overallStatus,
       duration: Date.now() - startTime,
       issues: issues.length,
@@ -341,7 +342,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    logInfo('Status check failed', { error: error.message });
+    logInfo({ message: 'Status check failed', error: error.message });
 
     return NextResponse.json(
       {

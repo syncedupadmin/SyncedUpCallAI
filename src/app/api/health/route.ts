@@ -221,11 +221,18 @@ export async function GET(request: Request) {
       },
       resources: {
         memory: memoryInfo,
-        pool: dbHealthResult.poolStats,
+        pool: dbHealthResult.poolStats ? {
+          total: dbHealthResult.poolStats.totalCount,
+          active: dbHealthResult.poolStats.activeCount,
+          idle: dbHealthResult.poolStats.idleCount,
+          waiting: dbHealthResult.poolStats.waitingCount,
+          utilization: dbHealthResult.poolStats.utilizationPercent,
+        } : undefined,
       },
     };
 
-    logInfo('Health check completed', {
+    logInfo({
+      message: 'Health check completed',
       status: overallStatus,
       duration: Date.now() - startTime,
     });
@@ -238,7 +245,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error: any) {
-    logInfo('Health check failed', { error: error.message });
+    logInfo({ message: 'Health check failed', error: error.message });
 
     return NextResponse.json(
       {

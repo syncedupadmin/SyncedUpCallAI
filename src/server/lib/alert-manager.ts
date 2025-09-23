@@ -1,7 +1,7 @@
-import { errorTracker, ErrorSeverity } from './error-tracker';
+import { errorTracker, ErrorSeverity, ErrorCategory } from './error-tracker';
 import { checkDatabaseHealth } from './db-utils';
 import { db } from '@/server/db';
-import { logError, logWarn, logInfo } from '@/lib/log';
+import { logError, logInfo } from '@/lib/log';
 
 export enum AlertLevel {
   INFO = 'info',
@@ -68,7 +68,7 @@ class AlertManager {
       description: 'Monitors database connectivity and response time',
       condition: async () => {
         const health = await checkDatabaseHealth();
-        return !health.healthy || (health.latency && health.latency > 5000);
+        return !health.healthy || (health.latency ? health.latency > 5000 : false);
       },
       level: AlertLevel.CRITICAL,
       message: (context) => `Database health check failed: ${context?.error || 'Unhealthy'}`,
@@ -154,12 +154,12 @@ class AlertManager {
 
   addRule(rule: AlertRule) {
     this.rules.set(rule.id, { ...rule, enabled: rule.enabled !== false });
-    logInfo(`Alert rule added: ${rule.name}`);
+    logInfo({ message: `Alert rule added: ${rule.name}` });
   }
 
   removeRule(ruleId: string) {
     this.rules.delete(ruleId);
-    logInfo(`Alert rule removed: ${ruleId}`);
+    logInfo({ message: `Alert rule removed: ${ruleId}` });
   }
 
   enableRule(ruleId: string) {
@@ -227,8 +227,8 @@ class AlertManager {
     await errorTracker.trackError(
       new Error(alert.message),
       this.levelToSeverity(alert.level),
-      'alert',
-      { ruleId: rule.id, alertTitle: alert.title }
+      ErrorCategory.SYSTEM,
+      { ruleId: rule.id, alertTitle: alert.title, source: 'alert' }
     );
   }
 
@@ -237,7 +237,7 @@ class AlertManager {
     if (activeAlert && !activeAlert.resolved) {
       activeAlert.resolved = true;
       activeAlert.resolvedAt = new Date();
-      logInfo(`Alert resolved: ${activeAlert.title}`);
+      logInfo({ message: `Alert resolved: ${activeAlert.title}` });
     }
   }
 
@@ -284,16 +284,16 @@ class AlertManager {
         logError(logMessage, alert.context);
         break;
       case AlertLevel.WARNING:
-        logWarn(logMessage, alert.context);
+        logInfo({ message: logMessage, level: 'warning', ...alert.context });
         break;
       default:
-        logInfo(logMessage, alert.context);
+        logInfo({ message: logMessage, ...alert.context });
     }
   }
 
   private async sendEmailAlert(alert: Alert) {
     if (!process.env.ALERT_EMAIL_TO || !process.env.SENDGRID_API_KEY) {
-      logWarn('Email alerts not configured');
+      logInfo({ message: 'Email alerts not configured', level: 'warning' });
       return;
     }
 
@@ -332,7 +332,7 @@ class AlertManager {
 
   private async sendWebhookAlert(alert: Alert) {
     if (!process.env.ALERT_WEBHOOK_URL) {
-      logWarn('Webhook alerts not configured');
+      logInfo({ message: 'Webhook alerts not configured', level: 'warning' });
       return;
     }
 

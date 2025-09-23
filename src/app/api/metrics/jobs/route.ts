@@ -225,7 +225,8 @@ export async function GET(request: NextRequest) {
       backlog,
     };
 
-    logInfo('Job metrics collected', {
+    logInfo({
+      message: 'Job metrics collected',
       duration: Date.now() - startTime,
       recording_pending: recordingQueue.pending,
       transcription_pending: transcriptionQueue.pending,

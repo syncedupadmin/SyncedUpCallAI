@@ -239,7 +239,8 @@ export async function GET(request: NextRequest) {
       trends,
     };
 
-    logInfo('Error metrics collected', {
+    logInfo({
+      message: 'Error metrics collected',
       duration: Date.now() - startTime,
       total_errors: summary.total_1h,
       critical_errors: summary.critical,
