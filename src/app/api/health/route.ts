@@ -3,6 +3,7 @@ import { checkDatabaseHealth, getPoolStats } from '@/server/lib/db-utils';
 import { errorTracker } from '@/server/lib/error-tracker';
 import { db } from '@/server/db';
 import { logInfo } from '@/lib/log';
+import { formatApiResponse } from '@/lib/api-formatter';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,6 +172,10 @@ export async function GET(request: Request) {
   const startTime = Date.now();
   const uptime = process.uptime();
 
+  // Check if request is from a browser
+  const acceptHeader = request.headers.get('accept') || '';
+  const isHtmlRequest = acceptHeader.includes('text/html');
+
   try {
     const [dbHealth, deepgramHealth, openaiHealth, convosoHealth, queueStatus, errorStats] = await Promise.allSettled([
       checkDatabaseHealth(),
@@ -247,6 +252,24 @@ export async function GET(request: Request) {
       status: overallStatus,
       duration: Date.now() - startTime,
     });
+
+    // Return HTML for browser requests
+    if (isHtmlRequest) {
+      const html = formatApiResponse(
+        response,
+        'Health Check',
+        'Real-time system health monitoring and service status'
+      );
+
+      return new NextResponse(html, {
+        status: overallStatus === 'unhealthy' ? 503 : 200,
+        headers: {
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Response-Time': `${Date.now() - startTime}ms`,
+        },
+      });
+    }
 
     return NextResponse.json(response, {
       status: overallStatus === 'unhealthy' ? 503 : 200,

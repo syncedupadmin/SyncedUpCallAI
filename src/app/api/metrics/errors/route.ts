@@ -3,6 +3,7 @@ import { errorTracker, ErrorSeverity, ErrorCategory } from '@/server/lib/error-t
 import { db } from '@/server/db';
 import { withRetry } from '@/server/lib/db-utils';
 import { logInfo, logError } from '@/lib/log';
+import { formatApiResponse } from '@/lib/api-formatter';
 
 export const dynamic = 'force-dynamic';
 
@@ -220,6 +221,10 @@ export async function GET(request: NextRequest) {
   try {
     const startTime = Date.now();
 
+    // Check if request is from a browser
+    const acceptHeader = request.headers.get('accept') || '';
+    const isHtmlRequest = acceptHeader.includes('text/html');
+
     const [summary, byCategory, byEndpoint, recentCritical, topErrors, trends] = await Promise.all([
       getErrorSummary(),
       getErrorsByCategory(),
@@ -245,6 +250,23 @@ export async function GET(request: NextRequest) {
       total_errors: summary.total_1h,
       critical_errors: summary.critical,
     });
+
+    // Return HTML for browser requests
+    if (isHtmlRequest) {
+      const html = formatApiResponse(
+        metrics,
+        'Error Metrics',
+        'Real-time error tracking and analysis dashboard'
+      );
+
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-store, no-cache',
+          'X-Response-Time': `${Date.now() - startTime}ms`,
+        },
+      });
+    }
 
     return NextResponse.json(metrics, {
       headers: {

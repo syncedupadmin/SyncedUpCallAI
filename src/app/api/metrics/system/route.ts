@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPoolStats } from '@/server/lib/db-utils';
 import { db } from '@/server/db';
 import { logInfo } from '@/lib/log';
+import { formatApiResponse } from '@/lib/api-formatter';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,10 @@ export async function GET(request: NextRequest) {
   try {
     const startTime = Date.now();
 
+    // Check if request is from a browser
+    const acceptHeader = request.headers.get('accept') || '';
+    const isHtmlRequest = acceptHeader.includes('text/html');
+
     const memUsage = process.memoryUsage();
     const poolStats = await getPoolStats();
     const queryPerf = await getQueryPerformanceMetrics();
@@ -150,6 +155,44 @@ export async function GET(request: NextRequest) {
       memory_used: metrics.memory.heap_used_mb,
       pool_utilization: metrics.database.pool.utilization_percent,
     });
+
+    // Return HTML for browser requests
+    if (isHtmlRequest) {
+      // Format metrics for HTML display
+      const formattedMetrics = {
+        ...metrics,
+        process: {
+          ...metrics.process,
+          uptime: metrics.process.uptime,
+          node_version: metrics.process.version,
+        },
+        memory: {
+          ...metrics.memory,
+          percent: metrics.memory.utilization_percent,
+        },
+        database_pool: {
+          total: metrics.database.pool.total,
+          active: metrics.database.pool.active,
+          idle: metrics.database.pool.idle,
+          waiting: metrics.database.pool.waiting,
+          utilization: metrics.database.pool.utilization_percent,
+        },
+      };
+
+      const html = formatApiResponse(
+        formattedMetrics,
+        'System Metrics',
+        'Real-time system performance and resource utilization metrics'
+      );
+
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-store, no-cache',
+          'X-Response-Time': `${Date.now() - startTime}ms`,
+        },
+      });
+    }
 
     return NextResponse.json(metrics, {
       headers: {

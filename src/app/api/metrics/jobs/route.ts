@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { withRetry } from '@/server/lib/db-utils';
 import { logInfo, logError } from '@/lib/log';
+import { formatApiResponse } from '@/lib/api-formatter';
 
 export const dynamic = 'force-dynamic';
 
@@ -203,6 +204,10 @@ export async function GET(request: NextRequest) {
   try {
     const startTime = Date.now();
 
+    // Check if request is from a browser
+    const acceptHeader = request.headers.get('accept') || '';
+    const isHtmlRequest = acceptHeader.includes('text/html');
+
     const [recordingQueue, transcriptionQueue, analysisJobs, throughput] = await Promise.all([
       getRecordingQueueMetrics(),
       getTranscriptionQueueMetrics(),
@@ -232,6 +237,47 @@ export async function GET(request: NextRequest) {
       transcription_pending: transcriptionQueue.pending,
       critical_backlog: backlog.critical_backlog,
     });
+
+    // Return HTML for browser requests
+    if (isHtmlRequest) {
+      // Format metrics for HTML display
+      const formattedMetrics = {
+        ...metrics,
+        recording_queue: {
+          ...recordingQueue,
+          failed_24h: recordingQueue.failed,
+          completed_24h: recordingQueue.completed,
+          throughput: {
+            per_hour: Math.round(throughput.recordings_per_minute * 60)
+          }
+        },
+        transcription_queue: {
+          ...transcriptionQueue,
+          completed_24h: transcriptionQueue.completed,
+        },
+        analysis_jobs: {
+          pending: 0,
+          completed_24h: analysisJobs.completed,
+          success_rate: analysisJobs.total_last_hour > 0
+            ? (analysisJobs.completed / analysisJobs.total_last_hour)
+            : 1
+        }
+      };
+
+      const html = formatApiResponse(
+        formattedMetrics,
+        'Job Metrics',
+        'Real-time job queue monitoring and processing statistics'
+      );
+
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-store, no-cache',
+          'X-Response-Time': `${Date.now() - startTime}ms`,
+        },
+      });
+    }
 
     return NextResponse.json(metrics, {
       headers: {

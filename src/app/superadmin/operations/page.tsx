@@ -125,26 +125,26 @@ export default function OperationsDashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p>Loading operational status...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-700">Loading operational status...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6 min-h-screen">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Operations Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Operations Dashboard</h1>
         <div className="flex gap-4">
           <button
-            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100"
             onClick={() => setAutoRefresh(!autoRefresh)}
           >
             Auto-refresh: {autoRefresh ? 'ON' : 'OFF'}
           </button>
           <button
-            className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50"
             onClick={fetchData}
             disabled={loading}
           >
@@ -198,10 +198,10 @@ export default function OperationsDashboard() {
             <div className="bg-white p-4 rounded-lg shadow">
               <h3 className="text-sm font-medium text-gray-500 mb-2">Performance</h3>
               <div className="space-y-1">
-                <div className="text-sm">
+                <div className="text-sm text-gray-900">
                   Response: {status.performance.avg_response_time_ms.toFixed(0)}ms
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-600">
                   {status.performance.requests_per_minute.toFixed(1)} req/min
                 </div>
                 {status.performance.error_rate > 0.01 && (
@@ -237,7 +237,7 @@ export default function OperationsDashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium mb-4">Service Health</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Service Health</h3>
               <div className="space-y-3">
                 {Object.entries({
                   'Database': status.services.database.status,
@@ -246,7 +246,7 @@ export default function OperationsDashboard() {
                   'Convoso API': status.services.external_apis.convoso
                 }).map(([name, serviceStatus]) => (
                   <div key={name} className="flex items-center justify-between py-2 border-b last:border-b-0">
-                    <span className="text-sm font-medium">{name}</span>
+                    <span className="text-sm font-medium text-gray-700">{name}</span>
                     <div className="flex items-center gap-2">
                       <span style={{ color: getStatusColor(serviceStatus) }}>
                         {getStatusIcon(serviceStatus)}
@@ -264,18 +264,18 @@ export default function OperationsDashboard() {
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium mb-4">Queue Status</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Queue Status</h3>
               <div className="space-y-4">
                 <div>
                   <h4 className="text-sm font-medium mb-2 text-gray-700">Recording Queue</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Pending:</span>
-                      <span className="font-medium">{status.services.queues.recordings.pending}</span>
+                      <span className="font-medium text-gray-900">{status.services.queues.recordings.pending}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Processing:</span>
-                      <span className="font-medium">{status.services.queues.recordings.processing}</span>
+                      <span className="font-medium text-gray-900">{status.services.queues.recordings.processing}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Failed:</span>
@@ -297,11 +297,11 @@ export default function OperationsDashboard() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Pending:</span>
-                      <span className="font-medium">{status.services.queues.transcriptions.pending}</span>
+                      <span className="font-medium text-gray-900">{status.services.queues.transcriptions.pending}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Processing:</span>
-                      <span className="font-medium">{status.services.queues.transcriptions.processing}</span>
+                      <span className="font-medium text-gray-900">{status.services.queues.transcriptions.processing}</span>
                     </div>
                     <div className="col-span-2 flex justify-between">
                       <span className="text-gray-600">Completed Today:</span>
@@ -315,29 +315,29 @@ export default function OperationsDashboard() {
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium mb-4">Recent Activity (Last Hour)</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity (Last Hour)</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">Calls Processed</span>
-                  <span className="font-medium">{status.recent_activity.calls_processed_last_hour}</span>
+                  <span className="font-medium text-gray-900">{status.recent_activity.calls_processed_last_hour}</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">Recordings Fetched</span>
-                  <span className="font-medium">{status.recent_activity.recordings_fetched_last_hour}</span>
+                  <span className="font-medium text-gray-900">{status.recent_activity.recordings_fetched_last_hour}</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">Transcriptions Completed</span>
-                  <span className="font-medium">{status.recent_activity.transcriptions_completed_last_hour}</span>
+                  <span className="font-medium text-gray-900">{status.recent_activity.transcriptions_completed_last_hour}</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">Analyses Completed</span>
-                  <span className="font-medium">{status.recent_activity.analyses_completed_last_hour}</span>
+                  <span className="font-medium text-gray-900">{status.recent_activity.analyses_completed_last_hour}</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium mb-4">Quick Actions</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-2">
                 <a
                   href="/api/health"

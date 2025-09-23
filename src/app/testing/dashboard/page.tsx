@@ -1,102 +1,251 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import useSWR, { mutate } from 'swr';
-import { toast } from 'react-hot-toast';
 import {
-  PlayCircle,
-  PauseCircle,
+  Play,
   Upload,
   RefreshCw,
-  BarChart3,
-  ThumbsUp,
-  ThumbsDown,
-  AlertCircle,
   CheckCircle,
   XCircle,
-  FileAudio,
+  AlertCircle,
+  Zap,
+  Download,
+  Search,
   Activity,
-  TrendingUp,
-  TrendingDown,
-  HelpCircle,
-  ArrowRight,
-  Zap
+  Plus,
+  Settings,
+  Loader2,
+  FileText,
+  Database,
+  Rocket
 } from 'lucide-react';
-import ConvosoImporter from '@/components/testing/ConvosoImporter';
-import AudioUploader from '@/components/testing/AudioUploader';
-
-const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export default function TestingDashboard() {
-  const [selectedSuite, setSelectedSuite] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'tests' | 'metrics' | 'feedback'>('overview');
+  const [metrics, setMetrics] = useState<any>(null);
+  const [suites, setSuites] = useState<any[]>([]);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [systemStatus, setSystemStatus] = useState<any>(null);
+  const [currentSuiteId, setCurrentSuiteId] = useState<string | null>(null);
 
-  // Fetch test suites
-  const { data: suitesData, error: suitesError } = useSWR('/api/testing/suites', fetcher);
+  // Load initial data
+  useEffect(() => {
+    loadMetrics();
+    loadSuites();
+    verifySystem();
+  }, []);
 
-  // Fetch metrics
-  const { data: metricsData } = useSWR('/api/testing/metrics?days=7', fetcher, {
-    refreshInterval: 30000 // Refresh every 30 seconds
-  });
-
-  // Fetch feedback summary
-  const { data: feedbackData } = useSWR('/api/testing/feedback?days=7', fetcher);
-
-  // Fetch monitor data (transcription queue status)
-  const { data: monitorData } = useSWR('/api/testing/monitor', fetcher, {
-    refreshInterval: 5000 // Refresh every 5 seconds to see queue updates
-  });
-
-  const runTestSuite = async (suiteId: string) => {
-    setIsRunning(true);
+  const loadMetrics = async () => {
     try {
-      const response = await fetch(`/api/testing/run/${suiteId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          parallel: 5,
-          stopOnFailure: false
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast.success(`Test suite "${result.suite_name}" started!`);
-        // Start monitoring the test progress
-        monitorTestProgress(result.suite_run_id);
-      } else {
-        toast.error(result.error || 'Failed to start test suite');
-      }
-    } catch (error: any) {
-      toast.error('Failed to start test suite');
-      console.error(error);
-    } finally {
-      setIsRunning(false);
+      const res = await fetch('/api/testing/metrics');
+      const data = await res.json();
+      setMetrics(data);
+    } catch (error) {
+      console.error('Failed to load metrics:', error);
     }
   };
 
-  const monitorTestProgress = (suiteRunId: string) => {
-    // Set up SSE connection to monitor progress
-    const eventSource = new EventSource(`/api/testing/stream/${suiteRunId}`);
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.status === 'completed') {
-        toast.success('Test suite completed!');
-        mutate('/api/testing/metrics?days=7');
-        eventSource.close();
-      } else if (data.status === 'failed') {
-        toast.error('Test suite failed');
-        eventSource.close();
+  const loadSuites = async () => {
+    try {
+      const res = await fetch('/api/testing/create-suite');
+      const data = await res.json();
+      if (data.suites && data.suites.length > 0) {
+        setSuites(data.suites);
+        if (!currentSuiteId && data.suites[0]) {
+          setCurrentSuiteId(data.suites[0].id);
+        }
       }
-    };
+    } catch (error) {
+      console.error('Failed to load suites:', error);
+    }
+  };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
+  const verifySystem = async () => {
+    try {
+      const res = await fetch('/api/testing/verify-system');
+      const data = await res.json();
+      setSystemStatus(data);
+    } catch (error) {
+      console.error('Failed to verify system:', error);
+    }
+  };
+
+  const showMessage = (type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const handleInitSystem = async () => {
+    setLoading('init');
+    try {
+      const res = await fetch('/api/testing/verify-system', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'init' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMessage('success', 'System initialized successfully!');
+        await verifySystem();
+      } else {
+        showMessage('error', data.message || 'Failed to initialize system');
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to initialize system');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleCreateSuite = async () => {
+    setLoading('create-suite');
+    try {
+      const res = await fetch('/api/testing/create-suite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Test Suite ${new Date().toISOString().split('T')[0]}`,
+          description: 'Automated test suite for transcription accuracy'
+        })
+      });
+      const data = await res.json();
+      if (data.suite) {
+        showMessage('success', `Created suite: ${data.suite.name}`);
+        setCurrentSuiteId(data.suite.id);
+        await loadSuites();
+      } else {
+        showMessage('error', 'Failed to create suite');
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to create suite');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleImportBestCalls = async () => {
+    setLoading('import');
+    try {
+      // First find good calls
+      const findRes = await fetch('/api/testing/find-good-calls');
+      const findData = await findRes.json();
+
+      if (!findData.high_quality_calls || findData.high_quality_calls.length === 0) {
+        showMessage('error', 'No high-quality calls found');
+        return;
+      }
+
+      // Get or create suite
+      let suiteId = currentSuiteId;
+      if (!suiteId) {
+        await handleCreateSuite();
+        suiteId = currentSuiteId;
+      }
+
+      // Import top 5 calls
+      const callIds = findData.high_quality_calls.slice(0, 5).map((c: any) => c.id);
+      const importRes = await fetch('/api/testing/import-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          suite_id: suiteId,
+          call_ids: callIds
+        })
+      });
+
+      const importData = await importRes.json();
+      if (importData.imported) {
+        showMessage('success', `Imported ${importData.imported} test cases`);
+        await loadSuites();
+      } else {
+        showMessage('error', 'Failed to import calls');
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to import calls');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleQuickTest = async () => {
+    setLoading('quick-test');
+    try {
+      // Find one good call
+      const findRes = await fetch('/api/testing/find-good-calls');
+      const findData = await findRes.json();
+
+      if (!findData.high_quality_calls || findData.high_quality_calls.length === 0) {
+        showMessage('error', 'No calls found for testing');
+        return;
+      }
+
+      // Import just one call
+      const call = findData.high_quality_calls[0];
+      const importRes = await fetch('/api/testing/import-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auto_create_suite: true,
+          call_ids: [call.id]
+        })
+      });
+
+      const importData = await importRes.json();
+      if (!importData.suite_id) {
+        showMessage('error', 'Failed to import test call');
+        return;
+      }
+
+      // Run the test
+      const testRes = await fetch(`/api/testing/run/${importData.suite_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_all: true })
+      });
+
+      const result = await testRes.json();
+      if (result.success) {
+        setTestResults(result);
+        showMessage('success', `Test complete! WER: ${result.results?.[0]?.wer || 'N/A'}%`);
+        await loadMetrics();
+      } else {
+        showMessage('error', 'Test failed');
+      }
+    } catch (error) {
+      showMessage('error', 'Quick test failed');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleRunAllTests = async () => {
+    if (!currentSuiteId) {
+      showMessage('error', 'No test suite selected. Create or import tests first.');
+      return;
+    }
+
+    setLoading('run-all');
+    try {
+      const res = await fetch(`/api/testing/run/${currentSuiteId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_all: true })
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        setTestResults(result);
+        showMessage('success', `Completed ${result.total_tests} tests. Passed: ${result.passed}, Failed: ${result.failed}`);
+        await loadMetrics();
+      } else {
+        showMessage('error', result.error || 'Failed to run tests');
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to run tests');
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -107,611 +256,321 @@ export default function TestingDashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">AI Testing Dashboard</h1>
-              <p className="text-sm text-gray-900 mt-1">Test and improve your transcription & analysis accuracy</p>
+              <p className="text-sm text-gray-500 mt-1">Test and improve your transcription accuracy</p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => mutate('/api/testing/metrics?days=7')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <RefreshCw className="w-4 h-4 inline mr-2" />
-                Refresh
-              </button>
-              <AudioUploader
-                suiteId={selectedSuite || '876b6b65-ddaa-42fe-aecd-80457cb66035'}
-                onUploadComplete={() => {
-                  mutate('/api/testing/suites');
-                  mutate('/api/testing/metrics?days=7');
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex space-x-8 border-t -mb-px">
-            {['overview', 'tests', 'metrics', 'feedback'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`py-3 px-1 border-b-2 font-medium text-sm capitalize ${
-                  activeTab === tab
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-900 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+            <button
+              onClick={() => {
+                loadMetrics();
+                loadSuites();
+                verifySystem();
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <RefreshCw className="w-4 h-4 inline mr-2" />
+              Refresh
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            {/* Getting Started Guide */}
-            {(!metricsData?.metrics?.overall?.total_tests || metricsData.metrics.overall.total_tests === 0) && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 p-2 bg-blue-100 rounded-lg">
-                    <HelpCircle className="w-6 h-6 text-blue-600" />
+        {/* Alert Message */}
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg ${
+            message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+            message.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
+          }`}>
+            <p className="flex items-center">
+              {message.type === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
+              {message.type === 'error' && <XCircle className="w-5 h-5 mr-2" />}
+              {message.type === 'info' && <AlertCircle className="w-5 h-5 mr-2" />}
+              {message.text}
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {/* System Status Card */}
+          {systemStatus && (
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold mb-4">System Status</h2>
+              <div className="grid grid-cols-5 gap-4">
+                <div className="text-center">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${
+                    systemStatus.checks?.database?.status === 'success' ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    <Database className={`w-6 h-6 ${
+                      systemStatus.checks?.database?.status === 'success' ? 'text-green-600' : 'text-red-600'
+                    }`} />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      🚀 Getting Started with AI Testing
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">1</span>
-                        <div>
-                          <p className="font-medium text-gray-900">Import Test Calls</p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Use high-quality calls from your system as test cases. Open browser console (F12) and run:
-                          </p>
-                          <pre className="mt-2 p-2 bg-gray-900 text-green-400 text-xs rounded overflow-x-auto">
-{`fetch('/api/testing/find-good-calls').then(r => r.json()).then(console.log)`}
-                          </pre>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">2</span>
-                        <div>
-                          <p className="font-medium text-gray-900">Run Your First Test</p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Click "Run Suite" below or run this in console:
-                          </p>
-                          <pre className="mt-2 p-2 bg-gray-900 text-green-400 text-xs rounded overflow-x-auto">
-{`fetch('/api/testing/run/876b6b65-ddaa-42fe-aecd-80457cb66035', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({parallel: 1})
-}).then(r => r.json()).then(console.log)`}
-                          </pre>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">3</span>
-                        <div>
-                          <p className="font-medium text-gray-900">Review Results</p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Tests run through YOUR Deepgram/AssemblyAI pipeline. Check accuracy (WER), provide feedback, and track improvements over time.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm">
-                        <strong className="text-yellow-800">💡 Pro Tip:</strong>
-                        <span className="text-yellow-700 ml-1">
-                          Start with your highest QA score calls as baseline tests. If these fail, you know there's a real accuracy issue.
-                        </span>
-                      </p>
-                    </div>
+                  <p className="mt-2 text-sm font-medium">Database</p>
+                  <p className="text-xs text-gray-500">
+                    {systemStatus.checks?.database?.status || 'Unknown'}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${
+                    systemStatus.checks?.deepgram?.status === 'success' ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    <Activity className={`w-6 h-6 ${
+                      systemStatus.checks?.deepgram?.status === 'success' ? 'text-green-600' : 'text-red-600'
+                    }`} />
                   </div>
+                  <p className="mt-2 text-sm font-medium">Deepgram API</p>
+                  <p className="text-xs text-gray-500">
+                    {systemStatus.checks?.deepgram?.status || 'Unknown'}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${
+                    systemStatus.checks?.test_suites?.status === 'success' ? 'bg-green-100' :
+                    systemStatus.checks?.test_suites?.status === 'warning' ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                    <FileText className={`w-6 h-6 ${
+                      systemStatus.checks?.test_suites?.status === 'success' ? 'text-green-600' :
+                      systemStatus.checks?.test_suites?.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                    }`} />
+                  </div>
+                  <p className="mt-2 text-sm font-medium">Test Suites</p>
+                  <p className="text-xs text-gray-500">
+                    {systemStatus.checks?.test_suites?.message || 'No suites'}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${
+                    systemStatus.checks?.test_cases?.status === 'success' ? 'bg-green-100' :
+                    systemStatus.checks?.test_cases?.status === 'warning' ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                    <FileText className={`w-6 h-6 ${
+                      systemStatus.checks?.test_cases?.status === 'success' ? 'text-green-600' :
+                      systemStatus.checks?.test_cases?.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                    }`} />
+                  </div>
+                  <p className="mt-2 text-sm font-medium">Test Cases</p>
+                  <p className="text-xs text-gray-500">
+                    {systemStatus.checks?.test_cases?.data?.total || '0'} cases
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${
+                    systemStatus.status === 'success' ? 'bg-green-100' :
+                    systemStatus.status === 'warning' ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                    <CheckCircle className={`w-6 h-6 ${
+                      systemStatus.status === 'success' ? 'text-green-600' :
+                      systemStatus.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                    }`} />
+                  </div>
+                  <p className="mt-2 text-sm font-medium">Overall</p>
+                  <p className="text-xs text-gray-500">
+                    {systemStatus.ready ? 'Ready' : 'Not Ready'}
+                  </p>
                 </div>
               </div>
-            )}
-
-            {/* Transcription Queue Status */}
-            {monitorData?.metrics?.transcription_queue && (
-              <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-blue-600" />
-                    Transcription Queue Status
-                  </h3>
+              {systemStatus.status === 'error' && (
+                <div className="mt-4 pt-4 border-t">
+                  <button
+                    onClick={handleInitSystem}
+                    disabled={loading === 'init'}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {loading === 'init' ? (
+                      <><Loader2 className="w-4 h-4 inline mr-2 animate-spin" />Initializing...</>
+                    ) : (
+                      <>Initialize System</>
+                    )}
+                  </button>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {monitorData.metrics.transcription_queue.pending || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Pending</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {monitorData.metrics.transcription_queue.processing || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Processing</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {monitorData.metrics.transcription_queue.completed || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Completed</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600">
-                      {monitorData.metrics.transcription_queue.failed || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Failed</div>
-                  </div>
-                </div>
-                {monitorData.metrics.transcription_queue.avg_completion_minutes && (
-                  <div className="mt-3 pt-3 border-t text-sm text-gray-600">
-                    Average completion time: {Math.round(monitorData.metrics.transcription_queue.avg_completion_minutes)} minutes
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Key Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <MetricCard
-                title="Average WER"
-                value={metricsData?.metrics?.overall?.avg_wer
-                  ? `${(metricsData.metrics.overall.avg_wer * 100).toFixed(1)}%`
-                  : 'N/A'
-                }
-                trend={metricsData?.metrics?.cost_analysis?.improvement_percentage}
-                icon={<BarChart3 className="w-5 h-5" />}
-                color="blue"
-              />
-              <MetricCard
-                title="Tests Run"
-                value={metricsData?.metrics?.overall?.total_tests || 0}
-                subtitle="Last 7 days"
-                icon={<Activity className="w-5 h-5" />}
-                color="green"
-              />
-              <MetricCard
-                title="Success Rate"
-                value={metricsData?.metrics?.overall?.total_tests
-                  ? `${((metricsData.metrics.overall.successful_tests / metricsData.metrics.overall.total_tests) * 100).toFixed(0)}%`
-                  : 'N/A'
-                }
-                icon={<CheckCircle className="w-5 h-5" />}
-                color="emerald"
-              />
-              <MetricCard
-                title="Avg Time"
-                value={metricsData?.metrics?.overall?.avg_execution_time_ms
-                  ? `${(metricsData.metrics.overall.avg_execution_time_ms / 1000).toFixed(1)}s`
-                  : 'N/A'
-                }
-                icon={<RefreshCw className="w-5 h-5" />}
-                color="purple"
-              />
+              )}
             </div>
+          )}
 
-            {/* Quick Actions Bar */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
-              <div className="flex gap-3 flex-wrap">
-                <ConvosoImporter
-                  suiteId="876b6b65-ddaa-42fe-aecd-80457cb66035"
-                  onImport={() => {
-                    mutate('/api/testing/suites');
-                    mutate('/api/testing/metrics?days=7');
-                  }}
-                />
-
+          {/* Quick Start Guide */}
+          {(!metrics || metrics.total_tests === 0) && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                🚀 Getting Started - Easy Setup
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Click the buttons below to set up your AI testing system. No console commands needed!
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch('/api/testing/find-good-calls');
-                      const data = await res.json();
-                      if (data.high_quality_calls && data.high_quality_calls.length > 0) {
-                        const call = data.high_quality_calls[0];
-                        const importRes = await fetch(`/api/testing/import-call/${call.id}`, {
-                          method: 'POST',
-                          headers: {'Content-Type': 'application/json'},
-                          body: JSON.stringify({
-                            suite_id: '876b6b65-ddaa-42fe-aecd-80457cb66035',
-                            verify_transcript: true
-                          })
-                        });
-                        const importData = await importRes.json();
-                        if (importData.success) {
-                          toast.success(`Imported call ${call.id} (QA Score: ${call.qa_score})`);
-                          mutate('/api/testing/suites');
-                        } else {
-                          toast.error(importData.error || 'Failed to import call');
-                        }
-                      } else {
-                        toast.error('No suitable calls found to import');
-                      }
-                    } catch (error) {
-                      toast.error('Failed to import test call');
-                    }
-                  }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium"
+                  onClick={handleInitSystem}
+                  disabled={loading === 'init'}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex flex-col items-center"
                 >
-                  <Upload className="w-4 h-4" />
-                  Import Best Call
+                  {loading === 'init' ? (
+                    <><Loader2 className="w-6 h-6 mb-2 animate-spin" />Initializing...</>
+                  ) : (
+                    <><Database className="w-6 h-6 mb-2" />Initialize System</>
+                  )}
                 </button>
 
                 <button
-                  onClick={() => runTestSuite('876b6b65-ddaa-42fe-aecd-80457cb66035')}
-                  disabled={isRunning}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+                  onClick={handleCreateSuite}
+                  disabled={loading === 'create-suite'}
+                  className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex flex-col items-center"
                 >
-                  <Zap className="w-4 h-4" />
-                  Quick Test Run
+                  {loading === 'create-suite' ? (
+                    <><Loader2 className="w-6 h-6 mb-2 animate-spin" />Creating...</>
+                  ) : (
+                    <><Plus className="w-6 h-6 mb-2" />Create Test Suite</>
+                  )}
                 </button>
 
                 <button
-                  onClick={async () => {
-                    const res = await fetch('/api/testing/verify-setup');
-                    const data = await res.json();
-                    if (data.success) {
-                      toast.success('System verified and ready!');
-                      console.log('System Status:', data);
-                    } else {
-                      toast.error('System check failed');
-                    }
-                  }}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 text-sm font-medium"
+                  onClick={handleImportBestCalls}
+                  disabled={loading === 'import'}
+                  className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex flex-col items-center"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  Verify System
+                  {loading === 'import' ? (
+                    <><Loader2 className="w-6 h-6 mb-2 animate-spin" />Importing...</>
+                  ) : (
+                    <><Upload className="w-6 h-6 mb-2" />Import Best Calls</>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleQuickTest}
+                  disabled={loading === 'quick-test'}
+                  className="px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 flex flex-col items-center"
+                >
+                  {loading === 'quick-test' ? (
+                    <><Loader2 className="w-6 h-6 mb-2 animate-spin" />Testing...</>
+                  ) : (
+                    <><Zap className="w-6 h-6 mb-2" />Quick Test (1 Call)</>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleRunAllTests}
+                  disabled={loading === 'run-all'}
+                  className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex flex-col items-center"
+                >
+                  {loading === 'run-all' ? (
+                    <><Loader2 className="w-6 h-6 mb-2 animate-spin" />Running...</>
+                  ) : (
+                    <><Play className="w-6 h-6 mb-2" />Run All Tests</>
+                  )}
                 </button>
 
                 <button
                   onClick={() => {
-                    const commands = [
-                      "// Import a call:",
-                      "fetch('/api/testing/import-call/CALL_ID', {",
-                      "  method: 'POST',",
-                      "  headers: {'Content-Type': 'application/json'},",
-                      "  body: JSON.stringify({",
-                      "    suite_id: '876b6b65-ddaa-42fe-aecd-80457cb66035',",
-                      "    verify_transcript: true",
-                      "  })",
-                      "}).then(r => r.json()).then(console.log)",
-                      "",
-                      "// Run tests:",
-                      "fetch('/api/testing/run/876b6b65-ddaa-42fe-aecd-80457cb66035', {",
-                      "  method: 'POST',",
-                      "  headers: {'Content-Type': 'application/json'},",
-                      "  body: JSON.stringify({parallel: 3})",
-                      "}).then(r => r.json()).then(console.log)"
-                    ].join('\n');
-                    console.log(commands);
-                    toast.success('Commands printed to console!');
+                    loadMetrics();
+                    loadSuites();
+                    verifySystem();
+                    showMessage('info', 'Data refreshed');
                   }}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 text-sm font-medium"
+                  className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex flex-col items-center"
                 >
-                  <HelpCircle className="w-4 h-4" />
-                  Show Commands
+                  <RefreshCw className="w-6 h-6 mb-2" />
+                  Refresh Data
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Test Suites */}
-            <div className="bg-white rounded-lg shadow">
+          {/* Key Metrics */}
+          {metrics && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Average WER</h3>
+                <p className="text-2xl font-bold text-gray-900">{metrics.wer_label || 'N/A'}</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Tests Run</h3>
+                <p className="text-2xl font-bold text-gray-900">{metrics.total_tests || 0}</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Success Rate</h3>
+                <p className="text-2xl font-bold text-gray-900">{metrics.success_rate || 'N/A'}</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Avg Time</h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {metrics.avg_processing_time ? `${metrics.avg_processing_time}ms` : 'N/A'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Test Suites */}
+          {suites.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border">
               <div className="px-6 py-4 border-b">
                 <h2 className="text-lg font-semibold">Test Suites</h2>
               </div>
               <div className="divide-y">
-                {suitesData?.suites?.map((suite: any) => (
-                  <div key={suite.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                    <div className="flex-1">
-                      <h3 className="text-sm font-medium text-gray-900">{suite.name}</h3>
-                      <p className="text-sm text-gray-900 mt-1">{suite.description}</p>
-                      <div className="flex gap-4 mt-2">
-                        <span className="text-xs text-gray-900">
-                          {suite.test_case_count} tests
-                        </span>
-                        <span className="text-xs text-gray-900">
-                          {suite.total_runs} runs
-                        </span>
-                        {suite.avg_wer_all_runs && (
-                          <span className="text-xs text-gray-900">
-                            Avg WER: {(suite.avg_wer_all_runs * 100).toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
+                {suites.map((suite: any) => (
+                  <div key={suite.id} className="px-6 py-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium">{suite.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {suite.test_cases || 0} test cases
+                      </p>
                     </div>
                     <button
-                      onClick={() => runTestSuite(suite.id)}
-                      disabled={isRunning}
-                      className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => {
+                        setCurrentSuiteId(suite.id);
+                        handleRunAllTests();
+                      }}
+                      disabled={loading === 'run-all'}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
                     >
-                      <PlayCircle className="w-4 h-4 inline mr-2" />
-                      Run Suite
+                      Run Tests
                     </button>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Recommendations */}
-            {metricsData?.recommendations && metricsData.recommendations.length > 0 && (
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b">
-                  <h2 className="text-lg font-semibold">Recommendations</h2>
+          {/* Test Results */}
+          {testResults && (
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold mb-4">Last Test Results</h2>
+              <div className="grid grid-cols-4 gap-4 mb-4">
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Total</p>
+                  <p className="text-xl font-bold">{testResults.total_tests}</p>
                 </div>
-                <div className="px-6 py-4">
-                  <ul className="space-y-3">
-                    {metricsData.recommendations.map((rec: string, idx: number) => (
-                      <li key={idx} className="flex items-start">
-                        <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5 mr-3 flex-shrink-0" />
-                        <span className="text-sm text-gray-700">{rec}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Passed</p>
+                  <p className="text-xl font-bold text-green-600">{testResults.passed}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Failed</p>
+                  <p className="text-xl font-bold text-red-600">{testResults.failed}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Time</p>
+                  <p className="text-xl font-bold">{(testResults.total_time_ms / 1000).toFixed(1)}s</p>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'tests' && (
-          <TestResultsView />
-        )}
-
-        {activeTab === 'metrics' && (
-          <MetricsView metricsData={metricsData} />
-        )}
-
-        {activeTab === 'feedback' && (
-          <FeedbackView feedbackData={feedbackData} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Metric Card Component
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  trend,
-  icon,
-  color
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  trend?: number;
-  icon: React.ReactNode;
-  color: string;
-}) {
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between">
-        <div className={`p-2 bg-${color}-100 rounded-lg`}>
-          <div className={`text-${color}-600`}>{icon}</div>
-        </div>
-        {trend !== undefined && (
-          <div className="flex items-center text-sm">
-            {trend > 0 ? (
-              <>
-                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                <span className="text-green-600">+{trend.toFixed(1)}%</span>
-              </>
-            ) : (
-              <>
-                <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-                <span className="text-red-600">{trend.toFixed(1)}%</span>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="mt-4">
-        <h3 className="text-sm font-medium text-gray-900">{title}</h3>
-        <p className="text-2xl font-semibold text-gray-900 mt-1">{value}</p>
-        {subtitle && (
-          <p className="text-sm text-gray-900 mt-1">{subtitle}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Test Results View Component
-function TestResultsView() {
-  return (
-    <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b">
-        <h2 className="text-lg font-semibold">Recent Test Results</h2>
-      </div>
-      <div className="px-6 py-4">
-        <p className="text-sm text-gray-900">Test results will appear here when tests are run</p>
-      </div>
-    </div>
-  );
-}
-
-// Metrics View Component
-function MetricsView({ metricsData }: any) {
-  return (
-    <div className="space-y-6">
-      {/* Category Performance */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">Performance by Category</h2>
-        </div>
-        <div className="px-6 py-4">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                    Tests
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                    Avg WER
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                    Quality Distribution
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {metricsData?.metrics?.by_category?.map((cat: any) => (
-                  <tr key={cat.test_category}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {cat.test_category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cat.test_count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {(cat.avg_wer * 100).toFixed(1)}%
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-1">
-                        <div className="bg-green-500 h-4" style={{ width: `${(cat.excellent_count / cat.test_count) * 100}px` }} />
-                        <div className="bg-yellow-500 h-4" style={{ width: `${(cat.good_count / cat.test_count) * 100}px` }} />
-                        <div className="bg-orange-500 h-4" style={{ width: `${(cat.fair_count / cat.test_count) * 100}px` }} />
-                        <div className="bg-red-500 h-4" style={{ width: `${(cat.poor_count / cat.test_count) * 100}px` }} />
+              {testResults.results && (
+                <div className="space-y-2">
+                  {testResults.results.map((result: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                      <span className="text-sm">{result.test_case_name}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm">WER: {result.wer?.toFixed(1)}%</span>
+                        <span className={`text-sm font-medium ${
+                          result.status === 'passed' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {result.status}
+                        </span>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Engine Comparison */}
-      {metricsData?.metrics?.engine_comparison?.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold">Engine Comparison</h2>
-          </div>
-          <div className="px-6 py-4">
-            <div className="space-y-4">
-              {metricsData.metrics.engine_comparison.map((engine: any) => (
-                <div key={engine.engine} className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium text-gray-900">{engine.engine}</h3>
-                    <div className="flex gap-4 mt-1">
-                      <span className="text-xs text-gray-900">
-                        WER: {(engine.avg_wer * 100).toFixed(1)}%
-                      </span>
-                      <span className="text-xs text-gray-900">
-                        Speed: {engine.avg_time_ms}ms
-                      </span>
-                      <span className="text-xs text-gray-900">
-                        Cost: ${engine.total_cost_dollars?.toFixed(2) || '0.00'}
-                      </span>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {engine.test_count} tests
-                    </span>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Feedback View Component
-function FeedbackView({ feedbackData }: any) {
-  return (
-    <div className="space-y-6">
-      {/* Feedback Summary */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">Feedback Summary</h2>
-        </div>
-        <div className="px-6 py-4">
-          {feedbackData?.summary?.length > 0 ? (
-            <div className="space-y-3">
-              {feedbackData.summary.map((item: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {item.error_category || 'Uncategorized'}
-                    </span>
-                    {item.error_severity && (
-                      <span className="ml-2 text-xs text-gray-900">
-                        ({item.error_severity})
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex gap-2">
-                      <span className="flex items-center text-sm">
-                        <ThumbsUp className="w-4 h-4 text-green-500 mr-1" />
-                        {item.thumbs_up}
-                      </span>
-                      <span className="flex items-center text-sm">
-                        <ThumbsDown className="w-4 h-4 text-red-500 mr-1" />
-                        {item.thumbs_down}
-                      </span>
-                    </div>
-                    <span className="text-sm text-gray-900">
-                      {item.count} occurrences
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-900">No feedback data available</p>
           )}
         </div>
       </div>
-
-      {/* Correction Statistics */}
-      {feedbackData?.correction_stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <MetricCard
-            title="Total Corrections"
-            value={feedbackData.correction_stats.total_corrections}
-            icon={<CheckCircle className="w-5 h-5" />}
-            color="blue"
-          />
-          <MetricCard
-            title="Verified"
-            value={feedbackData.correction_stats.verified_corrections}
-            icon={<CheckCircle className="w-5 h-5" />}
-            color="green"
-          />
-          <MetricCard
-            title="Used in Training"
-            value={feedbackData.correction_stats.used_in_training}
-            icon={<Activity className="w-5 h-5" />}
-            color="purple"
-          />
-          <MetricCard
-            title="Engines Covered"
-            value={feedbackData.correction_stats.engines_covered}
-            icon={<BarChart3 className="w-5 h-5" />}
-            color="orange"
-          />
-        </div>
-      )}
     </div>
   );
 }

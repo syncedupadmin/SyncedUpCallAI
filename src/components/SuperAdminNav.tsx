@@ -22,7 +22,8 @@ import {
   Building2,
   CheckCircle2,
   TrendingUp,
-  Monitor
+  Monitor,
+  ShieldCheck
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -93,6 +94,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/operations',
       icon: Monitor,
       description: 'System health & monitoring'
+    },
+    {
+      name: 'Audit',
+      href: '/superadmin/audit-dashboard',
+      icon: ShieldCheck,
+      description: 'Portal security audit'
     },
     {
       name: 'Bulk Upload',
@@ -184,44 +191,42 @@ export default function SuperAdminNav() {
 
   return (
     <nav className="bg-gray-900/95 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo and Desktop Navigation */}
-          <div className="flex items-center flex-1">
-            <div className="flex-shrink-0 flex items-center">
-              <Crown className="w-8 h-8 text-purple-500" />
-              <span className="ml-2 text-xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-                Super Admin
-              </span>
-            </div>
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-16">
+          {/* Logo - Fixed width */}
+          <div className="flex-shrink-0 flex items-center min-w-fit">
+            <Crown className="w-8 h-8 text-purple-500" />
+            <span className="ml-2 text-xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent whitespace-nowrap">
+              Super Admin
+            </span>
+          </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:block ml-6 flex-1">
-              <div className="flex items-baseline space-x-0.5">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.href);
+          {/* Desktop Navigation - Flexible center with overflow handling */}
+          <div className="hidden md:flex flex-1 mx-4 overflow-x-auto">
+            <div className="flex items-baseline space-x-0.5 mx-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
 
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                        active
-                          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
-                          : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`flex items-center gap-1 px-1.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                      active
+                        ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30'
+                        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
-          {/* User Menu */}
+          {/* User Menu - Fixed on right */}
           <div className="hidden md:flex items-center gap-2 flex-shrink-0">
             <OfficeSelector />
             {user && (
