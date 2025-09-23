@@ -3,8 +3,6 @@ import { db } from '@/server/db';
 import { isAdminAuthenticated } from '@/server/auth/admin';
 import { writeFile } from 'fs/promises';
 import path from 'path';
-import { createReadStream } from 'fs';
-import unzipper from 'unzipper';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
