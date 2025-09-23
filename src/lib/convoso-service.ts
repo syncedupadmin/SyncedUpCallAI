@@ -562,6 +562,7 @@ export class ConvosoService {
         ended_at: call.end_time,
         office_id: 1,
         source: call.source || 'manual',
+        analyzed_at: new Date().toISOString(),  // Add analyzed_at to prevent null constraint violation
         metadata: {
           customer_name: `${call.customer_first_name} ${call.customer_last_name}`.trim(),
           customer_email: call.customer_email,
