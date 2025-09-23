@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { isAdminAuthenticated } from '@/server/auth/admin';
+import { ConvosoService } from '@/lib/convoso-service';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 1 minute timeout for fetching from Convoso
+export const maxDuration = 60;
 
 // POST /api/testing/import-convoso-calls - Import recent calls from Convoso for testing
 export async function POST(req: NextRequest) {
@@ -27,69 +28,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check Convoso credentials
-    const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
-    if (!CONVOSO_AUTH_TOKEN) {
-      return NextResponse.json(
-        { error: 'Convoso AUTH_TOKEN not configured' },
-        { status: 500 }
-      );
-    }
+    console.log('[Convoso Import] Starting import for AI testing...');
 
-    console.log('[Convoso Import] Fetching recent calls from Convoso...');
+    // Step 1: Use ConvosoService to fetch calls (the WORKING method)
+    const service = new ConvosoService();
 
-    // Step 1: Get recent calls from Convoso using the working /log/retrieve endpoint
+    const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days_back);
-    const endDate = new Date();
 
-    // Format dates exactly like the working ConvosoService
-    const formatDateTime = (date: Date, isEnd: boolean = false) => {
-      const dateStr = date.toISOString().split('T')[0];
-      return isEnd ? `${dateStr} 23:59:59` : `${dateStr} 00:00:00`;
-    };
+    // Format dates for ConvosoService
+    const dateFrom = startDate.toISOString().split('T')[0];
+    const dateTo = endDate.toISOString().split('T')[0];
 
-    // Fetch more calls to find ones with recordings (most don't have recordings)
-    const fetchLimit = 100;  // Balanced to avoid timeout but get enough calls
-    const params = new URLSearchParams({
-      auth_token: CONVOSO_AUTH_TOKEN,
-      start_time: formatDateTime(startDate),
-      end_time: formatDateTime(endDate, true),
-      include_recordings: '1',
-      limit: String(fetchLimit),
-      offset: '0'
-    });
+    console.log(`[Convoso Import] Fetching calls from ${dateFrom} to ${dateTo}`);
 
-    const convosoUrl = `https://api.convoso.com/v1/log/retrieve?${params.toString()}`;
+    // Use the EXACT same method that works in production
+    const callData = await service.fetchCompleteCallData(dateFrom, dateTo);
 
-    const convosoResponse = await fetch(convosoUrl);
-
-    if (!convosoResponse.ok) {
-      const errorText = await convosoResponse.text();
-      console.error('[Convoso Import] API error:', errorText);
-      return NextResponse.json(
-        { error: `Convoso API error: ${convosoResponse.status}` },
-        { status: 502 }
-      );
-    }
-
-    const convosoData = await convosoResponse.json();
-
-    // Check for API error (matching ConvosoService)
-    if (convosoData.success === false) {
-      console.error('[Convoso Import] API returned failure:', convosoData.text);
-      return NextResponse.json(
-        { error: convosoData.text || 'Convoso API returned failure' },
-        { status: 502 }
-      );
-    }
-
-    const convosoCalls = convosoData.data?.results || [];
-    const totalFound = convosoData.data?.total_found || 0;
-
-    console.log(`[Convoso Import] Found ${totalFound} total calls, fetched ${convosoCalls.length} in this page`);
-
-    if (convosoCalls.length === 0) {
+    if (!callData || callData.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No recent calls found in Convoso',
@@ -97,131 +54,52 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Step 2: Filter calls suitable for testing - BE VERY LENIENT like the working system
-    let callsWithRecordings = 0;
-    let callsInProgress = 0;
+    // Filter for calls with recordings and reasonable duration
+    const validCalls = callData
+      .filter(call =>
+        call.recording_url &&
+        call.duration_seconds > 0 &&
+        !call.disposition.includes('Call in Progress')
+      )
+      .slice(0, limit);
 
-    const testCandidates = convosoCalls.filter((call: any) => {
-      // Check for ANY recording URL format (like the working system: src/app/api/convoso/search-by-agent/route.ts:79)
-      const hasRecording = call.recording &&
-                          call.recording.length > 0 &&
-                          (call.recording[0].public_url || call.recording[0].src);
+    console.log(`[Convoso Import] Found ${validCalls.length} valid calls for testing`);
 
-      if (hasRecording) callsWithRecordings++;
+    // Step 2: Save calls to database using ConvosoService's method
+    const savedCount = await service.saveCallsToDatabase(validCalls, 'ai-testing-import');
 
-      // Very minimal filtering - just skip calls that are definitely in progress
-      const skipDispositions = ['Call in Progress'];
-      const disposition = call.status_name || call.status || '';
+    console.log(`[Convoso Import] Saved ${savedCount} calls to database`);
 
-      if (skipDispositions.includes(disposition)) callsInProgress++;
-
-      // Be VERY lenient - accept anything with a recording
-      return hasRecording && !skipDispositions.includes(disposition);
-    }).slice(0, limit);
-
-    console.log(`[Convoso Import] Stats: ${callsWithRecordings} calls have recordings, ${callsInProgress} in progress`);
-    console.log(`[Convoso Import] Found ${testCandidates.length} suitable calls for testing`);
-
-    // Step 3: Import each call
+    // Step 3: Create test cases that REFERENCE the saved calls
     const imported = [];
     const failed = [];
 
-    for (const convosoCall of testCandidates) {
+    for (const call of validCalls) {
       try {
-        // First, check if this call already exists in our system
-        // Extract recording URL EXACTLY like the working system (src/app/api/convoso/search-by-agent/route.ts:79)
-        const recordingUrl = convosoCall.recording?.[0]?.public_url ||
-                           convosoCall.recording?.[0]?.src || '';
-        const convosoCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
-
-        // Skip URL validation for Convoso URLs - they may return different content-types
-        // for HEAD requests or require specific cookies. The transcription service will
-        // handle invalid URLs appropriately.
-        if (recordingUrl) {
-          console.log(`[Convoso Import] Skipping validation for ${convosoCallId} - will let transcription service handle it`);
-        }
-
-        const existingCall = await db.oneOrNone(`
-          SELECT id FROM calls
+        // Find the saved call in database
+        const savedCall = await db.oneOrNone(`
+          SELECT id, recording_url, duration_sec
+          FROM calls
           WHERE call_id = $1
-          OR (recording_url = $2 AND recording_url IS NOT NULL)
-        `, [`convoso_${convosoCallId}`, recordingUrl]);
+        `, [`convoso_${call.recording_id}`]);
 
-        let callId;
-
-        if (existingCall) {
-          callId = existingCall.id;
-          console.log(`[Convoso Import] Call ${convosoCallId} already exists as ${callId}`);
-        } else {
-          // Create a new call record matching the working schema (src/lib/convoso-service.ts:550)
-          const newCall = await db.one(`
-            INSERT INTO calls (
-              call_id,
-              convoso_lead_id,
-              lead_id,
-              recording_url,
-              duration_sec,
-              agent_name,
-              campaign,
-              disposition,
-              started_at,
-              ended_at,
-              created_at,
-              analyzed_at,
-              office_id,
-              source,
-              phone_number,
-              metadata
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12, $13, $14)
-            RETURNING id
-          `, [
-            `convoso_${convosoCallId}`,  // call_id
-            convosoCall.lead_id,          // convoso_lead_id
-            convosoCall.lead_id,          // lead_id
-            recordingUrl,                  // recording_url
-            convosoCall.call_length ? parseInt(convosoCall.call_length) : 30, // duration_sec
-            convosoCall.user || 'Unknown', // agent_name
-            convosoCall.campaign || 'Unknown Campaign', // campaign
-            convosoCall.status_name || convosoCall.status || 'UNKNOWN', // disposition
-            convosoCall.call_date || new Date().toISOString(), // started_at
-            convosoCall.call_date || new Date().toISOString(), // ended_at
-            1, // office_id
-            'test_import', // source
-            convosoCall.phone_number || '', // phone_number
-            JSON.stringify({ // metadata
-              imported_for_testing: true,
-              test_import_date: new Date().toISOString()
-            })
-          ]);
-          callId = newCall.id;
-          console.log(`[Convoso Import] Created new call ${callId} from Convoso ${convosoCallId}`);
-
-          // Trigger transcription
-          await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/api/jobs/transcribe`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.JOBS_SECRET}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              callId: callId,
-              recordingUrl: recordingUrl
-            })
-          });
-        }
-
-        // Check if already imported as test case
-        const existingTestCase = await db.oneOrNone(`
-          SELECT id FROM ai_test_cases
-          WHERE source_call_id = $1
-        `, [callId]);
-
-        if (existingTestCase) {
-          console.log(`[Convoso Import] Call ${callId} already imported as test case`);
+        if (!savedCall) {
+          console.warn(`[Convoso Import] Could not find saved call for ${call.recording_id}`);
           continue;
         }
 
-        // Create test case
+        // Check if test case already exists for this call
+        const existingTestCase = await db.oneOrNone(`
+          SELECT id FROM ai_test_cases
+          WHERE source_call_id = $1
+        `, [savedCall.id]);
+
+        if (existingTestCase) {
+          console.log(`[Convoso Import] Test case already exists for call ${savedCall.id}`);
+          continue;
+        }
+
+        // Create test case that REFERENCES the call (not duplicate the URL)
         const testCase = await db.one(`
           INSERT INTO ai_test_cases (
             suite_id,
@@ -237,37 +115,46 @@ export async function POST(req: NextRequest) {
           RETURNING id
         `, [
           suite_id,
-          `Convoso Call - ${convosoCall.user || 'Unknown'} - ${convosoCall.status_name || 'Unknown'}`,
-          recordingUrl,
-          convosoCall.call_length ? parseInt(convosoCall.call_length) : 30,
-          determineTestCategory(convosoCall),
+          `Convoso Call - ${call.agent_name} - ${call.disposition}`,
+          savedCall.recording_url, // Use the URL from the saved call
+          savedCall.duration_sec || call.duration_seconds,
+          determineTestCategory(call),
           JSON.stringify({
-            convoso_call_id: convosoCallId,
-            agent: convosoCall.user,
-            campaign: convosoCall.campaign,
-            disposition: convosoCall.status_name || convosoCall.status,
-            phone: convosoCall.phone_number,
-            lead_id: convosoCall.lead_id,
-            imported_from: 'convoso_direct'
+            convoso_recording_id: call.recording_id,
+            agent: call.agent_name,
+            campaign: call.campaign_name,
+            disposition: call.disposition,
+            imported_at: new Date().toISOString()
           }),
           3, // Medium difficulty by default
           'convoso_import',
-          callId
+          savedCall.id // Reference to the actual call record
         ]);
+
+        // Queue the call for transcription if not already done
+        await db.none(`
+          INSERT INTO transcription_queue (
+            call_id,
+            status,
+            priority,
+            source,
+            created_at
+          ) VALUES ($1, 'pending', 2, 'ai_testing', NOW())
+          ON CONFLICT (call_id) DO NOTHING
+        `, [savedCall.id]);
 
         imported.push({
           test_case_id: testCase.id,
-          call_id: callId,
-          convoso_id: convosoCallId,
-          agent: convosoCall.user,
-          duration: convosoCall.call_length ? parseInt(convosoCall.call_length) : 30
+          call_id: savedCall.id,
+          convoso_id: call.recording_id,
+          agent: call.agent_name,
+          duration: call.duration_seconds
         });
 
       } catch (error: any) {
-        const failedCallId = convosoCall.recording?.[0]?.recording_id || convosoCall.id;
-        console.error(`[Convoso Import] Failed to import call ${failedCallId}:`, error);
+        console.error(`[Convoso Import] Failed to create test case:`, error);
         failed.push({
-          convoso_id: failedCallId,
+          convoso_id: call.recording_id,
           error: error.message
         });
       }
@@ -283,8 +170,8 @@ export async function POST(req: NextRequest) {
         failed
       },
       next_steps: [
-        'Calls are being transcribed in the background',
-        'Run tests once transcription completes (usually 10-30 seconds)',
+        'Calls are being transcribed using the production pipeline',
+        'Run tests once transcription completes',
         'View results in the Testing Dashboard'
       ]
     });
@@ -306,7 +193,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Check if Convoso credentials are configured
+    // Use ConvosoService to check connection
+    const service = new ConvosoService();
+    const settings = await service.getControlSettings();
+
     const CONVOSO_AUTH_TOKEN = process.env.CONVOSO_AUTH_TOKEN;
     const hasCredentials = !!CONVOSO_AUTH_TOKEN;
 
@@ -316,43 +206,19 @@ export async function GET(req: NextRequest) {
         message: 'Convoso AUTH_TOKEN not configured',
         setup_instructions: [
           '1. Add CONVOSO_AUTH_TOKEN to your .env.local',
-          '2. The token should be: 8nf3i9mmzoxidg3ntm28gbxvlhdiqo3p',
-          '3. Restart the development server'
+          '2. Restart the development server'
         ]
       });
     }
 
-    // Test the connection using a simple API call
-    const params = new URLSearchParams({
-      auth_token: CONVOSO_AUTH_TOKEN,
-      limit: '1',
-      offset: '0'
-    });
-
-    const testResponse = await fetch(`https://api.convoso.com/v1/log/retrieve?${params.toString()}`);
-
-    if (testResponse.ok) {
-      const data = await testResponse.json();
-      if (data.success !== false) {
-        return NextResponse.json({
-          connected: true,
-          message: 'Convoso API connected successfully',
-          account: 'Connected'
-        });
-      } else {
-        return NextResponse.json({
-          connected: false,
-          message: `Convoso API error: ${data.text || 'Authentication failed'}`,
-          error: data.text
-        });
+    return NextResponse.json({
+      connected: true,
+      message: 'Convoso API connected successfully',
+      settings: {
+        system_enabled: settings.system_enabled,
+        configured: true
       }
-    } else {
-      return NextResponse.json({
-        connected: false,
-        message: `Convoso API connection failed: ${testResponse.status}`,
-        error: await testResponse.text()
-      });
-    }
+    });
 
   } catch (error: any) {
     return NextResponse.json({
@@ -367,10 +233,10 @@ export async function GET(req: NextRequest) {
  * Determine test category based on call characteristics - using valid enum values
  */
 function determineTestCategory(call: any): string {
-  const duration = call.call_length ? parseInt(call.call_length) : 30;
-  const disposition = call.status_name || call.status || '';
+  const duration = call.duration_seconds || 30;
+  const disposition = call.disposition || '';
 
-  // Map to VALID test categories from the database constraint
+  // Map to VALID test categories from the database
   if (duration < 5) return 'dead_air';
   if (duration < 15) return 'rejection_immediate';
 
