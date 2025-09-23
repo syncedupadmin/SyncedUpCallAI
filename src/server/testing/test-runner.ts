@@ -62,12 +62,20 @@ export async function runTestCase(testCase: TestCase): Promise<TestRunResult> {
         created_at,
         source,
         analyzed_at,
-        is_test  -- Add this column if it doesn't exist
-      ) VALUES ($1, $2, 'TEST_AGENT', 'AI_TEST', 'outbound', NOW(), NOW(), 'ai_test', NOW(), true)
+        is_test
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `, [
       testCase.audio_url,
-      testCase.audio_duration_sec || 30
+      testCase.audio_duration_sec || 30,
+      'TEST_AGENT',
+      'AI_TEST',
+      'outbound',
+      new Date(),
+      new Date(),
+      'ai_test',
+      new Date(),
+      true
     ]);
     testCallId = testCall.id;
 
