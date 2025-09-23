@@ -23,6 +23,7 @@ import {
   Zap
 } from 'lucide-react';
 import ConvosoImporter from '@/components/testing/ConvosoImporter';
+import AudioUploader from '@/components/testing/AudioUploader';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -116,12 +117,13 @@ export default function TestingDashboard() {
                 <RefreshCw className="w-4 h-4 inline mr-2" />
                 Refresh
               </button>
-              <button
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-              >
-                <Upload className="w-4 h-4 inline mr-2" />
-                Upload Test Audio
-              </button>
+              <AudioUploader
+                suiteId={selectedSuite || '876b6b65-ddaa-42fe-aecd-80457cb66035'}
+                onUploadComplete={() => {
+                  mutate('/api/testing/suites');
+                  mutate('/api/testing/metrics?days=7');
+                }}
+              />
             </div>
           </div>
 
