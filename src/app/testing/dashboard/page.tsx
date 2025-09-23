@@ -42,6 +42,11 @@ export default function TestingDashboard() {
   // Fetch feedback summary
   const { data: feedbackData } = useSWR('/api/testing/feedback?days=7', fetcher);
 
+  // Fetch monitor data (transcription queue status)
+  const { data: monitorData } = useSWR('/api/testing/monitor', fetcher, {
+    refreshInterval: 5000 // Refresh every 5 seconds to see queue updates
+  });
+
   const runTestSuite = async (suiteId: string) => {
     setIsRunning(true);
     try {
@@ -206,6 +211,49 @@ export default function TestingDashboard() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Transcription Queue Status */}
+            {monitorData?.metrics?.transcription_queue && (
+              <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-blue-600" />
+                    Transcription Queue Status
+                  </h3>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {monitorData.metrics.transcription_queue.pending || 0}
+                    </div>
+                    <div className="text-sm text-gray-600">Pending</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {monitorData.metrics.transcription_queue.processing || 0}
+                    </div>
+                    <div className="text-sm text-gray-600">Processing</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {monitorData.metrics.transcription_queue.completed || 0}
+                    </div>
+                    <div className="text-sm text-gray-600">Completed</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">
+                      {monitorData.metrics.transcription_queue.failed || 0}
+                    </div>
+                    <div className="text-sm text-gray-600">Failed</div>
+                  </div>
+                </div>
+                {monitorData.metrics.transcription_queue.avg_completion_minutes && (
+                  <div className="mt-3 pt-3 border-t text-sm text-gray-600">
+                    Average completion time: {Math.round(monitorData.metrics.transcription_queue.avg_completion_minutes)} minutes
+                  </div>
+                )}
               </div>
             )}
 

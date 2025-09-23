@@ -24,7 +24,8 @@
       "Bash(dir)",
       "Bash(mv:*)",
       "Bash(dir:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(psql:*)"
     ]
   },
   "outputStyle": "default"
