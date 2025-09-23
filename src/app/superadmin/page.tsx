@@ -419,13 +419,29 @@ export default function AdminPage() {
           Quick Actions
         </h3>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <a href="/superadmin/audit-dashboard" className="btn btn-primary" style={{
+            background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+            color: 'white',
+            fontWeight: 600,
+            border: 'none'
+          }}>
+            🛡️ Portal Audit Dashboard
+          </a>
+          <a href="/ai-settings" className="btn btn-primary" style={{
+            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+            color: 'white',
+            fontWeight: 600,
+            border: 'none'
+          }}>
+            🎯 AI Settings (Fix Over-tuning)
+          </a>
           <a href="/testing/dashboard" className="btn btn-primary" style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             fontWeight: 600,
             border: 'none'
           }}>
-            🎯 AI Testing Dashboard
+            🧪 Testing Dashboard
           </a>
           <a href="/batch" className="btn btn-ghost">
             📊 Batch Monitor
