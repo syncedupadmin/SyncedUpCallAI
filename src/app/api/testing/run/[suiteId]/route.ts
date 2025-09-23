@@ -42,10 +42,13 @@ export async function POST(
     `, [suiteId]);
 
     if (runningTest) {
-      return NextResponse.json(
-        { error: 'A test is already running for this suite' },
-        { status: 409 }
-      );
+      // Reuse the existing run instead of failing with 409
+      return NextResponse.json({
+        success: true,
+        message: 'Test suite is already running',
+        reused_run_id: runningTest.id,
+        status: 'running'
+      }, { status: 202 }); // 202 Accepted - request accepted but processing not complete
     }
 
     // Run the test suite using our simplified runner
