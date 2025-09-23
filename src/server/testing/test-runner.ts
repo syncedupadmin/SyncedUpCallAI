@@ -1,6 +1,6 @@
 import { Client } from "pg";
 import fetch from "node-fetch";
-import { wer } from "./wer.js";
+import { wer } from "./wer";
 
 const JOBS_SECRET = process.env.JOBS_SECRET!;
 const DB = process.env.DATABASE_URL!;

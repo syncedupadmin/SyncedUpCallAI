@@ -1,6 +1,6 @@
 import { Client } from "pg";
 import pLimit from "p-limit";
-import { runTestCase } from "./test-runner.js";
+import { runTestCase } from "./test-runner";
 
 const DB = process.env.DATABASE_URL!;
 

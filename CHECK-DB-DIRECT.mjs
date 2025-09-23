@@ -27,7 +27,7 @@ async function checkDatabase() {
 
     // Check for test runs
     const testRuns = await client.query(`
-      SELECT id, test_case_id, status, error_message, created_at
+      SELECT id, test_case_id, status, error_message, transcript_wer, created_at
       FROM ai_test_runs
       ORDER BY created_at DESC
       LIMIT 10
@@ -35,7 +35,7 @@ async function checkDatabase() {
     console.log('\n=== TEST RUNS ===');
     console.log(`Found ${testRuns.rows.length} test runs`);
     testRuns.rows.forEach(run => {
-      console.log(`  ${run.id.substring(0, 8)}... - Status: ${run.status} - Error: ${run.error_message || 'none'}`);
+      console.log(`  ${run.id.substring(0, 8)}... - Status: ${run.status} - WER: ${run.transcript_wer || 'N/A'} - Error: ${run.error_message || 'none'}`);
     });
 
     // Check test cases count
