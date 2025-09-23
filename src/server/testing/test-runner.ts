@@ -60,8 +60,10 @@ export async function runTestCase(testCase: TestCase): Promise<TestRunResult> {
         direction,
         started_at,
         created_at,
+        source,
+        analyzed_at,
         is_test  -- Add this column if it doesn't exist
-      ) VALUES ($1, $2, 'TEST_AGENT', 'AI_TEST', 'outbound', NOW(), NOW(), true)
+      ) VALUES ($1, $2, 'TEST_AGENT', 'AI_TEST', 'outbound', NOW(), NOW(), 'ai_test', NOW(), true)
       RETURNING id
     `, [
       testCase.audio_url,
