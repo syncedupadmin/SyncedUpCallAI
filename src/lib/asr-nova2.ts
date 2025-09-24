@@ -194,9 +194,9 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       }
 
       // Show search results
-      if (debugResults?.search?.length > 0) {
-        console.log('Search results found:', debugResults.search.length, 'queries matched');
-        console.log('First 3 search matches:', debugResults.search.slice(0, 3).map((s: any) => ({
+      if ((debugResults as any)?.search?.length > 0) {
+        console.log('Search results found:', (debugResults as any).search.length, 'queries matched');
+        console.log('First 3 search matches:', (debugResults as any).search.slice(0, 3).map((s: any) => ({
           query: s.query,
           hits: s.hits?.length || 0
         })));
