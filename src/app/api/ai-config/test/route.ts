@@ -6,11 +6,18 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // Calculate word differences
-function calculateDifferences(expected: string, actual: string) {
+interface WordDifference {
+  position: number;
+  expected: string;
+  actual: string;
+  match: boolean;
+}
+
+function calculateDifferences(expected: string, actual: string): WordDifference[] {
   const expectedWords = expected.toLowerCase().split(/\s+/);
   const actualWords = actual.toLowerCase().split(/\s+/);
 
-  const differences = [];
+  const differences: WordDifference[] = [];
   const maxLength = Math.max(expectedWords.length, actualWords.length);
 
   for (let i = 0; i < maxLength; i++) {
@@ -31,10 +38,10 @@ function calculateDifferences(expected: string, actual: string) {
 }
 
 // Analyze which keywords might have caused issues
-function analyzeProblematicKeywords(transcript: string, keywords: string[]) {
+function analyzeProblematicKeywords(transcript: string, keywords: string[]): string[] {
   if (!keywords || keywords.length === 0) return [];
 
-  const problematic = [];
+  const problematic: string[] = [];
   const transcriptLower = transcript.toLowerCase();
 
   // Common words that shouldn't be boosted
@@ -155,7 +162,7 @@ export async function POST(request: NextRequest) {
     const estimatedWER = ((100 - estimatedAccuracy) / 100).toFixed(2);
 
     // Calculate differences if expected text provided
-    let differences = [];
+    let differences: WordDifference[] = [];
     if (expectedText && expectedText.trim()) {
       differences = calculateDifferences(expectedText, transcribedText);
       // Adjust accuracy based on actual differences
@@ -193,7 +200,7 @@ export async function POST(request: NextRequest) {
       message: hasKeywords && testConfig.keywords.length > 20
         ? `Note: Only first 20 keywords were tested to avoid timeout. You have ${testConfig.keywords.length} total.`
         : 'Test completed successfully',
-      recommendations: []
+      recommendations: [] as string[]
     };
 
     // Add specific recommendations
