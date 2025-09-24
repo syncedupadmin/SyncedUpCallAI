@@ -28,7 +28,7 @@ interface TestResult {
   testConfig?: {
     transcript: string;
     accuracy: number;
-    wer: number;
+    wer: string;
     processingTime: number;
     wordCount: number;
     keywordsUsed?: number;
@@ -36,7 +36,7 @@ interface TestResult {
   factoryConfig?: {
     transcript: string;
     accuracy: number;
-    wer: number;
+    wer: string;
     processingTime: number;
     wordCount: number;
   };
@@ -245,7 +245,7 @@ export default function AISettingsPage() {
           result.comparison = {
             currentBetter: currentAccuracy > factoryAccuracy,
             accuracyDelta: currentAccuracy - factoryAccuracy,
-            werDelta: (result.testConfig?.wer || 0) - (result.factoryConfig?.wer || 0)
+            werDelta: parseFloat(result.testConfig?.wer || '0') - parseFloat(result.factoryConfig?.wer || '0')
           };
         }
 
@@ -558,7 +558,7 @@ export default function AISettingsPage() {
                         <h4 className="font-medium text-gray-700 mb-2">Current Config (47 keywords)</h4>
                         <div className="bg-white p-4 rounded border border-gray-200">
                           <p className="text-2xl font-bold text-red-600">{testResults.testConfig.accuracy}% Accuracy</p>
-                          <p className="text-sm text-gray-600">WER: {(parseFloat(testResults.testConfig.wer) * 100).toFixed(1)}%</p>
+                          <p className="text-sm text-gray-600">WER: {(parseFloat(testResults.testConfig.wer || '0') * 100).toFixed(1)}%</p>
                           <p className="text-sm text-gray-600">Processing: {testResults.testConfig.processingTime}ms</p>
                         </div>
                       </div>
@@ -566,7 +566,7 @@ export default function AISettingsPage() {
                         <h4 className="font-medium text-gray-700 mb-2">Factory Default (0 keywords)</h4>
                         <div className="bg-white p-4 rounded border border-gray-200">
                           <p className="text-2xl font-bold text-green-600">{testResults.factoryConfig.accuracy}% Accuracy</p>
-                          <p className="text-sm text-gray-600">WER: {(parseFloat(testResults.factoryConfig.wer) * 100).toFixed(1)}%</p>
+                          <p className="text-sm text-gray-600">WER: {(parseFloat(testResults.factoryConfig.wer || '0') * 100).toFixed(1)}%</p>
                           <p className="text-sm text-gray-600">Processing: {testResults.factoryConfig.processingTime}ms</p>
                         </div>
                       </div>
@@ -597,7 +597,7 @@ export default function AISettingsPage() {
                         </div>
                         <div className="bg-gray-50 p-3 rounded">
                           <p className="text-sm text-gray-600">WER</p>
-                          <p className="text-xl font-bold text-gray-900">{(parseFloat(testResults.testConfig.wer) * 100).toFixed(1)}%</p>
+                          <p className="text-xl font-bold text-gray-900">{(parseFloat(testResults.testConfig.wer || '0') * 100).toFixed(1)}%</p>
                         </div>
                         <div className="bg-gray-50 p-3 rounded">
                           <p className="text-sm text-gray-600">Words</p>
@@ -665,7 +665,7 @@ export default function AISettingsPage() {
                       </div>
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-sm text-gray-600">WER</p>
-                        <p className="text-xl font-bold text-gray-900">{(parseFloat(testResults.factoryConfig.wer) * 100).toFixed(1)}%</p>
+                        <p className="text-xl font-bold text-gray-900">{(parseFloat(testResults.factoryConfig.wer || '0') * 100).toFixed(1)}%</p>
                       </div>
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-sm text-gray-600">Words</p>
