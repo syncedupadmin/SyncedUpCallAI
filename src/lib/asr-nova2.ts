@@ -399,8 +399,8 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
 
   // For multi-party calls, speaker_0 is usually the first speaker (could be agent or customer)
   // We'll count all speakers for now since we can't reliably identify roles
-  const speaker0Segments = segments.filter(s => s.speaker === "speaker_0");
-  const otherSpeakerSegments = segments.filter(s => s.speaker !== "speaker_0");
+  const speaker0Segments = segments.filter(s => (s.speaker as any) === "speaker_0");
+  const otherSpeakerSegments = segments.filter(s => (s.speaker as any) !== "speaker_0");
 
   const speaker0TalkTime = speaker0Segments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
   const otherSpeakersTalkTime = otherSpeakerSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
