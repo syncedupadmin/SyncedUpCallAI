@@ -522,30 +522,116 @@ export default function AISettingsDashboard() {
               <div>
                 <label className="block text-sm font-medium mb-2">Audio URL</label>
                 <input
+                  id="test-audio-url"
                   type="url"
                   placeholder="https://example.com/audio.mp3"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  defaultValue="https://www2.cs.uic.edu/~i101/SoundFiles/StarWars60.wav"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Expected Text (Optional)</label>
                 <textarea
+                  id="test-expected-text"
                   placeholder="Enter the expected transcription for accuracy calculation"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg h-24"
                 />
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={handleTestConfig}
+                  onClick={async () => {
+                    const audioUrl = (document.getElementById('test-audio-url') as HTMLInputElement)?.value;
+                    const expectedText = (document.getElementById('test-expected-text') as HTMLTextAreaElement)?.value;
+
+                    if (!audioUrl) {
+                      alert('Please enter an audio URL');
+                      return;
+                    }
+
+                    setIsTesting(true);
+                    try {
+                      const response = await fetch('/api/ai-config/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          audioUrl,
+                          expectedText: expectedText || null,
+                          testConfig: currentConfig?.config,
+                          compareWithActive: true
+                        })
+                      });
+
+                      const data = await response.json();
+                      if (data.success) {
+                        setTestResults(data);
+                        alert(`Test Complete!\n\nAccuracy: ${data.testConfig?.accuracy}%\nWER: ${data.testConfig?.wer}%\nProcessing Time: ${data.testConfig?.processingTime}ms`);
+                      } else {
+                        alert('Test failed: ' + (data.message || 'Unknown error'));
+                      }
+                    } catch (error: any) {
+                      alert('Test error: ' + error.message);
+                    } finally {
+                      setIsTesting(false);
+                    }
+                  }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   disabled={isTesting}
                 >
                   {isTesting ? 'Testing...' : 'Test Current Config'}
                 </button>
                 <button
+                  onClick={async () => {
+                    const audioUrl = (document.getElementById('test-audio-url') as HTMLInputElement)?.value;
+                    const expectedText = (document.getElementById('test-expected-text') as HTMLTextAreaElement)?.value;
+
+                    if (!audioUrl) {
+                      alert('Please enter an audio URL');
+                      return;
+                    }
+
+                    setIsTesting(true);
+                    try {
+                      // Test with factory default config
+                      const factoryConfig = {
+                        model: 'nova-2-phonecall',
+                        language: 'en-US',
+                        punctuate: true,
+                        diarize: true,
+                        smart_format: true,
+                        utterances: true,
+                        numerals: true,
+                        profanity_filter: false,
+                        keywords: [],
+                        replacements: {}
+                      };
+
+                      const response = await fetch('/api/ai-config/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          audioUrl,
+                          expectedText: expectedText || null,
+                          testConfig: factoryConfig,
+                          compareWithActive: false
+                        })
+                      });
+
+                      const data = await response.json();
+                      if (data.success) {
+                        alert(`Factory Default Test Complete!\n\nAccuracy: ${data.testConfig?.accuracy}%\nWER: ${data.testConfig?.wer}%\nProcessing Time: ${data.testConfig?.processingTime}ms\n\nCompare with current config to see improvement potential!`);
+                      } else {
+                        alert('Test failed: ' + (data.message || 'Unknown error'));
+                      }
+                    } catch (error: any) {
+                      alert('Test error: ' + error.message);
+                    } finally {
+                      setIsTesting(false);
+                    }
+                  }}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  disabled={isTesting}
                 >
-                  Test Factory Default
+                  {isTesting ? 'Testing...' : 'Test Factory Default'}
                 </button>
                 <button
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
