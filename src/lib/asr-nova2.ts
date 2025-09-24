@@ -186,7 +186,7 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       }
 
       // Show first few utterances if they exist
-      if (debugResults?.utterances?.length > 0) {
+      if (debugResults?.utterances && debugResults.utterances.length > 0) {
         console.log('First 3 utterances:');
         debugResults.utterances.slice(0, 3).forEach((utt: any, i: number) => {
           console.log(`  [${i}] Speaker: ${utt.speaker}, Start: ${utt.start}s, Text: "${utt.transcript?.substring(0, 100)}..."`);
