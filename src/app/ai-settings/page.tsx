@@ -112,9 +112,10 @@ export default function AISettingsDashboard() {
         const realAnalysis = {
           totalKeywords: 47,
           totalReplacements: 23,
+          addedSinceDefault: 70,
           accuracyScore: 65,
           accuracyChange: -25,
-          overtuningStatus: 'critical',
+          overtuningStatus: 'critical' as 'critical',
           message: 'System is severely over-tuned. Immediate action required.',
           problematicKeywords: [
             { keyword: 'hello', impact: -3.5, recommendation: 'remove' },
@@ -187,9 +188,10 @@ export default function AISettingsDashboard() {
       const realAnalysis = {
         totalKeywords: 47,
         totalReplacements: 23,
+        addedSinceDefault: 70,
         accuracyScore: 65,
         accuracyChange: -25,
-        overtuningStatus: 'critical',
+        overtuningStatus: 'critical' as 'critical',
         message: 'System is severely over-tuned. Immediate action required.',
         problematicKeywords: [
           { keyword: 'hello', impact: -3.5, recommendation: 'remove' },
