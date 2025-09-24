@@ -784,7 +784,8 @@ export default function AISettingsDashboard() {
                   {isTesting ? 'Testing...' : 'Test Factory Default'}
                 </button>
                 <button
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+                  onClick={() => alert('Compare feature coming soon!')}
                 >
                   Compare Configurations
                 </button>
