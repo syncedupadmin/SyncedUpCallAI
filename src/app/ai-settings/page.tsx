@@ -541,23 +541,23 @@ export default function AISettingsDashboard() {
             {/* Test Results */}
             {testResults && (
               <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Test Results</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Test Results</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Accuracy</p>
-                    <p className="text-2xl font-bold">{testResults.testConfig?.accuracy}%</p>
+                    <p className="text-2xl font-bold text-gray-900">{testResults.testConfig?.accuracy}%</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">WER</p>
-                    <p className="text-2xl font-bold">{testResults.testConfig?.wer}%</p>
+                    <p className="text-2xl font-bold text-gray-900">{testResults.testConfig?.wer}%</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Processing Time</p>
-                    <p className="text-2xl font-bold">{testResults.testConfig?.processingTime}ms</p>
+                    <p className="text-2xl font-bold text-gray-900">{testResults.testConfig?.processingTime}ms</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Word Count</p>
-                    <p className="text-2xl font-bold">{testResults.testConfig?.wordCount}</p>
+                    <p className="text-2xl font-bold text-gray-900">{testResults.testConfig?.wordCount}</p>
                   </div>
                 </div>
 
@@ -664,24 +664,27 @@ export default function AISettingsDashboard() {
 
         {activeTab === 'test' && (
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-6">Test Configuration</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Test Configuration</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Test your current configuration with audio files to see transcription accuracy. Compare with factory defaults to measure improvement.
+            </p>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Audio URL</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Audio URL</label>
                 <input
                   id="test-audio-url"
                   type="url"
                   placeholder="https://example.com/audio.mp3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
                   defaultValue="https://www2.cs.uic.edu/~i101/SoundFiles/StarWars60.wav"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Expected Text (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Expected Text (Optional)</label>
                 <textarea
                   id="test-expected-text"
                   placeholder="Enter the expected transcription for accuracy calculation"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg h-24"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg h-24 text-gray-900 bg-white"
                 />
               </div>
               <div className="flex gap-3">
