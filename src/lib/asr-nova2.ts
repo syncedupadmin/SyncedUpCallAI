@@ -157,6 +157,55 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       );
 
       console.log(`Deepgram responded in ${Date.now() - startTime}ms`);
+
+      // Comprehensive debugging of Deepgram response
+      console.log('=== DEEPGRAM RESPONSE STRUCTURE ===');
+      console.log('Full response keys:', Object.keys(resp || {}));
+      console.log('resp.result keys:', Object.keys(resp?.result || {}));
+      console.log('resp.result.results keys:', Object.keys(resp?.result?.results || {}));
+
+      // Check what we're getting
+      const debugResults = resp?.result?.results;
+      console.log('Has utterances?:', !!debugResults?.utterances);
+      console.log('Utterances length:', debugResults?.utterances?.length || 0);
+      console.log('Has channels?:', !!debugResults?.channels);
+      console.log('Channels length:', debugResults?.channels?.length || 0);
+
+      // If no utterances but has channels, show what's in channels
+      if (!debugResults?.utterances?.length && debugResults?.channels?.length) {
+        console.log('⚠️ No utterances but has channels!');
+        console.log('Channel 0 keys:', Object.keys(debugResults.channels[0] || {}));
+        console.log('Has alternatives?:', !!debugResults.channels[0]?.alternatives);
+        console.log('Transcript exists?:', !!debugResults.channels[0]?.alternatives?.[0]?.transcript);
+        console.log('Transcript preview:', debugResults.channels[0]?.alternatives?.[0]?.transcript?.substring(0, 200));
+
+        // Check if diarization failed
+        if (debugResults.channels[0]?.alternatives?.[0]?.transcript) {
+          console.log('DIARIZATION LIKELY FAILED - We have transcript but no speaker separation');
+        }
+      }
+
+      // Show first few utterances if they exist
+      if (debugResults?.utterances?.length > 0) {
+        console.log('First 3 utterances:');
+        debugResults.utterances.slice(0, 3).forEach((utt: any, i: number) => {
+          console.log(`  [${i}] Speaker: ${utt.speaker}, Start: ${utt.start}s, Text: "${utt.transcript?.substring(0, 100)}..."`);
+        });
+      }
+
+      // Show search results
+      if (debugResults?.search?.length > 0) {
+        console.log('Search results found:', debugResults.search.length, 'queries matched');
+        console.log('First 3 search matches:', debugResults.search.slice(0, 3).map((s: any) => ({
+          query: s.query,
+          hits: s.hits?.length || 0
+        })));
+      }
+
+      // Show current options being used
+      console.log('Options sent to Deepgram:', JSON.stringify(options, null, 2));
+      console.log('===================================');
+
       break; // Success, exit retry loop
 
     } catch (error) {
@@ -259,7 +308,8 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
     });
     
     return {
-      speaker: (String(u.speaker) === "0" ? "agent" : "customer") as "agent" | "customer",
+      // Keep raw speaker IDs since we handle multi-party calls
+      speaker: `speaker_${u.speaker}` as any,
       startMs: Math.round(u.start * 1000),
       endMs: Math.round(u.end * 1000),
       text: text,
@@ -347,11 +397,17 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
     ? segments[segments.length - 1].endMs 
     : 0;
 
-  const agentSegments = segments.filter(s => s.speaker === "agent");
-  const customerSegments = segments.filter(s => s.speaker === "customer");
+  // For multi-party calls, speaker_0 is usually the first speaker (could be agent or customer)
+  // We'll count all speakers for now since we can't reliably identify roles
+  const speaker0Segments = segments.filter(s => s.speaker === "speaker_0");
+  const otherSpeakerSegments = segments.filter(s => s.speaker !== "speaker_0");
 
-  const agentTalkTime = agentSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
-  const customerTalkTime = customerSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+  const speaker0TalkTime = speaker0Segments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+  const otherSpeakersTalkTime = otherSpeakerSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+
+  // For compatibility, we'll map speaker_0 to agent metrics and others to customer
+  const agentTalkTime = speaker0TalkTime;
+  const customerTalkTime = otherSpeakersTalkTime;
   
   // Calculate overlapping talk
   let overlappingTalkTime = 0;

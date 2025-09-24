@@ -146,11 +146,12 @@ export function isWastedCall(talk: ReturnType<typeof computeTalkMetrics>, segmen
   return (talk.talk_time_agent_sec < 5) || (durationSec < 20 && noQuestions);
 }
 
-export function isVoicemailLike(segments: Segment[]): boolean {
-  // Simple heuristic: if it's all agent talking with no customer response
-  const agentOnly = segments.every(s => s.speaker === "agent");
-  const hasVoicemailKeywords = segments.some(s =>
-    /voicemail|leave a message|call you back|not available/i.test(s.text)
-  );
-  return agentOnly || hasVoicemailKeywords;
-}
+// DISABLED: We never send voicemail recordings for analysis
+// export function isVoicemailLike(segments: Segment[]): boolean {
+//   // Simple heuristic: if it's all agent talking with no customer response
+//   const agentOnly = segments.every(s => s.speaker === "agent");
+//   const hasVoicemailKeywords = segments.some(s =>
+//     /voicemail|leave a message|call you back|not available/i.test(s.text)
+//   );
+//   return agentOnly || hasVoicemailKeywords;
+// }

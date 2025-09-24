@@ -71,6 +71,23 @@ export default function AnalyzeDemo() {
       const analysisData = j.validation === "failed" && j.partial ? j.partial : j;
       setData(analysisData);
 
+      // Log debug information to console
+      if (j.debug) {
+        console.log('=== ANALYSIS DEBUG INFO ===');
+        console.log('Segment count:', j.debug.segmentCount);
+        console.log('Has segments:', j.debug.hasSegments);
+        console.log('ASR quality:', j.debug.asrQuality);
+        console.log('Key phrases found:', j.debug.keyPhrasesCount);
+        console.log('Conversation metrics:', j.debug.conversationMetrics);
+        console.log('Sales metrics:', j.debug.salesMetrics);
+        console.log('URL processed:', j.debug.url);
+        if (j.debug.voicemail_trigger) {
+          console.log('⚠️ VOICEMAIL DETECTED - Trigger:', j.debug.voicemail_trigger);
+          console.log('First segment:', j.debug.first_segment);
+        }
+        console.log('===========================');
+      }
+
       // Log enriched signals to console
       console.log('Analysis completed. Check console for enriched signals sent to OpenAI.');
 

@@ -1,7 +1,7 @@
 // src/app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { transcribeFromUrl } from "@/lib/asr-nova2";
-import { computeTalkMetrics, isVoicemailLike, computeHoldStats, isWastedCall } from "@/lib/metrics";
+import { computeTalkMetrics, /* isVoicemailLike, */ computeHoldStats, isWastedCall } from "@/lib/metrics";
 import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/lib/prompts";
 import { runAnalysis } from "@/lib/analyze";
 // Removed non-existent rebuttal imports - using detectRebuttalsV3 instead
@@ -63,20 +63,29 @@ export async function POST(req: NextRequest) {
 
     // Deepgram + metrics (with increased timeout)
     let transcriptionResult;
+    let debugInfo: any = {};
     try {
       console.log('Starting transcription with 45s timeout...');
       transcriptionResult = await withTimeout(transcribeFromUrl(recording_url), 45000);
-      console.log('Transcription result:', {
-        hasSegments: !!transcriptionResult?.segments,
+
+      // Capture debug info
+      debugInfo = {
         segmentCount: transcriptionResult?.segments?.length || 0,
+        hasSegments: !!transcriptionResult?.segments,
         asrQuality: transcriptionResult?.asrQuality,
+        keyPhrasesCount: transcriptionResult?.keyPhrases?.length || 0,
+        conversationMetrics: transcriptionResult?.conversationMetrics,
+        salesMetrics: transcriptionResult?.salesMetrics,
         url: recording_url
-      });
+      };
+
+      console.log('Transcription result:', debugInfo);
     } catch (error) {
       console.error('Transcription error:', error);
       return NextResponse.json({
         error: "Failed to transcribe audio",
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
+        debug: { attempted_url: recording_url }
       }, { status: 422 });
     }
 
@@ -92,43 +101,53 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('Checking if voicemail-like...');
-    const speakerCounts = {
-      agent: segments.filter(s => s.speaker === "agent").length,
-      customer: segments.filter(s => s.speaker === "customer").length
-    };
+    // Count unique speakers
+    const speakerCounts: Record<string, number> = {};
+    segments.forEach(s => {
+      speakerCounts[s.speaker] = (speakerCounts[s.speaker] || 0) + 1;
+    });
     console.log('Speaker distribution:', speakerCounts);
 
-    if (isVoicemailLike(segments)) {
-      console.log('DETECTED AS VOICEMAIL (all agent or has voicemail keywords)');
-      console.log('First segment:', {
-        speaker: segments[0]?.speaker,
-        text: segments[0]?.text?.substring(0, 200)
-      });
-      return NextResponse.json({
-        version: "2.0",
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        reason_primary: "no_answer_voicemail",
-        reason_secondary: null,
-        confidence: 0.9,
-        qa_score: 0,
-        script_adherence: 0,
-        qa_breakdown: { greeting:0, discovery:0, benefit_explanation:0, objection_handling:0, compliance:0, closing:0 },
-        sentiment_agent: 0,
-        sentiment_customer: -0.2,
-        talk_metrics: { talk_time_agent_sec:0, talk_time_customer_sec:0, silence_time_sec:0, interrupt_count:0 },
-        lead_score: 0,
-        purchase_intent: "low",
-        risk_flags: [],
-        compliance_flags: [],
-        actions: ["schedule_callback"],
-        best_callback_window: null,
-        crm_updates: { disposition:"voicemail", callback_requested:false, callback_time_local:null, dnc:false },
-        key_quotes: [],
-        asr_quality: asrQuality,
-        summary: "No answer; voicemail detected.",
-        notes: null
-      });
-    }
+    // DISABLED: We never send voicemail recordings for analysis
+    // if (isVoicemailLike(segments)) {
+    //   console.log('DETECTED AS VOICEMAIL (all agent or has voicemail keywords)');
+    //   console.log('First segment:', {
+    //     speaker: segments[0]?.speaker,
+    //     text: segments[0]?.text?.substring(0, 200)
+    //   });
+    //   return NextResponse.json({
+    //     version: "2.0",
+    //     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    //     reason_primary: "no_answer_voicemail",
+    //     reason_secondary: null,
+    //     confidence: 0.9,
+    //     qa_score: 0,
+    //     script_adherence: 0,
+    //     qa_breakdown: { greeting:0, discovery:0, benefit_explanation:0, objection_handling:0, compliance:0, closing:0 },
+    //     sentiment_agent: 0,
+    //     sentiment_customer: -0.2,
+    //     talk_metrics: { talk_time_agent_sec:0, talk_time_customer_sec:0, silence_time_sec:0, interrupt_count:0 },
+    //     lead_score: 0,
+    //     purchase_intent: "low",
+    //     risk_flags: [],
+    //     compliance_flags: [],
+    //     actions: ["schedule_callback"],
+    //     best_callback_window: null,
+    //     crm_updates: { disposition:"voicemail", callback_requested:false, callback_time_local:null, dnc:false },
+    //     key_quotes: [],
+    //     asr_quality: asrQuality,
+    //     summary: "No answer; voicemail detected.",
+    //     notes: null,
+    //     debug: {
+    //       ...debugInfo,
+    //       voicemail_trigger: "all_agent_or_keywords",
+    //       first_segment: segments[0] ? {
+    //         speaker: segments[0].speaker,
+    //         text_preview: segments[0].text.substring(0, 200)
+    //       } : null
+    //     }
+    //   });
+    // }
 
     const transcript = segments
       .map(s => `${s.speaker.toUpperCase()} [${new Date(s.startMs).toISOString().substring(14,19)}]: ${s.text}`)
@@ -289,7 +308,10 @@ export async function POST(req: NextRequest) {
             { onConflict: "id" }
           );
 
-        return NextResponse.json(finalJson);
+        return NextResponse.json({
+          ...finalJson,
+          debug: debugInfo
+        });
       } catch (e: any) {
         // Log validation errors but don't fail the request
         if (e?.issues) {
