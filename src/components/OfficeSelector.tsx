@@ -1,10 +1,19 @@
 'use client';
 
-import { useOfficeContext } from '@/contexts/OfficeContext';
+import { useContext } from 'react';
+import { OfficeContext } from '@/contexts/OfficeContext';
 import { Building2 } from 'lucide-react';
 
 export function OfficeSelector({ className }: { className?: string }) {
-  const { memberships, selectedOfficeId, setSelectedOfficeId } = useOfficeContext();
+  // Try to get context, but handle if it doesn't exist
+  const context = useContext(OfficeContext);
+
+  // If no context (not wrapped in OfficeProvider), return null
+  if (!context) {
+    return null;
+  }
+
+  const { memberships, selectedOfficeId, setSelectedOfficeId } = context;
 
   // Hide if user has no memberships or only one office
   if (!memberships?.length || memberships.length === 1) {

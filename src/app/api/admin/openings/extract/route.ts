@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { isAdminAuthenticated } from '@/server/auth/admin';
-import { extractOpeningsInBatch } from '@/lib/opening-extractor';
+import { extractOpeningsInBatch } from '@/lib/opening-analysis';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for processing

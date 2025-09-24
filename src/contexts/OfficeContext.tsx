@@ -16,7 +16,7 @@ interface OfficeContextValue {
   setSelectedOfficeId: (id: number | null) => void;
 }
 
-const OfficeContext = createContext<OfficeContextValue | null>(null);
+export const OfficeContext = createContext<OfficeContextValue | null>(null);
 
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const { data: memberships, loading } = useMyMemberships();

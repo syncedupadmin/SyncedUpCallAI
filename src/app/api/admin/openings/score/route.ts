@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminAuthenticated } from '@/server/auth/admin';
-import { scoreOpening } from '@/lib/opening-analyzer';
+import { scoreOpening } from '@/lib/opening-analysis';
 
 export const dynamic = 'force-dynamic';
 

@@ -83,6 +83,11 @@ export function computeSignals(segments: Segment[]): Signals {
   const joined = segments.map(x => x.text).join(" ");
   s.lang = isES(joined) ? "es" : "en";
 
+  // DEBUG: Log signal extraction
+  console.log('=== SIGNAL EXTRACTION DEBUG ===');
+  console.log('Checking for sale phrases in first 500 chars:', joined.substring(0, 500));
+  console.log('Full transcript length:', joined.length);
+
   // Opening objections detection (0-30s)
   const openingEnd = PLAYBOOK.opening_window_ms;
   const openingWindowSec = 10; // 10 second window for agent response
@@ -123,8 +128,12 @@ export function computeSignals(segments: Segment[]): Signals {
 
   // price: last agent amounts near end
   const agent = segments.filter(x => x.speaker === "agent");
-  const lastAgentAmounts = extractMoneyCents(agent.slice(-30).map(x=>x.text).join(" "));
+  const last30AgentText = agent.slice(-30).map(x=>x.text).join(" ");
+  console.log('Looking for price in last 30 agent segments:', last30AgentText.substring(0, 500));
+  const lastAgentAmounts = extractMoneyCents(last30AgentText);
+  console.log('Prices found:', lastAgentAmounts.map(c => `$${c/100}`));
   if (lastAgentAmounts.length) s.price_monthly_cents = lastAgentAmounts.at(-1)!;
+  console.log('Selected price_monthly_cents:', s.price_monthly_cents ? `$${s.price_monthly_cents/100}` : 'none');
 
   // enrollment fee anywhere if labeled
   const feeHit = segments.find(seg =>
@@ -138,8 +147,17 @@ export function computeSignals(segments: Segment[]): Signals {
   if (last4) { s.card_last4 = last4[1]; s.card_spoken = true; }
 
   const hit = (arr:readonly string[]) => arr.some(p => joined.toLowerCase().includes(p.toLowerCase()));
+
+  // DEBUG: Log what phrases we're checking for
+  console.log('Checking for post_date phrases:', PLAYBOOK.outcomes.phrases.post_date);
+  console.log('Checking for sale_confirm phrases:', PLAYBOOK.outcomes.phrases.sale_confirm);
+
   s.post_date_phrase = hit(PLAYBOOK.outcomes.phrases.post_date);
   s.sale_confirm_phrase = hit(PLAYBOOK.outcomes.phrases.sale_confirm);
+
+  console.log('Found sale confirm:', s.sale_confirm_phrase);
+  console.log('Found post date:', s.post_date_phrase);
+  console.log('=== END SIGNAL EXTRACTION DEBUG ===');
 
   s.esign_sent = hit(PLAYBOOK.outcomes.esign.sent);
   s.esign_confirmed = hit(PLAYBOOK.outcomes.esign.confirmed);

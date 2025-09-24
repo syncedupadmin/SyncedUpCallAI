@@ -54,6 +54,12 @@ export default function SuperAdminNav() {
       description: 'Super admin dashboard'
     },
     {
+      name: 'TEST CALLS HERE',
+      href: '/analyze-demo',
+      icon: Phone,
+      description: 'Test call analysis'
+    },
+    {
       name: 'Agencies',
       href: '/superadmin/agencies',
       icon: Building2,

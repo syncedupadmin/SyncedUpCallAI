@@ -104,6 +104,8 @@ BUSINESS RULES:
 - Price = Signals.price_monthly_cents (monthly, keep cents). Enrollment fee from Signals.enrollment_fee_cents.
 - Rebuttals used = stalls addressed within 30s; missed otherwise. Quotes must be customer verbatim.
 
+IMPORTANT: SIGNALS includes opening scores, price events, and rebuttals. Incorporate ALL signal data in your analysis.
+
 SIGNALS:
 ${JSON.stringify(signals ?? {}, null, 2)}
 

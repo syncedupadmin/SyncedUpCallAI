@@ -4,11 +4,9 @@ import { transcribeFromUrl } from "@/lib/asr-nova2";
 import { computeTalkMetrics, isVoicemailLike, computeHoldStats, isWastedCall } from "@/lib/metrics";
 import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/lib/prompts";
 import { runAnalysis } from "@/lib/analyze";
-import { detectRebuttalsAndEscapes } from "@/lib/rebuttal-detector";
-import { openingAndControl } from "@/lib/opening-control";
-import { extractPriceEvents, extractPriceTimeline, detectPriceChanges } from "@/lib/price-events";
-import { choosePremiumAndFee } from "@/lib/money";
-import { detectRebuttals } from "@/lib/rebuttal-detect";
+// Removed non-existent rebuttal imports - using detectRebuttalsV3 instead
+import { openingAndControl } from "@/lib/opening-analysis";
+import { extractPriceEvents, extractPriceTimeline, detectPriceChanges, choosePremiumAndFee } from "@/lib/price-analysis";
 import { computeSignals, decideOutcome } from "@/lib/rules-engine";
 import { detectRebuttalsV3, type Segment as RSeg } from "@/lib/rebuttal-detect-v3";
 import { chooseCustomerName } from "@/lib/name-merge";
@@ -22,7 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Vercel Pro allows 60s. If on Hobby, keep ≤10s.
 
-function withTimeout<T>(p: Promise<T>, ms = 25000) {
+function withTimeout<T>(p: Promise<T>, ms = 45000) {
   return Promise.race([
     p,
     new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`Timeout after ${ms}ms`)), ms))
@@ -63,13 +61,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "recording_url required" }, { status: 400 });
     }
 
-    // Deepgram + metrics (with timeout)
-    const { segments, asrQuality } = await withTimeout(transcribeFromUrl(recording_url), 25000);
+    // Deepgram + metrics (with increased timeout)
+    let transcriptionResult;
+    try {
+      console.log('Starting transcription with 45s timeout...');
+      transcriptionResult = await withTimeout(transcribeFromUrl(recording_url), 45000);
+      console.log('Transcription result:', {
+        hasSegments: !!transcriptionResult?.segments,
+        segmentCount: transcriptionResult?.segments?.length || 0,
+        asrQuality: transcriptionResult?.asrQuality,
+        url: recording_url
+      });
+    } catch (error) {
+      console.error('Transcription error:', error);
+      return NextResponse.json({
+        error: "Failed to transcribe audio",
+        details: error instanceof Error ? error.message : String(error)
+      }, { status: 422 });
+    }
+
+    console.log('=== ANALYZE ROUTE RECEIVED ===');
+    console.log('Transcription result keys:', Object.keys(transcriptionResult));
+    console.log('Segments received:', transcriptionResult.segments?.length || 0);
+    console.log('If 0 segments, system defaults to voicemail');
+
+    const { segments, asrQuality } = transcriptionResult;
     if (!segments?.length) {
+      console.error('NO SEGMENTS - Will return "No speech detected"');
       return NextResponse.json({ error: "No speech detected" }, { status: 422 });
     }
 
+    console.log('Checking if voicemail-like...');
+    const speakerCounts = {
+      agent: segments.filter(s => s.speaker === "agent").length,
+      customer: segments.filter(s => s.speaker === "customer").length
+    };
+    console.log('Speaker distribution:', speakerCounts);
+
     if (isVoicemailLike(segments)) {
+      console.log('DETECTED AS VOICEMAIL (all agent or has voicemail keywords)');
+      console.log('First segment:', {
+        speaker: segments[0]?.speaker,
+        text: segments[0]?.text?.substring(0, 200)
+      });
       return NextResponse.json({
         version: "2.0",
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
@@ -113,8 +147,35 @@ export async function POST(req: NextRequest) {
       // New deterministic rule engine path
       const signals = computeSignals(segments);
 
-      // Build user prompt with signals
-      const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, signals);
+      // Move enrichments BEFORE calling OpenAI so they're included in analysis
+      const openingScores = openingAndControl(segments);
+      const priceEventsData = extractPriceEvents(segments);
+
+      // Add enrichments to signals
+      const enrichedSignals = {
+        ...signals,
+        opening: openingScores,
+        price_events: priceEventsData.price_events,
+        price_facts: priceEventsData.facts
+      };
+
+      // Build user prompt with enriched signals
+      const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, enrichedSignals);
+
+      // DEBUG: Log everything sent to OpenAI
+      console.log('=== ANALYSIS DEBUG (RULE ENGINE) ===');
+      console.log('Path used:', 'RULE_ENGINE');
+      console.log('Duration:', meta.duration_sec, 'seconds');
+      console.log('Transcript chars:', transcript.length);
+      console.log('Transcript sample:', transcript.substring(0, 1000));
+      console.log('Signals extracted:', JSON.stringify(signals, null, 2));
+      console.log('Price detected:', signals.price_monthly_cents);
+      console.log('Sale phrases found:', signals.sale_confirm_phrase);
+      console.log('Post date found:', signals.post_date_phrase);
+      console.log('Rebuttals found:', signals.rebuttals_used?.length || 0);
+      console.log('Opening scores:', enrichedSignals.opening);
+      console.log('Price events:', enrichedSignals.price_events);
+      console.log('======================');
 
       let finalJson: any;
       try {
@@ -245,23 +306,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Legacy path - existing rebuttal detection
-    const { escapes, rebuttalsUsed, rebuttalsMissed, summary } =
-      await detectRebuttalsAndEscapes(segments);
+    // Legacy path - COMMENTED OUT (functions don't exist)
+    // const { escapes, rebuttalsUsed, rebuttalsMissed, summary } =
+    //   await detectRebuttalsAndEscapes(segments);
 
-    // Build prelabels to steer the LLM and also to fill fields if you want to bypass it
+    // Build prelabels with empty defaults since legacy detection is removed
     const prelabels = {
-      escape_attempts: escapes,
-      rebuttals_used: rebuttalsUsed,
-      rebuttals_missed: rebuttalsMissed,
-      rebuttal_summary: summary
+      escape_attempts: [],
+      rebuttals_used: [],
+      rebuttals_missed: [],
+      rebuttal_summary: { total_used: 0, asked_for_card_after_last_rebuttal: false }
     };
 
     // Extract money from transcript
     const pricing = choosePremiumAndFee(transcript);
 
-    // Detect rebuttals
-    const rebuttals = detectRebuttals(segments);
+    // Detect rebuttals - COMMENTED OUT (function doesn't exist)
+    // const rebuttals = detectRebuttals(segments);
+    const rebuttals = {
+      used: [],
+      missed: [],
+      counts: {
+        used: 0,
+        missed: 0,
+        asked_for_card_after_last_rebuttal: false
+      }
+    }; // Empty default with correct structure
 
     // Detect payment and prepare signals
     const pay = detectPayment(segments);
@@ -270,6 +340,10 @@ export async function POST(req: NextRequest) {
     const transcriptLower = transcript.toLowerCase();
     const hasPostDate = /post\s*date|charge\s+on|process\s+on/.test(transcriptLower);
     const hasChargeConfirmed = /payment\s+(approved|processed|went\s+through)|charged\s+your|successfully\s+charged/.test(transcriptLower);
+
+    // Move enrichments BEFORE calling OpenAI so they're included in analysis
+    const openingScores = openingAndControl(segments);
+    const priceEventsData = extractPriceEvents(segments);
 
     const signals = {
       card_provided: pay.payment_taken,
@@ -280,18 +354,41 @@ export async function POST(req: NextRequest) {
       post_date_phrase: hasPostDate
     };
 
-    // Include prelabels, pricing hints, and signals in the user prompt so the model stays consistent
+    // Add enrichments to signals
+    const enrichedSignals = {
+      ...signals,
+      opening: openingScores,
+      price_events: priceEventsData.price_events,
+      price_facts: priceEventsData.facts
+    };
+
+    // Include prelabels, pricing hints, and enriched signals in the user prompt so the model stays consistent
     const up = userPromptTpl(
       {
         ...meta,
         tz: meta?.tz ?? process.env.TZ ?? "America/New_York",
         prelabels,
         price_hint_cents: pricing.premium_cents,
-        fee_hint_cents: pricing.fee_cents,
-        signals
+        fee_hint_cents: pricing.fee_cents
       },
-      transcript
+      transcript,
+      enrichedSignals
     );
+
+    // DEBUG: Log everything sent to OpenAI
+    console.log('=== ANALYSIS DEBUG (LEGACY) ===');
+    console.log('Path used:', 'LEGACY');
+    console.log('Duration:', meta?.duration_sec, 'seconds');
+    console.log('Transcript chars:', transcript.length);
+    console.log('Transcript sample:', transcript.substring(0, 1000));
+    console.log('Signals extracted:', JSON.stringify(enrichedSignals, null, 2));
+    console.log('Price detected (from choosePremiumAndFee):', pricing.premium_cents);
+    console.log('hasChargeConfirmed:', hasChargeConfirmed);
+    console.log('hasPostDate:', hasPostDate);
+    console.log('Opening scores:', enrichedSignals.opening);
+    console.log('Price events:', enrichedSignals.price_events);
+    console.log('Prelabels:', JSON.stringify(prelabels, null, 2));
+    console.log('======================');
 
     let finalJson: any;
     try {
@@ -313,16 +410,14 @@ export async function POST(req: NextRequest) {
       if (!prelabels.rebuttal_summary.asked_for_card_after_last_rebuttal) flags.push("did_not_ask_card_after_rebuttal");
       finalJson.coaching_flags = Array.from(new Set([...(finalJson.coaching_flags||[]), ...flags]));
 
-      // Opening and control scores
-      const oc = openingAndControl(segments);
-      finalJson.opening_score = oc.opening_score;
-      finalJson.control_score = oc.control_score;
-      finalJson.opening_feedback = oc.opening_feedback;
+      // Opening and control scores (already computed above)
+      finalJson.opening_score = openingScores.opening_score;
+      finalJson.control_score = openingScores.control_score;
+      finalJson.opening_feedback = openingScores.opening_feedback;
 
-      // Extract price events
-      const { price_events: priceEvents, facts } = extractPriceEvents(segments);
-      finalJson.price_events = priceEvents;
-      finalJson.facts = { ...(finalJson.facts||{}), ...facts };
+      // Price events (already computed above)
+      finalJson.price_events = priceEventsData.price_events;
+      finalJson.facts = { ...(finalJson.facts||{}), ...priceEventsData.facts };
 
       // Policy overrides: trust deterministic numbers if present
       if (pricing.premium_cents) {

@@ -1,7 +1,7 @@
 // KPI rollup function for aggregating all metrics
 import type { Segment } from "./asr-nova2";
 import { computeTalkMetrics, computeHoldStats, isWastedCall } from "./metrics";
-import { extractPriceTimeline, detectPriceChanges } from "./price-events";
+import { extractPriceTimeline, detectPriceChanges } from "./price-analysis";
 import { computeSignals } from "./rules-engine";
 
 export type KPIMetrics = {
