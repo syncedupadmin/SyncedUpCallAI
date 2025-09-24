@@ -161,9 +161,8 @@ export const PLAYBOOK = {
       post_date: ["post date", "post-date", "charge on", "process on", "charge it on", "run it on", "bill on"],
       sale_confirm: [
         "payment processed", "payment approved", "charge went through",
-        "you're all set", "all set", "welcome to", "congratulations",
+        "welcome to", "congratulations",
         "successfully processed", "transaction approved", "card approved",
-        "went through", "all good", "you're good to go", "good to go",
         "charged your card", "payment successful", "transaction successful",
         "enrollment complete", "enrolled", "you're now covered",
         "effective today", "coverage starts", "policy is active"

@@ -1,0 +1,199 @@
+{
+  "version": "2.0",
+  "model": "test",
+  "reason_primary": "requested_cancel",
+  "reason_secondary": null,
+  "confidence": 0.7,
+  "qa_score": 61,
+  "script_adherence": 60,
+  "qa_breakdown": {
+    "greeting": 0,
+    "discovery": 0,
+    "benefit_explanation": 100,
+    "objection_handling": 100,
+    "compliance": 75,
+    "closing": 100
+  },
+  "sentiment_agent": 0.8,
+  "sentiment_customer": 0.6,
+  "talk_metrics": {
+    "talk_time_agent_sec": 0,
+    "talk_time_customer_sec": 984,
+    "silence_time_sec": 544,
+    "interrupt_count": 0,
+    "questions_first_minute": 0,
+    "talk_ratio_agent": 0
+  },
+  "lead_score": 85,
+  "purchase_intent": "medium",
+  "risk_flags": [],
+  "compliance_flags": [],
+  "actions": [
+    "schedule_callback"
+  ],
+  "best_callback_window": {
+    "local_start": "2023-11-01T09:00",
+    "local_end": "2023-11-01T20:00"
+  },
+  "crm_updates": {
+    "disposition": "requested_cancel",
+    "callback_requested": true,
+    "callback_time_local": "2023-11-01T09:00",
+    "dnc": false
+  },
+  "key_quotes": [
+    {
+      "ts": "19:05",
+      "speaker": "customer",
+      "quote": "What if I wanna cancel it before it starts?"
+    },
+    {
+      "ts": "19:34",
+      "speaker": "customer",
+      "quote": "Okay. So because okay. So I can cancel it? Correct."
+    },
+    {
+      "ts": "20:02",
+      "speaker": "customer",
+      "quote": "It's Paramount?"
+    },
+    {
+      "ts": "25:02",
+      "speaker": "customer",
+      "quote": "No, sir. Other than that, you're also company?"
+    }
+  ],
+  "asr_quality": "good",
+  "summary": "Customer expressed interest in canceling the policy before it starts. Agent provided information on cancellation policy.",
+  "notes": null,
+  "evidence": {
+    "reason_primary_span": [
+      1145,
+      1155
+    ],
+    "reason_primary_quote": "What if I wanna cancel it before it starts?"
+  },
+  "outcome": {
+    "sale_status": "sale",
+    "payment_confirmed": true,
+    "post_date_iso": null
+  },
+  "signals": {
+    "card_provided": false,
+    "card_last4": null,
+    "esign_sent": false,
+    "esign_confirmed": true,
+    "charge_confirmed_phrase": true,
+    "post_date_phrase": false,
+    "acceptance_phrase": false,
+    "policy_identifiers_present": false
+  },
+  "rebuttals": {
+    "used": [],
+    "missed": [],
+    "counts": {
+      "used": 0,
+      "missed": 0,
+      "asked_for_card_after_last_rebuttal": false
+    }
+  },
+  "facts": {
+    "pricing": {
+      "premium_unit": "monthly",
+      "signup_fee": 1
+    }
+  },
+  "rebuttals_opening": {
+    "used": [],
+    "missed": [],
+    "counts": {
+      "used": 0,
+      "missed": 0
+    }
+  },
+  "rebuttals_closing": {
+    "used": [],
+    "missed": [],
+    "counts": {
+      "used": 0,
+      "missed": 0,
+      "asked_for_card_after_last_rebuttal": false
+    }
+  },
+  "contact_guess": {
+    "first_name": null,
+    "last_name": null,
+    "confidence": 0,
+    "evidence_ts": null,
+    "evidence_quote": null,
+    "source": "audio_extract",
+    "alternate": null
+  },
+  "hold": {
+    "holds": [
+      {
+        "startMs": 223770,
+        "endMs": 330480,
+        "type": "silence_hold",
+        "reason": "Dead air detected"
+      },
+      {
+        "startMs": 703280,
+        "endMs": 724250,
+        "type": "silence_hold",
+        "reason": "Dead air detected"
+      },
+      {
+        "startMs": 824465,
+        "endMs": 877690,
+        "type": "silence_hold",
+        "reason": "Dead air detected"
+      }
+    ],
+    "hold_time_sec": 181,
+    "hold_events": 3,
+    "hold_breakdown": {
+      "system_holds": 0,
+      "explicit_holds": 0,
+      "silence_holds": 3,
+      "system_hold_sec": 0,
+      "explicit_hold_sec": 0,
+      "silence_hold_sec": 181
+    }
+  },
+  "price_change": false,
+  "price_direction": "none",
+  "discount_cents_total": null,
+  "upsell_cents_total": null,
+  "wasted_call": true,
+  "questions_first_minute": 0,
+  "debug": {
+    "segmentCount": 266,
+    "hasSegments": true,
+    "asrQuality": "excellent",
+    "keyPhrasesCount": 0,
+    "conversationMetrics": {
+      "totalDuration": 1529495,
+      "agentTalkTime": 229861,
+      "customerTalkTime": 754478,
+      "silenceTime": 545156,
+      "interruptionCount": 0,
+      "overlappingTalkTime": 0,
+      "longestMonologue": 38635,
+      "avgResponseLatency": 1035.7727272727273,
+      "agentTalkRatio": 0.15028555176708652
+    },
+    "salesMetrics": {
+      "rapportDuration": 0,
+      "searchOccurred": false,
+      "holdDuration": 0,
+      "cardRequested": false,
+      "cardProvided": false,
+      "cardComplete": false,
+      "routingProvided": false,
+      "objectionCount": 0,
+      "rebuttalCount": 0
+    },
+    "url": "https://admin-dt.convoso.com/play-recording-public/JTdCJTIyYWNjb3VudF9pZCUyMiUzQTEwMzgzMyUyQyUyMnVfaWQlMjIlM0ElMjJkejZxZjNxYm93cHE1MzgwZnE1N2hyamV2MHk3c3BzdyUyMiU3RA==?rlt=NBGIOmIsrZdg/ij12A4673bVaGSr3u603VQy3cqsef8"
+  }
+}

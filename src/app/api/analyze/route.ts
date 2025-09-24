@@ -61,12 +61,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "recording_url required" }, { status: 400 });
     }
 
+    console.log('=== AUDIO URL VERIFICATION ===');
+    console.log('URL being analyzed:', recording_url);
+    console.log('Timestamp:', new Date().toISOString());
+
     // Deepgram + metrics (with increased timeout)
     let transcriptionResult;
     let debugInfo: any = {};
     try {
       console.log('Starting transcription with 45s timeout...');
       transcriptionResult = await withTimeout(transcribeFromUrl(recording_url), 45000);
+
+      console.log('=== TRANSCRIPT RECEIVED BY SYSTEM ===');
+      console.log('Segment count:', transcriptionResult?.segments?.length);
+      console.log('First 3 segments:', transcriptionResult?.segments?.slice(0, 3).map(s => ({
+        speaker: s.speaker,
+        text: s.text.substring(0, 100)
+      })));
+      console.log('Last 3 segments:', transcriptionResult?.segments?.slice(-3).map(s => ({
+        speaker: s.speaker,
+        text: s.text.substring(0, 100)
+      })));
+
+      // Check for key phrases that should exist
+      const transcriptText = transcriptionResult?.segments?.map(s => s.text).join(' ') || '';
+      console.log('Contains "Lisa"?:', transcriptText.includes('Lisa'));
+      console.log('Contains "510"?:', transcriptText.includes('510') || transcriptText.includes('five ten'));
+      console.log('Contains "member ID"?:', transcriptText.toLowerCase().includes('member'));
+      console.log('Contains "grocery store"?:', transcriptText.toLowerCase().includes('grocery'));
+      console.log('Contains "shopping"?:', transcriptText.toLowerCase().includes('shopping'));
+
+      // Speaker distribution
+      const speakers: Record<string, number> = {};
+      transcriptionResult?.segments?.forEach(s => {
+        speakers[s.speaker] = (speakers[s.speaker] || 0) + 1;
+      });
+      console.log('=== SPEAKER DISTRIBUTION ===');
+      console.log('Speakers found:', speakers);
 
       // Capture debug info
       debugInfo = {
@@ -153,6 +184,14 @@ export async function POST(req: NextRequest) {
       .map(s => `${s.speaker.toUpperCase()} [${new Date(s.startMs).toISOString().substring(14,19)}]: ${s.text}`)
       .join("\n");
 
+    console.log('=== TRANSCRIPT CONTENT CHECK ===');
+    console.log('Transcript length:', transcript.length);
+    console.log('Contains "shopping"?:', transcript.includes('shopping'));
+    console.log('Contains "not signing up"?:', transcript.includes('not signing up'));
+    console.log('Contains "460"?:', transcript.includes('460') || transcript.includes('four sixty'));
+    console.log('First 500 chars:', transcript.substring(0, 500));
+    console.log('Last 500 chars:', transcript.substring(transcript.length - 500));
+
     const talk = computeTalkMetrics(segments);
     const hold = computeHoldStats(segments);
     const wasted = isWastedCall(talk, segments);
@@ -181,6 +220,9 @@ export async function POST(req: NextRequest) {
       // Build user prompt with enriched signals
       const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, enrichedSignals);
 
+      console.log('=== EXTRACTED SIGNALS ===');
+      console.log('Full signals object:', JSON.stringify(signals, null, 2));
+
       // DEBUG: Log everything sent to OpenAI
       console.log('=== ANALYSIS DEBUG (RULE ENGINE) ===');
       console.log('Path used:', 'RULE_ENGINE');
@@ -196,10 +238,33 @@ export async function POST(req: NextRequest) {
       console.log('Price events:', enrichedSignals.price_events);
       console.log('======================');
 
+      console.log('=== TO OPENAI ===');
+      console.log('Transcript length sent:', transcript.length);
+      console.log('First 500 chars of transcript:', transcript.substring(0, 500));
+      console.log('Last 500 chars of transcript:', transcript.substring(transcript.length - 500));
+
+      // Check specific content
+      const lowerTranscript = transcript.toLowerCase();
+      console.log('Transcript contains "lisa"?:', lowerTranscript.includes('lisa'));
+      console.log('Transcript contains "510"?:', lowerTranscript.includes('510'));
+      console.log('Transcript contains "member"?:', lowerTranscript.includes('member'));
+      console.log('Transcript contains "grocery"?:', lowerTranscript.includes('grocery'));
+
       let finalJson: any;
       try {
         // LLM with timeout
         finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
+
+        console.log('=== FROM OPENAI ===');
+        console.log('Summary:', finalJson?.summary);
+        console.log('Outcome from OpenAI:', finalJson?.outcome);
+        console.log('Reason primary:', finalJson?.reason_primary);
+        console.log('Key quotes count:', finalJson?.key_quotes?.length);
+        if (finalJson?.key_quotes?.length > 0) {
+          console.log('First quote:', finalJson.key_quotes[0]);
+          console.log('Last quote:', finalJson.key_quotes[finalJson.key_quotes.length - 1]);
+        }
+
         finalJson.talk_metrics = talk;
         finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
 
@@ -469,7 +534,7 @@ export async function POST(req: NextRequest) {
             evidence_quote: "post date scheduled"
           };
         }
-        if (signals.charge_confirmed_phrase) {
+        if (signals.charge_confirmed_phrase || signals.sale_confirm_phrase) {
           return {
             sale_status: "sale" as const,
             payment_confirmed: true,

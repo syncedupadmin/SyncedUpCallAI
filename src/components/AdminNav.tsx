@@ -86,6 +86,12 @@ export default function AdminNav() {
         description: 'Development & testing'
       },
       {
+        name: 'Simple Analysis',
+        href: '/test-simple',
+        icon: Activity,
+        description: 'Clean AI analysis without rules'
+      },
+      {
         name: 'Bulk Upload',
         href: '/admin/bulk-upload',
         icon: Upload,
@@ -102,6 +108,12 @@ export default function AdminNav() {
         href: '/admin/openings',
         icon: Mic,
         description: 'Opening analysis & training'
+      },
+      {
+        name: 'Simple Analysis',
+        href: '/test-simple',
+        icon: Activity,
+        description: 'Clean AI analysis without rules'
       }
     ];
 
@@ -149,6 +161,12 @@ export default function AdminNav() {
         description: 'Development & testing'
       },
       {
+        name: 'Simple Analysis',
+        href: '/test-simple',
+        icon: Activity,
+        description: 'Clean AI analysis without rules'
+      },
+      {
         name: 'Bulk Upload',
         href: '/admin/bulk-upload',
         icon: Upload,
@@ -165,6 +183,12 @@ export default function AdminNav() {
         href: '/admin/openings',
         icon: Mic,
         description: 'Opening analysis & training'
+      },
+      {
+        name: 'Simple Analysis',
+        href: '/test-simple',
+        icon: Activity,
+        description: 'Clean AI analysis without rules'
       }
     ];
 

@@ -146,7 +146,32 @@ export function computeSignals(segments: Segment[]): Signals {
   const last4 = joined.match(/\b(\d{4})\b(?=\D*$)/);
   if (last4) { s.card_last4 = last4[1]; s.card_spoken = true; }
 
-  const hit = (arr:readonly string[]) => arr.some(p => joined.toLowerCase().includes(p.toLowerCase()));
+  const hit = (arr:readonly string[]) => {
+    const text = joined.toLowerCase();
+    return arr.some(p => {
+      const pattern = p.toLowerCase();
+      // Use word boundary regex to avoid partial matches like "all set" matching "Alright"
+      const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedPattern}\\b`);
+      const matches = regex.test(text);
+      if (matches) {
+        console.log(`PATTERN MATCHED: "${p}" found in text`);
+        // Find and log the context where it matched
+        const match = text.match(regex);
+        if (match) {
+          const startIdx = Math.max(0, match.index! - 20);
+          const endIdx = Math.min(text.length, match.index! + pattern.length + 20);
+          console.log(`Context: "...${text.substring(startIdx, endIdx)}..."`);
+        }
+      }
+      return matches;
+    });
+  };
+
+  console.log('=== PLAYBOOK MATCHING ===');
+  console.log('Text being checked:', joined.substring(0, 200));
+  console.log('Sale confirm patterns:', PLAYBOOK.outcomes?.phrases?.sale_confirm);
+  console.log('Matched sale?:', hit(PLAYBOOK.outcomes?.phrases?.sale_confirm));
 
   // DEBUG: Log what phrases we're checking for
   console.log('Checking for post_date phrases:', PLAYBOOK.outcomes.phrases.post_date);
