@@ -577,7 +577,13 @@ export default function AISettingsDashboard() {
         {activeTab === 'keywords' && (
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Keywords Management</h2>
+              <div>
+                <h2 className="text-xl font-semibold">Keywords Management</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Total: {currentConfig?.config.keywords?.length || 0} keywords |
+                  Problematic: {analysis?.problematicKeywords?.length || 0}
+                </p>
+              </div>
               <div className="flex gap-3">
                 <input
                   type="search"
@@ -602,6 +608,11 @@ export default function AISettingsDashboard() {
             </div>
 
             <div className="space-y-2">
+              {!currentConfig?.config.keywords?.length && (
+                <div className="text-center py-8 text-gray-500">
+                  No keywords loaded. Loading configuration...
+                </div>
+              )}
               {currentConfig?.config.keywords?.map((keyword: string, idx: number) => {
                 const [word, boost] = keyword.split(':');
                 const isProblematic = analysis?.problematicKeywords?.some(k => k.keyword === word);
@@ -631,8 +642,8 @@ export default function AISettingsDashboard() {
                         }}
                         className="rounded"
                       />
-                      <span className="font-mono">{word}</span>
-                      <span className="text-sm text-gray-500">Boost: {boost || 1}</span>
+                      <span className="font-mono text-gray-900 font-semibold">{word}</span>
+                      <span className="text-sm text-gray-500 ml-2">Boost: {boost || 1}</span>
                     </div>
                     <div className="flex items-center gap-4">
                       {isProblematic && (
