@@ -534,7 +534,7 @@ export async function POST(req: NextRequest) {
             evidence_quote: "post date scheduled"
           };
         }
-        if (signals.charge_confirmed_phrase || signals.sale_confirm_phrase) {
+        if (signals.charge_confirmed_phrase || (signals as any).sale_confirm_phrase) {
           return {
             sale_status: "sale" as const,
             payment_confirmed: true,
