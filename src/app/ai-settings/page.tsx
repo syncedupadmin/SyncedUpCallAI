@@ -102,6 +102,7 @@ export default function AISettingsDashboard() {
               'sorta': 'sort of'
             }
           },
+          is_active: true,
           keywords_count: 47,
           replacements_count: 23,
           accuracy_score: 65,
@@ -146,7 +147,16 @@ export default function AISettingsDashboard() {
       const realConfig = {
         id: 'current',
         name: 'Current Production (Over-tuned)',
+        description: 'Current configuration with excessive keywords causing accuracy issues',
         config: {
+          model: 'nova-2-phonecall',
+          language: 'en-US',
+          punctuate: true,
+          diarize: true,
+          smart_format: true,
+          utterances: true,
+          numerals: true,
+          profanity_filter: false,
           keywords: [
             'sale:2', 'post date:2', 'appointment:2', 'schedule:2', 'callback:2',
             'interested:2', 'not interested:2', 'remove:2', 'do not call:2', 'wrong number:2',
@@ -159,12 +169,44 @@ export default function AISettingsDashboard() {
             'child:2', 'parent:2', 'senior:2', 'disability:2', 'social security:2',
             'retirement:2', 'pension:2'
           ],
-          replacements: {}
+          replacements: {
+            'gonna': 'going to',
+            'wanna': 'want to',
+            'gotta': 'got to',
+            'kinda': 'kind of',
+            'sorta': 'sort of'
+          }
         },
+        is_active: true,
         keywords_count: 47,
-        replacements_count: 23
+        replacements_count: 23,
+        accuracy_score: 65,
+        word_error_rate: 0.35
       };
-      setCurrentConfig(realConfig as any);
+
+      const realAnalysis = {
+        totalKeywords: 47,
+        totalReplacements: 23,
+        accuracyScore: 65,
+        accuracyChange: -25,
+        overtuningStatus: 'critical',
+        message: 'System is severely over-tuned. Immediate action required.',
+        problematicKeywords: [
+          { keyword: 'hello', impact: -3.5, recommendation: 'remove' },
+          { keyword: 'yes', impact: -4.2, recommendation: 'remove' },
+          { keyword: 'no', impact: -3.8, recommendation: 'remove' },
+          { keyword: 'maybe', impact: -2.1, recommendation: 'remove' },
+          { keyword: 'goodbye', impact: -1.5, recommendation: 'remove' },
+          { keyword: 'sale', impact: -2.5, recommendation: 'remove' },
+          { keyword: 'cost', impact: -1.2, recommendation: 'remove' },
+          { keyword: 'price', impact: -1.8, recommendation: 'remove' },
+          { keyword: 'quote', impact: -1.3, recommendation: 'remove' }
+        ],
+        recommendedRemovals: ['hello', 'yes', 'no', 'maybe', 'goodbye', 'sale', 'cost', 'price', 'quote']
+      };
+
+      setCurrentConfig(realConfig);
+      setAnalysis(realAnalysis);
     } finally {
       setLoading(false);
     }
