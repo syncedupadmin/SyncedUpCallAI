@@ -197,19 +197,40 @@ export default function TestSimple() {
 
                   {result.rebuttals?.used && result.rebuttals.used.length > 0 ? (
                     <>
-                      <p className="text-sm text-gray-600 mb-3">Used ({result.rebuttals.used.length})</p>
+                      <p className="text-sm text-gray-600 mb-3">Addressed ({result.rebuttals.used.length})</p>
                       <div className="space-y-3">
                         {result.rebuttals.used.map((rebuttal: any, idx: number) => (
                           <div key={idx} className="border-l-2 border-green-500 pl-3">
                             <p className="text-xs text-gray-500">
-                              {rebuttal.timestamp} • <span className="text-green-600">{rebuttal.type}</span>
+                              {rebuttal.ts} • <span className="text-green-600">{rebuttal.stall_type}</span>
                             </p>
-                            <p className="text-sm">"{rebuttal.quote}"</p>
+                            <p className="text-sm text-gray-700">Customer: "{rebuttal.quote_customer}"</p>
+                            <p className="text-sm text-green-700">Agent: "{rebuttal.quote_agent}"</p>
                           </div>
                         ))}
                       </div>
                     </>
-                  ) : (
+                  ) : null}
+
+                  {result.rebuttals?.missed && result.rebuttals.missed.length > 0 ? (
+                    <>
+                      <p className="text-sm text-gray-600 mb-3 mt-4">Missed ({result.rebuttals.missed.length})</p>
+                      <div className="space-y-3">
+                        {result.rebuttals.missed.map((rebuttal: any, idx: number) => (
+                          <div key={idx} className="border-l-2 border-red-500 pl-3">
+                            <p className="text-xs text-gray-500">
+                              {rebuttal.ts} • <span className="text-red-600">{rebuttal.stall_type}</span>
+                            </p>
+                            <p className="text-sm text-gray-700">Customer: "{rebuttal.quote_customer}"</p>
+                            <p className="text-sm text-red-600 italic">No effective response</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {(!result.rebuttals?.used || result.rebuttals.used.length === 0) &&
+                   (!result.rebuttals?.missed || result.rebuttals.missed.length === 0) && (
                     <p className="text-sm text-gray-500">None</p>
                   )}
                 </div>

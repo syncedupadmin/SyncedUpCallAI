@@ -1,5 +1,6 @@
 import { createClient } from "@deepgram/sdk";
 import OpenAI from "openai";
+import { buildAgentSnippetsAroundObjections, classifyRebuttals, type Segment, type ObjectionSpan } from "./rebuttals";
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -37,7 +38,17 @@ SCHEMA:
     "sale_cues": string[],                  // e.g., "approved", "member ID", "successfully signed"
     "callback_cues": string[],              // e.g., "call me back", "after work"
     "red_flags_raw": string[]               // any of: "dnc_request","trust_scam_fear","bank_decline","language_barrier","benefits_confusion","requested_cancel"
-  }
+  },
+  "objection_spans": [
+    {
+      "stall_type": "pricing"|"spouse_approval"|"bank_decline"|"benefits_confusion"|"trust_scam_fear"|"already_covered"|"agent_miscommunication"|"requested_callback"|"language_barrier"|"other",
+      "quote": string,                      // verbatim quote from customer
+      "position": integer,                  // char index
+      "startMs": integer,                   // millisecond timestamp
+      "endMs": integer,                     // millisecond timestamp
+      "speaker": "customer"
+    }
+  ]
 }
 
 RULES:
@@ -70,7 +81,29 @@ Text: "... it's a PPO ... I apologize ... it's an open access plan with Paramoun
 
 EXAMPLES (signals):
 Text: "... approved ... member ID is 685417634 ..."
-→ sale_cues += ["approved","member ID"]`;
+→ sale_cues += ["approved","member ID"]
+
+OBJECTION DETECTION:
+- Only capture CUSTOMER objections/stalls that fit the stall_type enum exactly
+- Include millisecond timestamps from the audio (startMs, endMs)
+- Stall types to detect:
+  • pricing: cost concerns, too expensive, can't afford
+  • spouse_approval: need to talk to spouse/partner/family
+  • bank_decline: card declined, payment issues
+  • benefits_confusion: confusion about coverage
+  • trust_scam_fear: scam fears, legitimacy concerns
+  • already_covered: has existing insurance
+  • requested_callback: asks to call back later
+  • language_barrier: language difficulties
+  • agent_miscommunication: agent error/contradiction
+  • other: clear objection not fitting above
+
+EXAMPLES (objections):
+Text: "I need to talk to my wife first" (at 10000ms-12000ms)
+→ objection_spans += { stall_type:"spouse_approval", quote:"I need to talk to my wife first", position:<i>, startMs:10000, endMs:12000, speaker:"customer" }
+
+Text: "This sounds too expensive for me" (at 20000ms-22000ms)
+→ objection_spans += { stall_type:"pricing", quote:"This sounds too expensive for me", position:<j>, startMs:20000, endMs:22000, speaker:"customer" }`;
 
 const passBPrompt = `You are the ARBITER. Build the final white card JSON strictly by the provided schema. Never invent values. Redact any 7+ consecutive digits in QUOTES as ####### inside reason/summary if you include quotes.
 
@@ -194,8 +227,17 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
     }
   );
 
-  // Extract utterances with speakers
+  // Extract utterances with speakers and segments for rebuttals
   const utterances = result?.results?.utterances || [];
+
+  // Extract segments with millisecond timestamps for rebuttals
+  const segments: Segment[] = utterances.map(u => ({
+    speaker: u.speaker === 0 ? "agent" : "customer",
+    startMs: Math.round((u.start || 0) * 1000),
+    endMs: Math.round((u.end || 0) * 1000),
+    text: u.transcript || "",
+    conf: u.confidence || 0
+  }));
 
   // Extract summary if available (from summarize: v2)
   const deepgramSummary = result?.results?.summary?.short || null;
@@ -227,7 +269,17 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
   });
 
   const mentionsTable = JSON.parse(passAResponse.choices[0].message.content || "{}");
-  console.log(`Pass A complete: ${mentionsTable.money_mentions?.length || 0} money mentions found`);
+  console.log(`Pass A complete: ${mentionsTable.money_mentions?.length || 0} money mentions, ${mentionsTable.objection_spans?.length || 0} objections found`);
+
+  // Step 2b: Run rebuttals detection if objections exist
+  let rebuttals = null;
+  if (mentionsTable.objection_spans?.length > 0) {
+    console.log('Running rebuttals detection...');
+    const objectionSpans: ObjectionSpan[] = mentionsTable.objection_spans;
+    const items = buildAgentSnippetsAroundObjections(segments, objectionSpans);
+    rebuttals = await classifyRebuttals(items);
+    console.log(`Rebuttals classified: ${rebuttals?.used?.length || 0} addressed, ${rebuttals?.missed?.length || 0} missed`);
+  }
 
   // Step 3: Pass B - Generate final white card
   console.log('Running Pass B: Generating final white card...');
@@ -266,6 +318,7 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       agent_name: meta?.agent_name || null,
       agent_id: meta?.agent_id || null
     },
+    rebuttals: rebuttals,  // Include rebuttals if detected
     metadata: {
       model: "two-pass-v1",
       deepgram_request_id: result?.metadata?.request_id,

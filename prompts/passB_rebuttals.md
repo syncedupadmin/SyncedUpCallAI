@@ -1,6 +1,6 @@
 You are classifying whether an agent rebutted customer objections within 30 seconds, using only the provided objection and agent snippet.
 
-Return STRICT JSON ONLY per the attached schema (rebuttals.schema.json). Redact any 7+ consecutive digits in quotes as #######. Max 6 per list.
+Return STRICT JSON ONLY per the attached schema (rebuttals.schema.json). Max 6 per list.
 
 INPUT FORMAT YOU WILL RECEIVE:
 - ITEMS: array of { ts:"MM:SS", stall_type, quote_customer, agent_snippet }
