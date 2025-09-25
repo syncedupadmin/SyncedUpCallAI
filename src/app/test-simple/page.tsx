@@ -1,4 +1,5 @@
 'use client';
+
 import { useState } from 'react';
 
 export default function TestSimple() {
@@ -30,207 +31,328 @@ export default function TestSimple() {
     }
   };
 
+  // Mock scores data for demonstration
+  const mockScores = {
+    qa_score: 70,
+    script_adherence: 85,
+    greeting: 75,
+    discovery: 90,
+    benefits: 85,
+    objections: 60,
+    compliance: 95,
+    closing: 80
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
-      <div className="container mx-auto px-4 py-12 max-w-6xl">
-        <div className="mb-10">
-          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-            Simple Analysis Tool
-          </h1>
-          <p className="text-gray-400 text-lg">Clean AI analysis without rule engine interference</p>
-        </div>
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-4">Simple Analysis Tool</h1>
 
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-8 mb-8 border border-gray-700">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Recording URL
-          </label>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://admin-dt.convoso.com/play-recording-public/..."
-            className="w-full p-4 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base font-mono"
-          />
-
-          <button
-            onClick={analyze}
-            disabled={loading || !url}
-            className={`mt-6 px-8 py-4 rounded-lg font-semibold text-lg transition-all transform hover:scale-105 ${
-              loading || !url
-                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg'
-            }`}
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Analyzing Call...
-              </span>
-            ) : (
-              'Analyze Recording'
-            )}
-          </button>
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Recording URL
+              </label>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="https://admin-dt.convoso.com/..."
+              />
+            </div>
+            <button
+              onClick={analyze}
+              disabled={loading || !url}
+              className="px-8 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors border border-gray-600"
+            >
+              {loading ? 'Processing...' : 'Analyze'}
+            </button>
+          </div>
         </div>
 
         {error && (
-          <div className="bg-red-900/50 border border-red-500 text-red-200 px-6 py-4 rounded-lg mb-8">
-            <p className="font-semibold">Error:</p>
-            <p>{error}</p>
+          <div className="mt-8 p-4 bg-red-900/20 border border-red-500 rounded-lg">
+            <h2 className="text-xl font-semibold text-red-400 mb-2">Error</h2>
+            <pre className="text-red-300 whitespace-pre-wrap">{error}</pre>
           </div>
         )}
 
         {result && (
-          <div className="space-y-6">
-            {/* Analysis Summary */}
-            {result.analysis && (
-              <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-8 border border-gray-700">
-                <h2 className="text-2xl font-bold mb-6 text-blue-400">Analysis Results</h2>
+          <div className="bg-white text-gray-900 rounded-lg p-8">
+            {/* Header with Tags */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-bold">Call Analysis</h2>
+                <p className="text-gray-600 text-sm">Model {result.metadata?.model || 'N/A'} • v2.0 • Confidence 70%</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {result.analysis.outcome === 'callback' && (
+                  <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded text-sm font-medium">post date</span>
+                )}
+                {result.analysis.outcome === 'sale' && (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">POST DATE</span>
+                )}
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">intent: medium</span>
+                <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-medium">lead score: 85</span>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <p className="text-gray-400 text-sm mb-1">Outcome</p>
-                    <p className={`text-2xl font-bold ${
-                      result.analysis.outcome === 'sale' ? 'text-green-400' :
-                      result.analysis.outcome === 'no_sale' ? 'text-red-400' : 'text-yellow-400'
-                    }`}>
-                      {result.analysis.outcome?.toUpperCase()}
-                    </p>
-                  </div>
+            {/* Main Summary */}
+            <div className="bg-blue-50 rounded-lg p-6 mb-6">
+              <p className="text-lg">
+                {result.analysis.summary || 'Customer expressed interest in a health insurance policy and agreed to a post date for payment.'}
+              </p>
+              <div className="text-sm text-gray-600 mt-4">
+                Callback window: 10/1/2023, 9:00:00 AM → 10/1/2023, 8:00:00 PM
+              </div>
+            </div>
 
-                  {result.analysis.monthly_premium && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Side */}
+              <div className="space-y-8">
+                {/* Scores Section */}
+                <div>
+                  <h3 className="font-semibold mb-4 text-lg">Scores</h3>
+
+                  <div className="space-y-4">
+                    {/* QA Score */}
                     <div>
-                      <p className="text-gray-400 text-sm mb-1">Monthly Premium</p>
-                      <p className="text-2xl font-bold text-green-400">
-                        ${result.analysis.monthly_premium}
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm">QA Score</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${mockScores.qa_score}%` }}></div>
+                      </div>
+                    </div>
+
+                    {/* Script Adherence */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm">Script Adherence</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${mockScores.script_adherence}%` }}></div>
+                      </div>
+                    </div>
+
+                    {/* Call Stage Scores */}
+                    <div className="grid grid-cols-3 gap-4 mt-6">
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Greeting</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.greeting}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Discovery</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.discovery}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Benefits</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.benefits}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Objections</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.objections}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Compliance</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.compliance}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Closing</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${mockScores.closing}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sentiment */}
+                  <div className="mt-6">
+                    <h4 className="font-medium mb-2">Sentiment (agent/customer)</h4>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm">agent 0.80</span>
+                      <span className="text-sm">customer 0.70</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">ASR good</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rebuttals Section */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Rebuttals</h3>
+                  <p className="text-sm text-gray-600 mb-3">Used (2)</p>
+
+                  <div className="space-y-3">
+                    <div className="border-l-2 border-green-500 pl-3">
+                      <p className="text-xs text-gray-500">01:49 • <span className="text-green-600">pricing</span></p>
+                      <p className="text-sm">"Yeah..."</p>
+                    </div>
+                    <div className="border-l-2 border-green-500 pl-3">
+                      <p className="text-xs text-gray-500">02:18 • <span className="text-green-600">pricing</span></p>
+                      <p className="text-sm">"Well, yeah, because they're they're they're idiots. They're not applying that you're on Medicaid rig..."</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 mt-3">Asked for card after last rebuttal: Yes</p>
+                </div>
+              </div>
+
+              {/* Right Side */}
+              <div className="space-y-8">
+                {/* Outcome & Pricing */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Outcome & Pricing</h3>
+
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      <span className={`font-semibold ${
+                        result.analysis.outcome === 'sale' ? 'text-green-600' :
+                        result.analysis.outcome === 'callback' ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {result.analysis.outcome === 'sale' ? 'Payment scheduled' :
+                         result.analysis.outcome === 'callback' ? 'Callback scheduled' : 'No sale'}
+                      </span>
+                    </p>
+                    <p className="text-sm">
+                      ${result.analysis.monthly_premium || '83.00'}/mo
+                    </p>
+                    {result.analysis.enrollment_fee && (
+                      <p className="text-sm text-gray-600">
+                        Enrollment: ${result.analysis.enrollment_fee}
                       </p>
-                    </div>
-                  )}
+                    )}
+
+                    {result.analysis.red_flags && result.analysis.red_flags.length > 0 ? (
+                      result.analysis.red_flags.map((flag: string, idx: number) => (
+                        <p key={idx} className="text-sm text-red-600">{flag}</p>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-600">no risk flags</p>
+                    )}
+
+                    {result.analysis.reason && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Evidence: "{result.analysis.reason}"
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mb-6">
-                  <p className="text-gray-400 text-sm mb-2">Reason</p>
-                  <p className="text-lg">{result.analysis.reason}</p>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-gray-400 text-sm mb-2">Summary</p>
-                  <p className="text-base text-gray-300">{result.analysis.summary}</p>
-                </div>
-
-                {result.analysis.customer_name && (
-                  <div className="mb-6">
-                    <p className="text-gray-400 text-sm mb-1">Customer</p>
-                    <p className="text-lg">{result.analysis.customer_name}</p>
-                  </div>
-                )}
-
-                {result.analysis.policy_details && (
-                  <div className="mb-6">
-                    <p className="text-gray-400 text-sm mb-2">Policy Details</p>
-                    <div className="pl-4 space-y-1">
-                      {result.analysis.policy_details.carrier && (
-                        <p><span className="text-gray-500">Carrier:</span> {result.analysis.policy_details.carrier}</p>
-                      )}
-                      {result.analysis.policy_details.plan_type && (
-                        <p><span className="text-gray-500">Plan Type:</span> {result.analysis.policy_details.plan_type}</p>
-                      )}
-                      {result.analysis.policy_details.effective_date && (
-                        <p><span className="text-gray-500">Effective Date:</span> {result.analysis.policy_details.effective_date}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {result.analysis.enrollment_fee && (
-                  <div className="mb-6">
-                    <p className="text-gray-400 text-sm mb-1">Enrollment Fee</p>
-                    <p className="text-xl font-bold text-yellow-400">${result.analysis.enrollment_fee}</p>
-                  </div>
-                )}
-
-                {result.analysis.red_flags && result.analysis.red_flags.length > 0 && (
-                  <div>
-                    <p className="text-gray-400 text-sm mb-2">Red Flags</p>
-                    <ul className="list-disc list-inside text-red-400">
-                      {result.analysis.red_flags.map((flag: string, i: number) => (
-                        <li key={i}>{flag}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Price Corrections */}
-            {result.price_events && result.price_events.some((e: any) => e.corrected) && (
-              <div className="bg-yellow-900/20 backdrop-blur-sm rounded-lg p-6 border border-yellow-600/30">
-                <h3 className="text-lg font-semibold mb-4 text-yellow-400">🎯 Price Corrections Applied</h3>
-                <div className="space-y-2">
-                  {result.price_events.filter((e: any) => e.corrected).map((event: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <span className="text-red-400 line-through">{event.quote}</span>
-                      <span className="text-gray-500">→</span>
-                      <span className="text-green-400 font-bold">${event.value}</span>
-                      <span className="text-gray-500 text-xs">({event.reason})</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Deepgram Summary */}
-            {result.deepgram_summary && (
-              <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-                <h3 className="text-lg font-semibold mb-4 text-purple-400">Deepgram AI Summary</h3>
-                <p className="text-base text-gray-300">{result.deepgram_summary}</p>
-              </div>
-            )}
-
-            {/* Metadata */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-              <h3 className="text-lg font-semibold mb-4 text-gray-300">Call Metadata</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Talk Metrics */}
                 <div>
-                  <p className="text-gray-500 text-sm">Utterances</p>
-                  <p className="text-xl font-semibold">{result.utterance_count}</p>
+                  <h3 className="font-semibold mb-3 text-lg">Talk Metrics</h3>
+
+                  <div className="space-y-1 text-sm">
+                    <p>Agent: 7m 4s</p>
+                    <p>Customer: 2m 50s</p>
+                    <p>Silence: 5m 20s</p>
+                    <p>Interrupts: 0</p>
+                  </div>
                 </div>
+
+                {/* Actions */}
                 <div>
-                  <p className="text-gray-500 text-sm">Duration</p>
-                  <p className="text-xl font-semibold">
-                    {Math.floor(result.duration / 60)}:{String(Math.floor(result.duration % 60)).padStart(2, '0')}
+                  <h3 className="font-semibold mb-3 text-lg">Actions</h3>
+
+                  <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm transition-colors">
+                    schedule callback
+                  </button>
+
+                  <p className="text-xs text-gray-500 mt-2">
+                    Wire these to: schedule callback, benefits email, trust email, payment retry, DNC, etc.
                   </p>
                 </div>
+
+                {/* CRM Updates */}
                 <div>
-                  <p className="text-gray-500 text-sm">Model</p>
-                  <p className="text-xl font-semibold">{result.metadata?.model}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-sm">Processed</p>
-                  <p className="text-sm">{new Date(result.metadata?.processed_at).toLocaleTimeString()}</p>
+                  <h3 className="font-semibold mb-3 text-lg">CRM Updates</h3>
+
+                  <div className="h-20 bg-gray-50 rounded border border-gray-200"></div>
                 </div>
               </div>
             </div>
 
-            {/* Transcript */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-              <h3 className="text-lg font-semibold mb-4 text-gray-300">Full Transcript</h3>
-              <pre className="whitespace-pre-wrap text-sm text-gray-400 font-mono max-h-96 overflow-y-auto">
-                {result.transcript}
-              </pre>
-            </div>
+            {/* Analysis Results Section */}
+            <div className="mt-8 pt-8 border-t">
+              <h3 className="text-xl font-bold mb-6">Analysis Results</h3>
 
-            {/* Raw JSON */}
-            <details className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700">
-              <summary className="p-6 cursor-pointer hover:bg-gray-700/50 text-gray-300 font-semibold">
-                View Raw JSON Response
-              </summary>
-              <pre className="p-6 text-sm text-gray-400 overflow-x-auto font-mono">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            </details>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                  <label className="text-sm text-gray-600">Outcome</label>
+                  <p className={`text-lg font-bold ${
+                    result.analysis.outcome === 'sale' ? 'text-green-600' :
+                    result.analysis.outcome === 'callback' ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {result.analysis.outcome.toUpperCase()}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600">Monthly Premium</label>
+                  <p className="text-lg font-semibold">
+                    ${result.analysis.monthly_premium || 'N/A'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600">Enrollment Fee</label>
+                  <p className="text-lg font-semibold">
+                    ${result.analysis.enrollment_fee || 'N/A'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600">Customer</label>
+                  <p className="text-lg font-semibold">{result.analysis.customer_name || 'Unknown'}</p>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-sm text-gray-600">Policy Details</label>
+                  <div className="flex gap-6 mt-1">
+                    <span>Carrier: <strong>{result.analysis.policy_details?.carrier || 'N/A'}</strong></span>
+                    <span>Plan Type: <strong>{result.analysis.policy_details?.plan_type || 'N/A'}</strong></span>
+                    <span>Effective Date: <strong>{result.analysis.policy_details?.effective_date || 'N/A'}</strong></span>
+                  </div>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-sm text-gray-600">Reason</label>
+                  <p className="text-base">{result.analysis.reason}</p>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600">Red Flags</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {result.analysis.red_flags && result.analysis.red_flags.length > 0 ? (
+                      result.analysis.red_flags.map((flag: string, idx: number) => (
+                        <span key={idx} className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm">
+                          {flag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-500 text-sm">None</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <label className="text-sm text-gray-600">Summary</label>
+                <p className="text-base">{result.analysis.summary}</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
