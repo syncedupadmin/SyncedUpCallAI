@@ -127,6 +127,30 @@ export default function TestSimple() {
                   </div>
                 )}
 
+                {result.analysis.policy_details && (
+                  <div className="mb-6">
+                    <p className="text-gray-400 text-sm mb-2">Policy Details</p>
+                    <div className="pl-4 space-y-1">
+                      {result.analysis.policy_details.carrier && (
+                        <p><span className="text-gray-500">Carrier:</span> {result.analysis.policy_details.carrier}</p>
+                      )}
+                      {result.analysis.policy_details.plan_type && (
+                        <p><span className="text-gray-500">Plan Type:</span> {result.analysis.policy_details.plan_type}</p>
+                      )}
+                      {result.analysis.policy_details.effective_date && (
+                        <p><span className="text-gray-500">Effective Date:</span> {result.analysis.policy_details.effective_date}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {result.analysis.enrollment_fee && (
+                  <div className="mb-6">
+                    <p className="text-gray-400 text-sm mb-1">Enrollment Fee</p>
+                    <p className="text-xl font-bold text-yellow-400">${result.analysis.enrollment_fee}</p>
+                  </div>
+                )}
+
                 {result.analysis.red_flags && result.analysis.red_flags.length > 0 && (
                   <div>
                     <p className="text-gray-400 text-sm mb-2">Red Flags</p>
@@ -137,6 +161,31 @@ export default function TestSimple() {
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Price Corrections */}
+            {result.price_events && result.price_events.some((e: any) => e.corrected) && (
+              <div className="bg-yellow-900/20 backdrop-blur-sm rounded-lg p-6 border border-yellow-600/30">
+                <h3 className="text-lg font-semibold mb-4 text-yellow-400">🎯 Price Corrections Applied</h3>
+                <div className="space-y-2">
+                  {result.price_events.filter((e: any) => e.corrected).map((event: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <span className="text-red-400 line-through">{event.quote}</span>
+                      <span className="text-gray-500">→</span>
+                      <span className="text-green-400 font-bold">${event.value}</span>
+                      <span className="text-gray-500 text-xs">({event.reason})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Deepgram Summary */}
+            {result.deepgram_summary && (
+              <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
+                <h3 className="text-lg font-semibold mb-4 text-purple-400">Deepgram AI Summary</h3>
+                <p className="text-base text-gray-300">{result.deepgram_summary}</p>
               </div>
             )}
 

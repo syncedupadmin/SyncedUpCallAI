@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome","monthly_premium","enrollment_fee","reason","summary","customer_name","policy_details","red_flags"],
+  "properties": {
+    "outcome": {
+      "enum": ["sale","no_sale","callback"]
+    },
+    "monthly_premium": {
+      "type": ["number","null"]
+    },
+    "enrollment_fee": {
+      "type": ["number","null"]
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 140
+    },
+    "summary": {
+      "type": "string"
+    },
+    "customer_name": {
+      "type": ["string","null"]
+    },
+    "policy_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier","plan_type","effective_date"],
+      "properties": {
+        "carrier": {
+          "type": ["string","null"]
+        },
+        "plan_type": {
+          "type": ["string","null"],
+          "enum": ["PPO","HMO","EPO","POS","Medigap","ACA bronze","ACA silver","ACA gold","Short-term","Medicare Advantage","Open access",null]
+        },
+        "effective_date": {
+          "type": ["string","null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "red_flags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  }
+}
