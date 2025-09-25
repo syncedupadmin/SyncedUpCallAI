@@ -42,8 +42,7 @@
     },
     "red_flags": {
       "type": "array",
-      "items": { "type": "string" },
-      "uniqueItems": true
+      "items": { "type": "string" }
     }
   }
 }

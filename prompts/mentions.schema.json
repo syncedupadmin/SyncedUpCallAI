@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["money_mentions", "plan_mentions", "carrier_mentions", "date_mentions", "signals"],
+  "properties": {
+    "money_mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "value_raw", "quote", "position", "speaker"],
+        "properties": {
+          "field_hint": { "enum": ["monthly_premium", "first_month_bill", "enrollment_fee", "generic"] },
+          "value_raw": { "type": "string" },
+          "quote": { "type": "string", "maxLength": 160 },
+          "position": { "type": "integer", "minimum": 0 },
+          "speaker": { "enum": ["agent", "customer", "unknown"] }
+        }
+      }
+    },
+    "plan_mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["plan_type", "quote", "position"],
+        "properties": {
+          "plan_type": { "enum": ["PPO","HMO","EPO","POS","Medigap","ACA bronze","ACA silver","ACA gold","Short-term","Medicare Advantage","Open access"] },
+          "quote": { "type": "string", "maxLength": 160 },
+          "position": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "carrier_mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["carrier", "quote", "position"],
+        "properties": {
+          "carrier": { "type": "string" },
+          "quote": { "type": "string", "maxLength": 160 },
+          "position": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "date_mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "value_raw", "quote", "position"],
+        "properties": {
+          "kind": { "enum": ["effective_date","post_date","generic"] },
+          "value_raw": { "type": "string" },
+          "quote": { "type": "string", "maxLength": 160 },
+          "position": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sale_cues","callback_cues","red_flags_raw"],
+      "properties": {
+        "sale_cues": { "type": "array", "items": { "type": "string" } },
+        "callback_cues": { "type": "array", "items": { "type": "string" } },
+        "red_flags_raw": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
