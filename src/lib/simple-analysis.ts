@@ -273,7 +273,7 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
 
   // Step 2b: Run rebuttals detection if objections exist
   let rebuttals = null;
-  let immediate = [];
+  let immediate: any[] = [];
   if (mentionsTable.objection_spans?.length > 0) {
     console.log('Running rebuttals detection...');
     const objectionSpans: ObjectionSpan[] = mentionsTable.objection_spans;
