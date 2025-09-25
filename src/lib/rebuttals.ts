@@ -117,6 +117,32 @@ export function buildAgentSnippetsAroundObjections(segments: Segment[], objectio
   return items;
 }
 
+/**
+ * Build the agent's immediate reply to each objection, deterministically.
+ * Picks the first agent segment that starts at or after objection.endMs,
+ * within a window (default 15 seconds). No LLM involved.
+ */
+export function buildImmediateReplies(
+  segments: Segment[],
+  objections: ObjectionSpan[],
+  windowMs = 15000
+) {
+  const results = [];
+  const agentSegs = segments.filter(s => s.speaker === "agent").sort((a,b)=>a.startMs-b.startMs);
+  for (const obj of objections) {
+    const start = obj.endMs;
+    const end = obj.endMs + windowMs;
+    const firstAgent = agentSegs.find(s => s.startMs >= start && s.startMs <= end);
+    results.push({
+      ts: mmss(obj.startMs),
+      stall_type: obj.stall_type,
+      quote_customer: obj.quote.slice(0, 220),
+      quote_agent_immediate: firstAgent ? firstAgent.text.trim().slice(0, 220) : null
+    });
+  }
+  return results;
+}
+
 export async function classifyRebuttals(items: Array<{ ts:string; stall_type: ObjectionSpan["stall_type"]; quote_customer:string; agent_snippet:string }>): Promise<Rebuttals> {
   const resp = await client.chat.completions.create({
     model: "gpt-4o-mini",

@@ -1,6 +1,6 @@
 import { createClient } from "@deepgram/sdk";
 import OpenAI from "openai";
-import { buildAgentSnippetsAroundObjections, classifyRebuttals, type Segment, type ObjectionSpan } from "./rebuttals";
+import { buildAgentSnippetsAroundObjections, classifyRebuttals, buildImmediateReplies, type Segment, type ObjectionSpan } from "./rebuttals";
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -273,9 +273,15 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
 
   // Step 2b: Run rebuttals detection if objections exist
   let rebuttals = null;
+  let immediate = [];
   if (mentionsTable.objection_spans?.length > 0) {
     console.log('Running rebuttals detection...');
     const objectionSpans: ObjectionSpan[] = mentionsTable.objection_spans;
+
+    // Get immediate replies (deterministic, no LLM)
+    immediate = buildImmediateReplies(segments, objectionSpans, 15000);
+
+    // Get classified rebuttals (LLM)
     const items = buildAgentSnippetsAroundObjections(segments, objectionSpans);
     rebuttals = await classifyRebuttals(items);
     console.log(`Rebuttals classified: ${rebuttals?.used?.length || 0} addressed, ${rebuttals?.missed?.length || 0} missed`);
@@ -318,7 +324,10 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       agent_name: meta?.agent_name || null,
       agent_id: meta?.agent_id || null
     },
-    rebuttals: rebuttals,  // Include rebuttals if detected
+    rebuttals: rebuttals ? {
+      ...rebuttals,
+      immediate: immediate
+    } : null,  // Include rebuttals with immediate responses if detected
     metadata: {
       model: "two-pass-v1",
       deepgram_request_id: result?.metadata?.request_id,

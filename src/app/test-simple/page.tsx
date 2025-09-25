@@ -234,6 +234,29 @@ export default function TestSimple() {
                     <p className="text-sm text-gray-500">None</p>
                   )}
                 </div>
+
+                {/* Immediate Replies to Objections (deterministic) */}
+                {Array.isArray(result.rebuttals?.immediate) && result.rebuttals.immediate.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 text-lg">Immediate Replies</h3>
+                    <div className="space-y-3">
+                      {result.rebuttals.immediate.map((item: any, idx: number) => (
+                        <div key={idx} className="border-l-2 border-blue-500 pl-3">
+                          <p className="text-xs text-gray-500">
+                            {item.ts} • <span className="text-blue-600">{item.stall_type}</span>
+                          </p>
+                          <p className="text-sm text-gray-700">Customer: "{item.quote_customer}"</p>
+                          <p className="text-sm text-blue-700">
+                            Agent: {item.quote_agent_immediate ?
+                              `"${item.quote_agent_immediate}"` :
+                              <em className="text-gray-500">no immediate reply within 15s</em>
+                            }
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Right Side */}
