@@ -3,14 +3,14 @@ import { analyzeCallSimple } from '@/lib/simple-analysis';
 
 export async function POST(request: NextRequest) {
   try {
-    const { recording_url } = await request.json();
+    const { recording_url, meta } = await request.json();
 
     if (!recording_url) {
       return NextResponse.json({ error: 'Recording URL required' }, { status: 400 });
     }
 
     console.log('Processing:', recording_url);
-    const result = await analyzeCallSimple(recording_url);
+    const result = await analyzeCallSimple(recording_url, meta);
 
     return NextResponse.json(result);
   } catch (error: any) {

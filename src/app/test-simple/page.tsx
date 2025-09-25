@@ -15,7 +15,13 @@ export default function TestSimple() {
       const res = await fetch('/api/analyze-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recording_url: url })
+        body: JSON.stringify({
+          recording_url: url,
+          meta: {
+            agent_name: 'Test Agent', // This would come from the dialer in production
+            agent_id: 'agent-123'      // This would come from the dialer in production
+          }
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -325,6 +331,11 @@ export default function TestSimple() {
                 <div>
                   <label className="text-sm text-gray-600">Customer</label>
                   <p className="text-lg font-semibold">{result.analysis?.customer_name || '—'}</p>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600">Agent</label>
+                  <p className="text-lg font-semibold">{result.analysis?.agent_name || result.metadata?.agent_name || '—'}</p>
                 </div>
 
                 <div className="col-span-2">

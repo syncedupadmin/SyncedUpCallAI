@@ -177,7 +177,7 @@ const whiteCardSchema = {
   }
 };
 
-export async function analyzeCallSimple(audioUrl: string) {
+export async function analyzeCallSimple(audioUrl: string, meta?: any) {
   // Step 1: Get transcript from Deepgram with diarization
   console.log('Getting transcript from Deepgram...');
 
@@ -261,11 +261,17 @@ export async function analyzeCallSimple(audioUrl: string) {
     duration: result?.results?.channels?.[0]?.alternatives?.[0]?.words?.slice(-1)[0]?.end || 0,
     deepgram_summary: deepgramSummary,
     mentions_table: mentionsTable,  // Include Pass A results for debugging
-    analysis,
+    analysis: {
+      ...analysis,
+      agent_name: meta?.agent_name || null,
+      agent_id: meta?.agent_id || null
+    },
     metadata: {
       model: "two-pass-v1",
       deepgram_request_id: result?.metadata?.request_id,
-      processed_at: new Date().toISOString()
+      processed_at: new Date().toISOString(),
+      agent_name: meta?.agent_name || null,
+      agent_id: meta?.agent_id || null
     }
   };
 }
