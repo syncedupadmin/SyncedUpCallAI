@@ -19,6 +19,18 @@ Signals:
 - callback_cues: schedule phrases like call me tomorrow, after 6, later today
 - red_flags_raw: any of exactly: dnc_request, trust_scam_fear, bank_decline, language_barrier, benefits_confusion, requested_cancel
 
+Objection spans (customer stalls):
+- Detect and tag only clear customer stalls with explicit language. Allowed stall_type enum:
+  pricing, spouse_approval, bank_decline, benefits_confusion, trust_scam_fear, already_covered, agent_miscommunication, requested_callback, language_barrier, other.
+- Include: quote (≤200 chars), position (char index), startMs/endMs (milliseconds), speaker:"customer".
+- Examples:
+  • "I need to talk to my wife" → spouse_approval
+  • "That sounds like a scam" → trust_scam_fear
+  • "That's too expensive / I can't afford that" → pricing
+  • "I'm already covered through work" → already_covered
+  • "Call me back later today" → requested_callback
+Do NOT create objection spans for agent speech.
+
 EXAMPLES
 Text: 'the monthly premium is $5.10 and 56¢' → money_mentions += { field_hint:"monthly_premium", value_raw:"$5.10 and 56¢", quote:"the monthly premium is $5.10 and 56¢", position:<index>, speaker:"agent" }
 Text: 'enrollment fee is one twenty five' → money_mentions += { field_hint:"enrollment_fee", value_raw:"one twenty five", quote:"enrollment fee is one twenty five", position:<index>, speaker:"agent" }

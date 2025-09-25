@@ -1,8 +1,24 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["money_mentions", "plan_mentions", "carrier_mentions", "date_mentions", "signals"],
+  "required": ["money_mentions", "plan_mentions", "carrier_mentions", "date_mentions", "signals", "objection_spans"],
   "properties": {
+    "objection_spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stall_type","quote","position","startMs","endMs","speaker"],
+        "properties": {
+          "stall_type": { "enum": ["pricing","spouse_approval","bank_decline","benefits_confusion","trust_scam_fear","already_covered","agent_miscommunication","requested_callback","language_barrier","other"] },
+          "quote": { "type": "string", "maxLength": 200 },
+          "position": { "type": "integer", "minimum": 0 },
+          "startMs": { "type": "integer", "minimum": 0 },
+          "endMs": { "type": "integer", "minimum": 0 },
+          "speaker": { "enum": ["customer"] }
+        }
+      }
+    },
     "money_mentions": {
       "type": "array",
       "items": {

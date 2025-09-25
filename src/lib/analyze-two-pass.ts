@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { buildAgentSnippetsAroundObjections, classifyRebuttals, type Rebuttals, type ObjectionSpan, type Segment } from "./rebuttals";
 
 /**
  * Two-pass analyzer with context windows and early-exit routing.
@@ -18,6 +19,7 @@ export type Mentions = {
   carrier_mentions: Array<{ carrier:string; quote:string; position:number }>;
   date_mentions: Array<{ kind:"effective_date"|"post_date"|"generic"; value_raw:string; quote:string; position:number }>;
   signals: { sale_cues:string[]; callback_cues:string[]; red_flags_raw:string[] };
+  objection_spans: ObjectionSpan[];
 };
 
 export type WhiteCard = {
@@ -218,13 +220,15 @@ export async function arbitrateWhiteCard({
 /** Public entry point: analyze with speed routing */
 export async function analyzeCallTwoPass({
   transcript,
+  segments,
   call_started_at_iso,
   tz = "America/New_York"
 }: {
   transcript: string;
+  segments: Segment[]; // Deepgram diarized segments with ms timestamps
   call_started_at_iso: string;
   tz?: string;
-}): Promise<{ mentions: Mentions; whitecard: WhiteCard; context_snippets: Array<{kind:string;snippet:string}>; early_exit: boolean }> {
+}): Promise<{ mentions: Mentions; whitecard: WhiteCard; rebuttals: Rebuttals; context_snippets: Array<{kind:string;snippet:string}>; early_exit: boolean }> {
   const callYear = new Date(call_started_at_iso).getFullYear();
   const callMeta = { call_started_at_iso, tz };
 
@@ -232,12 +236,20 @@ export async function analyzeCallTwoPass({
   const early = earlyExitWhiteCard({ mentions, callYear });
   const snippets = buildContextSnippets(transcript, mentions);
 
+  // Build rebuttal items from objections and agent windows within 30s
+  const objections = mentions.objection_spans;
+  let rebuttals: Rebuttals = { used: [], missed: [] };
+  if (Array.isArray(objections) && objections.length > 0) {
+    const items = buildAgentSnippetsAroundObjections(segments, objections, 30000);
+    rebuttals = await classifyRebuttals(items);
+  }
+
   if (early) {
-    return { mentions, whitecard: early, context_snippets: snippets, early_exit: true };
+    return { mentions, whitecard: early, rebuttals, context_snippets: snippets, early_exit: true };
   }
 
   const whitecard = await arbitrateWhiteCard({ mentions, contextSnippets: snippets, transcript, callMeta });
-  return { mentions, whitecard, context_snippets: snippets, early_exit: false };
+  return { mentions, whitecard, rebuttals, context_snippets: snippets, early_exit: false };
 }
 
 /** --------- tiny helpers to load prompt/schema files in Node/Next --------- */
