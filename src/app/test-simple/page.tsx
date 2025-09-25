@@ -31,7 +31,6 @@ export default function TestSimple() {
     }
   };
 
-
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
@@ -77,11 +76,11 @@ export default function TestSimple() {
                 <p className="text-gray-600 text-sm">Model {result.metadata?.model || 'N/A'} • v2.0 • Confidence 70%</p>
               </div>
               <div className="flex items-center gap-2">
-                {result.analysis.outcome === 'callback' && (
+                {result.analysis?.outcome === 'callback' && (
                   <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded text-sm font-medium">post date</span>
                 )}
-                {result.analysis.outcome === 'sale' && (
-                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">POST DATE</span>
+                {result.analysis?.outcome === 'sale' && (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">SALE</span>
                 )}
                 <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">intent: medium</span>
                 <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-medium">lead score: 85</span>
@@ -91,7 +90,7 @@ export default function TestSimple() {
             {/* Main Summary */}
             <div className="bg-blue-50 rounded-lg p-6 mb-6">
               <p className="text-lg">
-                {result.analysis.summary}
+                {result.analysis?.summary || ''}
               </p>
               {result.best_callback_window?.local_start && result.best_callback_window?.local_end && (
                 <div className="text-sm text-gray-600 mt-4">
@@ -103,234 +102,193 @@ export default function TestSimple() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Side */}
               <div className="space-y-8">
-                {/* Scores Section */}
-                {(result.qa_score != null || result.script_adherence != null) && (
-                  <div>
-                    <h3 className="font-semibold mb-4 text-lg">Scores</h3>
+                {/* Scores Section - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-4 text-lg">Scores</h3>
 
-                    <div className="space-y-4">
-                      {/* QA Score */}
-                      {result.qa_score != null && (
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm">QA Score</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${result.qa_score || 0}%` }}></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Script Adherence */}
-                      {result.script_adherence != null && (
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm">Script Adherence</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${result.script_adherence || 0}%` }}></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Call Stage Scores */}
-                      {(result.greeting != null || result.discovery != null || result.benefits != null ||
-                        result.objections != null || result.compliance != null || result.closing != null) && (
-                        <div className="grid grid-cols-3 gap-4 mt-6">
-                          {result.greeting != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Greeting</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.greeting || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                          {result.discovery != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Discovery</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.discovery || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                          {result.benefits != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Benefits</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.benefits || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                          {result.objections != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Objections</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.objections || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                          {result.compliance != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Compliance</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.compliance || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                          {result.closing != null && (
-                            <div>
-                              <div className="text-xs text-gray-600 mb-1">Closing</div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.closing || 0}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  <div className="space-y-4">
+                    {/* QA Score */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm">QA Score</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${result.qa_score || 0}%` }}></div>
+                      </div>
                     </div>
 
-                    {/* Sentiment */}
-                    {(result.sentiment_agent != null || result.sentiment_customer != null) && (
-                      <div className="mt-6">
-                        <h4 className="font-medium mb-2">Sentiment (agent/customer)</h4>
-                        <div className="flex items-center gap-4">
-                          {result.sentiment_agent != null && (
-                            <span className="text-sm">agent {result.sentiment_agent}</span>
-                          )}
-                          {result.sentiment_customer != null && (
-                            <span className="text-sm">customer {result.sentiment_customer}</span>
-                          )}
-                          {result.asr_quality && (
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">ASR {result.asr_quality}</span>
-                          )}
+                    {/* Script Adherence */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm">Script Adherence</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${result.script_adherence || 0}%` }}></div>
+                      </div>
+                    </div>
+
+                    {/* Call Stage Scores */}
+                    <div className="grid grid-cols-3 gap-4 mt-6">
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Greeting</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.greeting || 0}%` }}></div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Rebuttals Section */}
-                {result.rebuttals?.used && result.rebuttals.used.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-3 text-lg">Rebuttals</h3>
-                    <p className="text-sm text-gray-600 mb-3">Used ({result.rebuttals.used.length})</p>
-
-                    <div className="space-y-3">
-                      {result.rebuttals.used.map((rebuttal: any, idx: number) => (
-                        <div key={idx} className="border-l-2 border-green-500 pl-3">
-                          <p className="text-xs text-gray-500">
-                            {rebuttal.timestamp} • <span className="text-green-600">{rebuttal.type}</span>
-                          </p>
-                          <p className="text-sm">"{rebuttal.quote}"</p>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Discovery</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.discovery || 0}%` }}></div>
                         </div>
-                      ))}
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Benefits</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.benefits || 0}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Objections</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.objections || 0}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Compliance</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.compliance || 0}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-600 mb-1">Closing</div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${result.closing || 0}%` }}></div>
+                        </div>
+                      </div>
                     </div>
-
-                    {result.rebuttals.asked_for_card_after_last != null && (
-                      <p className="text-sm text-gray-600 mt-3">
-                        Asked for card after last rebuttal: {result.rebuttals.asked_for_card_after_last ? 'Yes' : 'No'}
-                      </p>
-                    )}
                   </div>
-                )}
+
+                  {/* Sentiment */}
+                  <div className="mt-6">
+                    <h4 className="font-medium mb-2">Sentiment (agent/customer)</h4>
+                    <div className="flex items-center gap-4">
+                      {result.sentiment_agent != null && (
+                        <span className="text-sm">agent {result.sentiment_agent}</span>
+                      )}
+                      {result.sentiment_customer != null && (
+                        <span className="text-sm">customer {result.sentiment_customer}</span>
+                      )}
+                      {result.asr_quality && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">ASR {result.asr_quality}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rebuttals Section - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Rebuttals</h3>
+
+                  {result.rebuttals?.used && result.rebuttals.used.length > 0 ? (
+                    <>
+                      <p className="text-sm text-gray-600 mb-3">Used ({result.rebuttals.used.length})</p>
+                      <div className="space-y-3">
+                        {result.rebuttals.used.map((rebuttal: any, idx: number) => (
+                          <div key={idx} className="border-l-2 border-green-500 pl-3">
+                            <p className="text-xs text-gray-500">
+                              {rebuttal.timestamp} • <span className="text-green-600">{rebuttal.type}</span>
+                            </p>
+                            <p className="text-sm">"{rebuttal.quote}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500">None</p>
+                  )}
+                </div>
               </div>
 
               {/* Right Side */}
               <div className="space-y-8">
-                {/* Outcome & Pricing */}
-                {(result.analysis.outcome ||
-                  result.analysis.monthly_premium != null ||
-                  result.analysis.enrollment_fee != null ||
-                  (result.analysis.red_flags && result.analysis.red_flags.length > 0)) && (
-                  <div>
-                    <h3 className="font-semibold mb-3 text-lg">Outcome & Pricing</h3>
+                {/* Outcome & Pricing - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Outcome & Pricing</h3>
 
-                    <div className="space-y-2">
-                      {result.analysis.outcome && (
-                        <p className="text-sm">
-                          <span className={`font-semibold ${
-                            result.analysis.outcome === 'sale' ? 'text-green-600' :
-                            result.analysis.outcome === 'callback' ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {result.analysis.outcome === 'sale' ? 'Payment scheduled' :
-                             result.analysis.outcome === 'callback' ? 'Callback scheduled' : 'No sale'}
-                          </span>
-                        </p>
-                      )}
-                      {result.analysis.monthly_premium != null && (
-                        <p className="text-sm">
-                          ${result.analysis.monthly_premium}/mo
-                        </p>
-                      )}
-                      {result.analysis.enrollment_fee != null && (
-                        <p className="text-sm text-gray-600">
-                          Enrollment: ${result.analysis.enrollment_fee}
-                        </p>
-                      )}
+                  <div className="space-y-2">
+                    {result.analysis?.outcome ? (
+                      <p className="text-sm">
+                        <span className={`font-semibold ${
+                          result.analysis.outcome === 'sale' ? 'text-green-600' :
+                          result.analysis.outcome === 'callback' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {result.analysis.outcome === 'sale' ? 'Payment scheduled' :
+                           result.analysis.outcome === 'callback' ? 'Callback scheduled' : 'No sale'}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-500">—</p>
+                    )}
 
-                      {result.analysis.red_flags && result.analysis.red_flags.length > 0 && (
-                        result.analysis.red_flags.map((flag: string, idx: number) => (
-                          <p key={idx} className="text-sm text-red-600">{flag}</p>
-                        ))
-                      )}
+                    {result.analysis?.monthly_premium != null && (
+                      <p className="text-sm">
+                        ${result.analysis.monthly_premium}/mo
+                      </p>
+                    )}
 
-                      {result.evidence?.reason_primary_quote && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          Evidence: "{result.evidence.reason_primary_quote}"
-                        </p>
-                      )}
-                    </div>
+                    {result.analysis?.enrollment_fee != null && (
+                      <p className="text-sm text-gray-600">
+                        Enrollment: ${result.analysis.enrollment_fee}
+                      </p>
+                    )}
+
+                    {result.analysis?.red_flags && result.analysis.red_flags.length > 0 && (
+                      result.analysis.red_flags.map((flag: string, idx: number) => (
+                        <p key={idx} className="text-sm text-red-600">{flag}</p>
+                      ))
+                    )}
+
+                    {result.evidence?.reason_primary_quote && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Evidence: "{result.evidence.reason_primary_quote}"
+                      </p>
+                    )}
                   </div>
-                )}
+                </div>
 
-                {/* Talk Metrics */}
-                {result.talk_metrics && (
-                  result.talk_metrics.agent_talk_time ||
-                  result.talk_metrics.customer_talk_time ||
-                  result.talk_metrics.silence_time ||
-                  result.talk_metrics.interrupts != null
-                ) && (
-                  <div>
-                    <h3 className="font-semibold mb-3 text-lg">Talk Metrics</h3>
+                {/* Talk Metrics - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Talk Metrics</h3>
 
-                    <div className="space-y-1 text-sm">
-                      {result.talk_metrics.agent_talk_time && (
-                        <p>Agent: {result.talk_metrics.agent_talk_time}</p>
-                      )}
-                      {result.talk_metrics.customer_talk_time && (
-                        <p>Customer: {result.talk_metrics.customer_talk_time}</p>
-                      )}
-                      {result.talk_metrics.silence_time && (
-                        <p>Silence: {result.talk_metrics.silence_time}</p>
-                      )}
-                      {result.talk_metrics.interrupts != null && (
-                        <p>Interrupts: {result.talk_metrics.interrupts}</p>
-                      )}
-                    </div>
+                  <div className="space-y-1 text-sm">
+                    <p>Agent: {result.talk_metrics?.agent_talk_time || '—'}</p>
+                    <p>Customer: {result.talk_metrics?.customer_talk_time || '—'}</p>
+                    <p>Silence: {result.talk_metrics?.silence_time || '—'}</p>
+                    <p>Interrupts: {result.talk_metrics?.interrupts ?? '—'}</p>
                   </div>
-                )}
+                </div>
 
-                {/* Actions - only show if callback outcome */}
-                {result.analysis.outcome === 'callback' && (
-                  <div>
-                    <h3 className="font-semibold mb-3 text-lg">Actions</h3>
+                {/* Actions - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">Actions</h3>
 
+                  {result.analysis?.outcome === 'callback' ? (
                     <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm transition-colors">
                       schedule callback
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-sm text-gray-500">No actions available</p>
+                  )}
+                </div>
 
-                {/* CRM Updates - only show if there are updates */}
-                {result.crm_updates && Object.keys(result.crm_updates).length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-3 text-lg">CRM Updates</h3>
+                {/* CRM Updates - Always visible */}
+                <div>
+                  <h3 className="font-semibold mb-3 text-lg">CRM Updates</h3>
 
-                    <div className="h-20 bg-gray-50 rounded border border-gray-200">
-                      {/* CRM updates content would go here */}
-                    </div>
+                  <div className="h-20 bg-gray-50 rounded border border-gray-200">
+                    {/* CRM updates would go here if available */}
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
@@ -342,50 +300,51 @@ export default function TestSimple() {
                 <div>
                   <label className="text-sm text-gray-600">Outcome</label>
                   <p className={`text-lg font-bold ${
-                    result.analysis.outcome === 'sale' ? 'text-green-600' :
-                    result.analysis.outcome === 'callback' ? 'text-yellow-600' : 'text-red-600'
+                    result.analysis?.outcome === 'sale' ? 'text-green-600' :
+                    result.analysis?.outcome === 'callback' ? 'text-yellow-600' :
+                    result.analysis?.outcome === 'no_sale' ? 'text-red-600' : 'text-gray-400'
                   }`}>
-                    {result.analysis.outcome.toUpperCase()}
+                    {result.analysis?.outcome?.toUpperCase() || '—'}
                   </p>
                 </div>
 
                 <div>
                   <label className="text-sm text-gray-600">Monthly Premium</label>
                   <p className="text-lg font-semibold">
-                    ${result.analysis.monthly_premium || 'N/A'}
+                    {result.analysis?.monthly_premium != null ? `$${result.analysis.monthly_premium}` : '—'}
                   </p>
                 </div>
 
                 <div>
                   <label className="text-sm text-gray-600">Enrollment Fee</label>
                   <p className="text-lg font-semibold">
-                    ${result.analysis.enrollment_fee || 'N/A'}
+                    {result.analysis?.enrollment_fee != null ? `$${result.analysis.enrollment_fee}` : '—'}
                   </p>
                 </div>
 
                 <div>
                   <label className="text-sm text-gray-600">Customer</label>
-                  <p className="text-lg font-semibold">{result.analysis.customer_name || 'Unknown'}</p>
+                  <p className="text-lg font-semibold">{result.analysis?.customer_name || '—'}</p>
                 </div>
 
                 <div className="col-span-2">
                   <label className="text-sm text-gray-600">Policy Details</label>
                   <div className="flex gap-6 mt-1">
-                    <span>Carrier: <strong>{result.analysis.policy_details?.carrier || 'N/A'}</strong></span>
-                    <span>Plan Type: <strong>{result.analysis.policy_details?.plan_type || 'N/A'}</strong></span>
-                    <span>Effective Date: <strong>{result.analysis.policy_details?.effective_date || 'N/A'}</strong></span>
+                    <span>Carrier: <strong>{result.analysis?.policy_details?.carrier || '—'}</strong></span>
+                    <span>Plan Type: <strong>{result.analysis?.policy_details?.plan_type || '—'}</strong></span>
+                    <span>Effective Date: <strong>{result.analysis?.policy_details?.effective_date || '—'}</strong></span>
                   </div>
                 </div>
 
                 <div className="col-span-2">
                   <label className="text-sm text-gray-600">Reason</label>
-                  <p className="text-base">{result.analysis.reason}</p>
+                  <p className="text-base">{result.analysis?.reason || '—'}</p>
                 </div>
 
                 <div>
                   <label className="text-sm text-gray-600">Red Flags</label>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {result.analysis.red_flags && result.analysis.red_flags.length > 0 ? (
+                    {result.analysis?.red_flags && result.analysis.red_flags.length > 0 ? (
                       result.analysis.red_flags.map((flag: string, idx: number) => (
                         <span key={idx} className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm">
                           {flag}
@@ -400,7 +359,7 @@ export default function TestSimple() {
 
               <div className="mt-6">
                 <label className="text-sm text-gray-600">Summary</label>
-                <p className="text-base">{result.analysis.summary}</p>
+                <p className="text-base">{result.analysis?.summary || '—'}</p>
               </div>
             </div>
           </div>
