@@ -1,5 +1,151 @@
-// money-normalizer.ts
-type MoneyContext = "monthly_premium" | "first_month_bill" | "enrollment_fee" | "generic";
+/**
+ * Deterministic money normalization for health insurance pricing
+ * Handles ASR transcription errors and verbal price patterns
+ */
+
+export type MoneyContext = 'monthly_premium' | 'first_month_bill' | 'enrollment_fee' | 'generic';
+
+/**
+ * Normalize money values based on context and quote patterns
+ * Applies deterministic rules for ASR correction
+ *
+ * @param value - The raw numeric value extracted
+ * @param context - The field context (premium, enrollment, etc.)
+ * @param quote - The verbatim quote from transcript
+ * @returns Normalized dollar amount
+ */
+export function normalizeMoney(value: number, context: MoneyContext, quote: string): number {
+  // Handle null/undefined/NaN
+  if (!Number.isFinite(value)) return value;
+
+  const quoteLower = quote.toLowerCase();
+
+  // Rule 4: Preserve legitimate sub-hundred values if explicitly stated
+  // Check for explicit "twenty-seven fifty", "twenty-seven dollars", "fifty dollars" patterns
+  const legitimateSubHundredPatterns = [
+    /twenty[- ]?seven[- ]?(fifty|dollars)/,
+    /fifty[- ]?dollars/,
+    /ninety[- ]?nine[- ]?dollars/,
+    /\$27\.50/,
+    /\$50\.00/,
+    /\$99\.00/
+  ];
+
+  if (legitimateSubHundredPatterns.some(pattern => pattern.test(quoteLower))) {
+    // These are legitimate values, return as-is
+    return value;
+  }
+
+  // Rule 3: Handle verbal patterns like "four sixty", "five sixty-seven", etc.
+  // These should be normalized to 460, 567, etc.
+  const verbalHundredsPattern = /\b(one|two|three|four|five|six|seven|eight|nine)\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)/i;
+  if (verbalHundredsPattern.test(quoteLower)) {
+    // If the value is < 100 and matches verbal pattern, it's likely hundreds were dropped
+    if (value < 100) {
+      // Parse the verbal pattern properly
+      const hundreds = parseVerbalHundreds(quoteLower);
+      if (hundreds !== null) {
+        return hundreds;
+      }
+      // Fallback: multiply by 10 if it looks like tens
+      if (value >= 10 && value < 100) {
+        return value * 10;
+      }
+    }
+  }
+
+  // Rule 1: Premium/first bill context - multiply by 100 if < 50
+  if ((context === 'monthly_premium' || context === 'first_month_bill') && value < 50) {
+    return value * 100;
+  }
+
+  // Rule 2: Enrollment fee context - multiply by 100 if < 10
+  if (context === 'enrollment_fee' && value < 10) {
+    return value * 100;
+  }
+
+  // Default: return value as-is
+  return value;
+}
+
+/**
+ * Parse verbal hundreds patterns like "four sixty" -> 460
+ */
+function parseVerbalHundreds(text: string): number | null {
+  const wordToNum: { [key: string]: number } = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+    'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50,
+    'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90
+  };
+
+  const matches = text.toLowerCase().match(
+    /\b(one|two|three|four|five|six|seven|eight|nine)\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ]?(one|two|three|four|five|six|seven|eight|nine))?\b/
+  );
+
+  if (matches) {
+    const hundreds = wordToNum[matches[1]] || 0;
+    const tens = wordToNum[matches[2]] || 0;
+    const ones = matches[3] ? wordToNum[matches[3]] : 0;
+    return hundreds * 100 + tens + ones;
+  }
+
+  return null;
+}
+
+/**
+ * Parse raw money value from various formats
+ * @param rawValue - String value from transcript (e.g., "$5.10 and 56¢", "four sixty")
+ * @returns Numeric value or null if unparseable
+ */
+export function parseMoneyValue(rawValue: string): number | null {
+  if (!rawValue) return null;
+
+  const cleaned = rawValue.toLowerCase().trim();
+
+  // Handle "$X.YZ and AB¢" format
+  const dollarsAndCentsPattern = /\$?(\d+(?:\.\d+)?)\s+and\s+(\d+)¢?/;
+  const match = cleaned.match(dollarsAndCentsPattern);
+  if (match) {
+    const dollars = parseFloat(match[1]);
+    const cents = parseInt(match[2]);
+    return dollars + (cents / 100);
+  }
+
+  // Handle standard dollar amounts
+  const dollarPattern = /\$?(\d+(?:\.\d+)?)/;
+  const dollarMatch = cleaned.match(dollarPattern);
+  if (dollarMatch) {
+    return parseFloat(dollarMatch[1]);
+  }
+
+  // Handle verbal patterns
+  const verbalValue = parseVerbalHundreds(cleaned);
+  if (verbalValue !== null) {
+    return verbalValue;
+  }
+
+  return null;
+}
+
+/**
+ * Format normalized money value for display
+ * @param value - Normalized dollar amount
+ * @returns Formatted string (e.g., "$450.00")
+ */
+export function formatMoney(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'N/A';
+  return `$${value.toFixed(2)}`;
+}
+
+// ===== Legacy code below for backward compatibility =====
+
+type MoneyExtraction = {
+  value: number;                 // dollars, cents as decimal
+  source: string;                // original phrase
+  corrected: boolean;            // true if we applied a hundreds inference
+  reason?: string;               // why we corrected
+};
 
 const WORD_TO_NUM: Record<string, number> = {
   zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
@@ -44,13 +190,6 @@ function wordsToHundreds(seq: string): number | null {
 
   return null;
 }
-
-export type MoneyExtraction = {
-  value: number;                 // dollars, cents as decimal
-  source: string;                // original phrase
-  corrected: boolean;            // true if we applied a hundreds inference
-  reason?: string;               // why we corrected
-};
 
 export function extractMoneyWithContext(text: string, ctx: MoneyContext = "generic"): MoneyExtraction[] {
   const out: MoneyExtraction[] = [];

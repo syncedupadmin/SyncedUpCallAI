@@ -2,6 +2,7 @@ import { createClient } from "@deepgram/sdk";
 import OpenAI from "openai";
 import { buildAgentSnippetsAroundObjections, classifyRebuttals, buildImmediateReplies, type Segment, type ObjectionSpan } from "./rebuttals";
 import { computeTalkMetrics } from "./talk-metrics";
+import { normalizeMoney, parseMoneyValue, type MoneyContext } from "./money-normalizer";
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -325,6 +326,39 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
 
   const analysis = JSON.parse(passBResponse.choices[0].message.content || "{}");
 
+  // Step 3b: Apply deterministic money normalization
+  // Store both raw and normalized values for auditing
+  const rawMonthlyPremium = analysis.monthly_premium;
+  const rawEnrollmentFee = analysis.enrollment_fee;
+
+  if (mentionsTable.money_mentions?.length > 0) {
+    // Find the most recent/relevant money mentions for each field
+    const premiumMention = mentionsTable.money_mentions.find((m: any) =>
+      m.field_hint === 'monthly_premium' || m.field_hint === 'first_month_bill'
+    );
+    const enrollmentMention = mentionsTable.money_mentions.find((m: any) =>
+      m.field_hint === 'enrollment_fee'
+    );
+
+    // Apply normalization if we have values to normalize
+    if (analysis.monthly_premium !== null && premiumMention) {
+      const context: MoneyContext = premiumMention.field_hint === 'monthly_premium' ? 'monthly_premium' : 'first_month_bill';
+      analysis.monthly_premium = normalizeMoney(
+        analysis.monthly_premium,
+        context,
+        premiumMention.quote || premiumMention.value_raw
+      );
+    }
+
+    if (analysis.enrollment_fee !== null && enrollmentMention) {
+      analysis.enrollment_fee = normalizeMoney(
+        analysis.enrollment_fee,
+        'enrollment_fee',
+        enrollmentMention.quote || enrollmentMention.value_raw
+      );
+    }
+  }
+
   // Compute deterministic talk metrics from diarized segments
   const talk_metrics = segments && segments.length > 0
     ? computeTalkMetrics(segments)
@@ -352,7 +386,17 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       deepgram_request_id: result?.metadata?.request_id,
       processed_at: new Date().toISOString(),
       agent_name: meta?.agent_name || null,
-      agent_id: meta?.agent_id || null
+      agent_id: meta?.agent_id || null,
+      normalization_applied: {
+        monthly_premium: rawMonthlyPremium !== analysis.monthly_premium ? {
+          raw: rawMonthlyPremium,
+          normalized: analysis.monthly_premium
+        } : null,
+        enrollment_fee: rawEnrollmentFee !== analysis.enrollment_fee ? {
+          raw: rawEnrollmentFee,
+          normalized: analysis.enrollment_fee
+        } : null
+      }
     }
   };
 }
