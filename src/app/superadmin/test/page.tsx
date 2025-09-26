@@ -438,7 +438,8 @@ export default function SuperAdminTestPage() {
             <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
               <div className="p-6">
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">Talk Metrics</h2>
-                {console.log('Talk Metrics Data:', result.talk_metrics)}
+                {/* Debug log */}
+                {typeof window !== 'undefined' && console.log('Talk Metrics Data:', result.talk_metrics)}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   {(() => {
