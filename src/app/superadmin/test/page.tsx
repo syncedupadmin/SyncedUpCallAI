@@ -222,36 +222,60 @@ export default function SuperAdminTestPage() {
                     <h3 className="text-lg font-bold mb-3 text-gray-800">Money Mentions</h3>
                     <div className="space-y-3">
                       {result.mentions_table.money_mentions.map((item: any, i: number) => {
-                        // Determine corrected value based on field type and Pass B rules
-                        const getCorrectedValue = () => {
+                        // Determine if ASR correction was applied based on Pass B rules
+                        const getCorrectedInfo = () => {
+                          // Parse the raw value to check if correction is needed
+                          const rawStr = item.value_raw?.replace(/[$,]/g, '').trim();
+
                           if (item.field_hint === 'monthly_premium' && result.analysis?.monthly_premium) {
-                            return `$${result.analysis.monthly_premium}`;
+                            // Check if raw value is under $50 and corrected to hundreds
+                            if (rawStr && parseFloat(rawStr) < 50 && result.analysis.monthly_premium >= 100) {
+                              return { value: `$${result.analysis.monthly_premium}`, needsCorrection: true };
+                            }
+                            return { value: `$${result.analysis.monthly_premium}`, needsCorrection: false };
                           }
+
                           if (item.field_hint === 'first_month_bill' && result.analysis?.monthly_premium) {
-                            // First month bill often correlates with premium + enrollment
+                            // First month bill = premium + enrollment
                             const enrollment = result.analysis?.enrollment_fee || 0;
                             const premium = result.analysis?.monthly_premium || 0;
-                            return enrollment > 0 ? `$${premium + enrollment}` : null;
+                            const total = premium + enrollment;
+                            // Check if raw value is under $50 and corrected to hundreds
+                            if (rawStr && parseFloat(rawStr) < 50 && total >= 100) {
+                              return { value: `$${total}`, needsCorrection: true };
+                            }
+                            return { value: `$${total}`, needsCorrection: false };
                           }
+
                           if (item.field_hint === 'enrollment_fee' && result.analysis?.enrollment_fee) {
-                            return `$${result.analysis.enrollment_fee}`;
+                            // Enrollment fee correction: if raw < 10, multiply by 100
+                            if (rawStr && parseFloat(rawStr) < 10 && result.analysis.enrollment_fee >= 50) {
+                              return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: true };
+                            }
+                            return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: false };
                           }
-                          return null;
+
+                          return { value: null, needsCorrection: false };
                         };
 
-                        const correctedValue = getCorrectedValue();
-                        const needsCorrection = correctedValue && correctedValue !== item.value_raw;
+                        const correctionInfo = getCorrectedInfo();
+                        const { value: correctedValue, needsCorrection } = correctionInfo;
 
                         return (
                           <div key={i} className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="text-base font-semibold text-gray-700">
-                                  {item.field_hint}: <span className={needsCorrection ? 'line-through text-red-500' : ''}>{item.value_raw}</span>
-                                  {needsCorrection && (
-                                    <span className="ml-2 text-green-600 font-bold">
-                                      → {correctedValue} ✓
-                                    </span>
+                                  {item.field_hint.replace(/_/g, ' ')}: {' '}
+                                  {needsCorrection ? (
+                                    <>
+                                      <span className="line-through text-red-500">{item.value_raw}</span>
+                                      <span className="ml-2 text-green-600 font-bold">
+                                        → {correctedValue} ✓
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-900 ml-1">{item.value_raw}</span>
                                   )}
                                 </div>
                                 <div className="text-base text-gray-700 italic mt-1">"{item.quote}"</div>
