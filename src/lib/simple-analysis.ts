@@ -359,6 +359,28 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
     }
   }
 
+  // Also normalize prices found in carrier mentions
+  if (mentionsTable.carrier_mentions?.length > 0) {
+    mentionsTable.carrier_mentions = mentionsTable.carrier_mentions.map((carrier: any) => {
+      const quote = carrier.quote || '';
+      // Look for price patterns in carrier quotes
+      const priceMatch = quote.match(/\$(\d+(?:\.\d{2})?)/);
+      if (priceMatch) {
+        const rawPrice = parseFloat(priceMatch[1]);
+        // Apply same normalization rules as monthly premium for carrier prices
+        if (rawPrice < 50) {
+          const normalizedPrice = rawPrice * 100;
+          // Update the quote with normalized price
+          carrier.normalized_quote = quote.replace(priceMatch[0], `$${normalizedPrice.toFixed(2)}`);
+          carrier.price_normalized = true;
+          carrier.raw_price = rawPrice;
+          carrier.normalized_price = normalizedPrice;
+        }
+      }
+      return carrier;
+    });
+  }
+
   // Compute deterministic talk metrics from diarized segments
   const talk_metrics = segments && segments.length > 0
     ? computeTalkMetrics(segments)

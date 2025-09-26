@@ -287,7 +287,14 @@ export default function SuperAdminTestPage() {
                       {result.mentions_table.carrier_mentions.map((item: any, i: number) => (
                         <div key={i} className="bg-blue-50 border border-blue-300 rounded-lg p-4">
                           <div className="text-base font-semibold text-gray-700">{item.carrier}</div>
-                          <div className="text-base text-gray-700 italic">"{item.quote}"</div>
+                          <div className="text-base text-gray-700 italic">
+                            "{item.normalized_quote || item.quote}"
+                          </div>
+                          {item.price_normalized && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Original: ${item.raw_price?.toFixed(2)} → Corrected: ${item.normalized_price?.toFixed(2)}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
