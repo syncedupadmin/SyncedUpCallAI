@@ -59,18 +59,25 @@ export default function SuperAdminTestPage() {
     }).format(value);
   };
 
+  const formatTimestamp = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6">
+    <div className="p-6 max-w-full mx-auto bg-gray-50 min-h-screen">
+      <div className="bg-white border border-gray-300 rounded-lg shadow-lg mb-6">
         <div className="p-6">
-          <h1 className="text-2xl font-bold mb-2">SuperAdmin Testing Interface</h1>
-          <p className="text-gray-600 mb-4">
+          <h1 className="text-3xl font-bold mb-2 text-gray-900">SuperAdmin Testing Interface</h1>
+          <p className="text-base text-gray-700 mb-4">
             Test the production analysis pipeline with any recording URL
           </p>
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="url" className="block text-base font-semibold text-gray-800 mb-1">
                 Recording URL
               </label>
               <input
@@ -79,21 +86,21 @@ export default function SuperAdminTestPage() {
                 placeholder="https://admin-dt.convoso.com/play-recording-public/..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-base"
               />
             </div>
             <button
               onClick={analyzeCall}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-blue-600 text-white text-base font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Analyzing...' : 'Analyze Recording'}
             </button>
           </div>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-red-700">{error}</p>
+            <div className="mt-4 p-4 bg-red-50 border-2 border-red-300 rounded-md">
+              <p className="text-red-700 text-base font-medium">{error}</p>
             </div>
           )}
         </div>
@@ -101,66 +108,88 @@ export default function SuperAdminTestPage() {
 
       {result && (
         <div className="space-y-6">
-          {/* Analysis Summary */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          {/* Core Analysis Results */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Analysis Summary</h2>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900">Core Analysis Results</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="text-sm text-gray-600">Outcome</label>
-                  <div className="font-semibold capitalize">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Outcome</label>
+                  <div className="text-xl font-bold text-blue-600 capitalize">
                     {result.analysis?.outcome || '—'}
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm text-gray-600">Monthly Premium</label>
-                  <div className="font-semibold">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Monthly Premium</label>
+                  <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.monthly_premium)}
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm text-gray-600">Enrollment Fee</label>
-                  <div className="font-semibold">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Enrollment Fee</label>
+                  <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.enrollment_fee)}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Reason</label>
+                  <p className="text-base text-gray-800">{result.analysis?.reason || '—'}</p>
+                </div>
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Summary</label>
+                  <p className="text-base text-gray-800">{result.analysis?.summary || '—'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer & Agent Info */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold mb-4 text-gray-900">Customer & Agent Information</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm text-gray-600">Reason</label>
-                  <p className="text-sm">{result.analysis?.reason || '—'}</p>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Customer Name</label>
+                  <div className="text-lg font-medium text-gray-800">
+                    {result.analysis?.customer_name || '—'}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600">Summary</label>
-                  <p className="text-sm">{result.analysis?.summary || '—'}</p>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Agent Name</label>
+                  <div className="text-lg font-medium text-gray-800">
+                    {result.analysis?.agent_name || result.metadata?.agent_name || '—'}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Policy Details */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Policy Details</h2>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900">Policy Details</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="text-sm text-gray-600">Carrier</label>
-                  <div className="font-medium">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Carrier</label>
+                  <div className="text-lg font-medium text-gray-800">
                     {result.analysis?.policy_details?.carrier || '—'}
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600">Plan Type</label>
-                  <div className="font-medium">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Plan Type</label>
+                  <div className="text-lg font-medium text-gray-800">
                     {result.analysis?.policy_details?.plan_type || '—'}
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600">Effective Date</label>
-                  <div className="font-medium">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Effective Date</label>
+                  <div className="text-lg font-medium text-gray-800">
                     {result.analysis?.policy_details?.effective_date || '—'}
                   </div>
                 </div>
@@ -168,83 +197,149 @@ export default function SuperAdminTestPage() {
             </div>
           </div>
 
+          {/* Mentions Table */}
+          {result.mentions_table && (
+            <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">Extracted Mentions</h2>
+
+                {/* Money Mentions */}
+                {result.mentions_table.money_mentions?.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800">Money Mentions</h3>
+                    <div className="space-y-3">
+                      {result.mentions_table.money_mentions.map((item: any, i: number) => (
+                        <div key={i} className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                          <div className="text-base font-semibold text-gray-700">
+                            {item.field_hint}: {item.value_raw}
+                          </div>
+                          <div className="text-base text-gray-700 italic mt-1">"{item.quote}"</div>
+                          <div className="text-sm text-gray-600 mt-1">Speaker: {item.speaker}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Carrier Mentions */}
+                {result.mentions_table.carrier_mentions?.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800">Carrier Mentions</h3>
+                    <div className="space-y-3">
+                      {result.mentions_table.carrier_mentions.map((item: any, i: number) => (
+                        <div key={i} className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+                          <div className="text-base font-semibold text-gray-700">{item.carrier}</div>
+                          <div className="text-base text-gray-700 italic">"{item.quote}"</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Date Mentions */}
+                {result.mentions_table.date_mentions?.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800">Date Mentions</h3>
+                    <div className="space-y-3">
+                      {result.mentions_table.date_mentions.map((item: any, i: number) => (
+                        <div key={i} className="bg-purple-50 border border-purple-300 rounded-lg p-4">
+                          <div className="text-base font-semibold text-gray-700">
+                            {item.kind}: {item.value_raw}
+                          </div>
+                          <div className="text-base text-gray-700 italic">"{item.quote}"</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Rebuttals Analysis */}
           {result.rebuttals && (
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
               <div className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Objection Handling</h2>
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">Objection Handling Analysis</h2>
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {/* Addressed */}
                   <div>
-                    <h3 className="font-medium mb-2">
-                      Addressed Objections ({result.rebuttals.used?.length || 0})
+                    <h3 className="text-lg font-bold mb-3 text-green-700">
+                      ✓ Addressed Objections ({result.rebuttals.used?.length || 0})
                     </h3>
                     {result.rebuttals.used?.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {result.rebuttals.used.map((item: any, i: number) => (
-                          <div key={i} className="border rounded-lg p-3 bg-green-50">
-                            <div className="text-sm font-medium text-gray-600 mb-1">
-                              {item.ts} - {item.stall_type}
+                          <div key={i} className="border-2 border-green-300 rounded-lg p-4 bg-green-50">
+                            <div className="text-base font-semibold text-gray-700 mb-2">
+                              [{item.ts}] {item.stall_type}
                             </div>
-                            <div className="text-sm space-y-1">
-                              <div><strong>Customer:</strong> {item.quote_customer}</div>
-                              <div><strong>Agent:</strong> {item.quote_agent}</div>
+                            <div className="space-y-2">
+                              <div className="text-base text-gray-800">
+                                <span className="font-semibold">Customer:</span> "{item.quote_customer}"
+                              </div>
+                              <div className="text-base text-gray-800">
+                                <span className="font-semibold">Agent Response:</span> "{item.quote_agent}"
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">No addressed objections</p>
+                      <p className="text-base text-gray-600">No addressed objections</p>
                     )}
                   </div>
 
                   {/* Missed */}
                   <div>
-                    <h3 className="font-medium mb-2">
-                      Missed Objections ({result.rebuttals.missed?.length || 0})
+                    <h3 className="text-lg font-bold mb-3 text-red-700">
+                      ✗ Missed Objections ({result.rebuttals.missed?.length || 0})
                     </h3>
                     {result.rebuttals.missed?.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {result.rebuttals.missed.map((item: any, i: number) => (
-                          <div key={i} className="border rounded-lg p-3 bg-red-50">
-                            <div className="text-sm font-medium text-gray-600 mb-1">
-                              {item.ts} - {item.stall_type}
+                          <div key={i} className="border-2 border-red-300 rounded-lg p-4 bg-red-50">
+                            <div className="text-base font-semibold text-gray-700 mb-2">
+                              [{item.ts}] {item.stall_type}
                             </div>
-                            <div className="text-sm">
-                              <strong>Customer:</strong> {item.quote_customer}
+                            <div className="text-base text-gray-800">
+                              <span className="font-semibold">Customer:</span> "{item.quote_customer}"
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">No missed objections</p>
+                      <p className="text-base text-gray-600">No missed objections</p>
                     )}
                   </div>
 
                   {/* Immediate */}
-                  <div>
-                    <h3 className="font-medium mb-2">
-                      Immediate Responses ({result.rebuttals.immediate?.length || 0})
-                    </h3>
-                    {result.rebuttals.immediate?.length > 0 ? (
-                      <div className="space-y-2">
+                  {result.rebuttals.immediate && result.rebuttals.immediate.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-bold mb-3 text-blue-700">
+                        ⚡ Immediate Responses ({result.rebuttals.immediate.length})
+                      </h3>
+                      <div className="space-y-3">
                         {result.rebuttals.immediate.map((item: any, i: number) => (
-                          <div key={i} className="border rounded-lg p-3 bg-blue-50">
-                            <div className="text-sm font-medium text-gray-600 mb-1">
-                              {item.ts} - {item.stall_type}
+                          <div key={i} className="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                            <div className="text-base font-semibold text-gray-700 mb-2">
+                              [{item.ts}] {item.stall_type}
                             </div>
-                            <div className="text-sm space-y-1">
-                              <div><strong>Customer:</strong> {item.quote_customer}</div>
-                              <div><strong>Agent (15s):</strong> {item.quote_agent_immediate || 'No immediate response'}</div>
+                            <div className="space-y-2">
+                              <div className="text-base text-gray-800">
+                                <span className="font-semibold">Customer:</span> "{item.quote_customer}"
+                              </div>
+                              <div className="text-base text-gray-800">
+                                <span className="font-semibold">Agent (within 15s):</span>
+                                "{item.quote_agent_immediate || 'No immediate response'}"
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-500">No immediate responses tracked</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -252,12 +347,12 @@ export default function SuperAdminTestPage() {
 
           {/* Red Flags */}
           {result.analysis?.red_flags?.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
               <div className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Red Flags</h2>
-                <div className="flex flex-wrap gap-2">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">⚠️ Red Flags</h2>
+                <div className="flex flex-wrap gap-3">
                   {result.analysis.red_flags.map((flag: string, i: number) => (
-                    <span key={i} className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                    <span key={i} className="px-4 py-2 bg-red-100 text-red-800 rounded-full text-base font-semibold">
                       {flag}
                     </span>
                   ))}
@@ -266,14 +361,67 @@ export default function SuperAdminTestPage() {
             </div>
           )}
 
-          {/* Raw Data */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          {/* Metadata */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-2">Raw Response</h2>
-              <p className="text-gray-600 text-sm mb-4">Full API response for debugging</p>
-              <pre className="text-xs bg-gray-50 p-4 rounded-lg overflow-x-auto">
-                {JSON.stringify(result, null, 2)}
-              </pre>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900">Analysis Metadata</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Model</label>
+                  <div className="text-lg font-medium text-gray-800">
+                    {result.metadata?.model || '—'}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Duration</label>
+                  <div className="text-lg font-medium text-gray-800">
+                    {result.duration ? `${Math.round(result.duration)}s` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Utterances</label>
+                  <div className="text-lg font-medium text-gray-800">
+                    {result.utterance_count || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {result.metadata?.deepgram_request_id && (
+                <div className="mt-4">
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Deepgram Request ID</label>
+                  <div className="text-sm font-mono text-gray-600">
+                    {result.metadata.deepgram_request_id}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Transcript */}
+          {result.transcript && (
+            <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">Transcript</h2>
+                <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap text-base text-gray-800 font-sans">
+                    {result.transcript}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Raw Data */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold mb-2 text-gray-900">Raw Response Data</h2>
+              <p className="text-gray-700 text-base mb-4">Full API response for debugging</p>
+              <div className="bg-gray-900 p-4 rounded-lg overflow-x-auto">
+                <pre className="text-sm text-green-400 font-mono">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </div>
             </div>
           </div>
         </div>
