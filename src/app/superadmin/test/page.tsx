@@ -426,11 +426,19 @@ export default function SuperAdminTestPage() {
             </div>
           )}
 
+          {/* Talk Metrics - Debug */}
+          {!result.talk_metrics && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
+              <p className="text-yellow-800">Talk metrics not found in result</p>
+            </div>
+          )}
+
           {/* Talk Metrics */}
           {result.talk_metrics && (
             <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
               <div className="p-6">
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">Talk Metrics</h2>
+                {console.log('Talk Metrics Data:', result.talk_metrics)}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   {(() => {
