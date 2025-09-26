@@ -126,7 +126,7 @@ export default function SuperAdminTestPage() {
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="text-base font-semibold text-gray-700 block mb-1">
                     Monthly Premium
-                    {result.analysis?.monthly_premium >= 100 && (
+                    {result.analysis?.monthly_premium >= 150 && (
                       <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Corrected</span>
                     )}
                   </label>
@@ -137,8 +137,11 @@ export default function SuperAdminTestPage() {
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="text-base font-semibold text-gray-700 block mb-1">
                     Enrollment Fee
-                    {result.analysis?.enrollment_fee >= 50 && (
-                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Corrected</span>
+                    {(result.analysis?.enrollment_fee === 27.5 ||
+                      result.analysis?.enrollment_fee === 50 ||
+                      result.analysis?.enrollment_fee === 99 ||
+                      result.analysis?.enrollment_fee === 125) && (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">✓ Standard</span>
                     )}
                   </label>
                   <div className="text-xl font-bold text-green-600">
@@ -228,8 +231,8 @@ export default function SuperAdminTestPage() {
                           const rawStr = item.value_raw?.replace(/[$,]/g, '').trim();
 
                           if (item.field_hint === 'monthly_premium' && result.analysis?.monthly_premium) {
-                            // Check if raw value is under $50 and corrected to hundreds
-                            if (rawStr && parseFloat(rawStr) < 50 && result.analysis.monthly_premium >= 100) {
+                            // Check if raw value is under $20 and corrected to hundreds (typical range $150-$2000)
+                            if (rawStr && parseFloat(rawStr) < 20 && result.analysis.monthly_premium >= 150) {
                               return { value: `$${result.analysis.monthly_premium}`, needsCorrection: true };
                             }
                             return { value: `$${result.analysis.monthly_premium}`, needsCorrection: false };
@@ -240,17 +243,25 @@ export default function SuperAdminTestPage() {
                             const enrollment = result.analysis?.enrollment_fee || 0;
                             const premium = result.analysis?.monthly_premium || 0;
                             const total = premium + enrollment;
-                            // Check if raw value is under $50 and corrected to hundreds
-                            if (rawStr && parseFloat(rawStr) < 50 && total >= 100) {
+                            // Check if raw value is under $20 and corrected to hundreds (typical total $175+)
+                            if (rawStr && parseFloat(rawStr) < 20 && total >= 175) {
                               return { value: `$${total}`, needsCorrection: true };
                             }
                             return { value: `$${total}`, needsCorrection: false };
                           }
 
                           if (item.field_hint === 'enrollment_fee' && result.analysis?.enrollment_fee) {
-                            // Enrollment fee correction: if raw < 10, multiply by 100
-                            if (rawStr && parseFloat(rawStr) < 10 && result.analysis.enrollment_fee >= 50) {
-                              return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: true };
+                            // Enrollment fee correction: Common values are $27.50, $50, $99, $125
+                            // Check if raw is misheard version (e.g., "$0.99" → $99, "$1.25" → $125)
+                            const rawNum = parseFloat(rawStr);
+                            const finalNum = result.analysis.enrollment_fee;
+
+                            // Check for common misheard patterns
+                            if ((rawNum < 2 && finalNum === 99) || // "$0.99" → $99
+                                (rawNum < 2 && finalNum === 125) || // "$1.25" → $125
+                                (rawNum === 27.5 && finalNum === 27.5) || // $27.50 stays as-is
+                                (rawNum < 10 && finalNum >= 27.5)) { // Other low values corrected
+                              return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: rawNum !== finalNum };
                             }
                             return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: false };
                           }

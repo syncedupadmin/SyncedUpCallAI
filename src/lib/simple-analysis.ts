@@ -126,11 +126,16 @@ DECISION RULES (from project code, apply exactly):
   no_sale: otherwise.
 
 - Money normalization (apply only when context matches):
-  • Premium/First bill hundreds inference: if dollars < 50 AND contains either decimal like ".60/.80" OR phrase "and NN¢" OR compact words like "four sixty", treat as hundreds:
+  • Premium/First bill hundreds inference: if dollars < 20 AND contains either decimal like ".60/.80" OR phrase "and NN¢" OR compact words like "four sixty", treat as hundreds:
       "$5.10 and 56¢"  → 510.56
+      "$2.98"          → 298.00
+      "$15.50"         → 1550.00
       "four sixty"     → 460.00
       "under $5.50"    → 550.00 (use 550.00 for "under $5.50" in premium/bill context)
-  • Enrollment fee hundreds inference: if enrollment_fee < 10 → multiply by 100 (e.g., "$1.25" → 125.00) when context is enrollment fee.
+  • Enrollment fee inference: Common values are $27.50, $50, $99, $125
+      - If raw value appears to be "$0.99" or "$99 cents" → 99.00
+      - If raw value is "$1.25" → 125.00 (multiply by 100)
+      - Keep $27.50, $50.00, $99.00, $125.00 as-is when already correct
   • Word forms: "one oh five" → 105.00 ; "one hundred twenty five" → 125.00
   • Skip false positives: phone numbers, dates, addresses, percentages, generic values < $10 unless enrollment_fee context.
   • If multiple candidates remain, choose the most recent AGENT mention per conflict order. If still ambiguous, set null.
