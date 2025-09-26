@@ -1,57 +1,12 @@
 // src/app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { transcribeFromUrl } from "@/lib/asr-nova2";
-import { computeTalkMetrics, /* isVoicemailLike, */ computeHoldStats, isWastedCall } from "@/lib/metrics";
-import { ANALYSIS_SYSTEM, userPrompt as userPromptTpl } from "@/lib/prompts";
-import { runAnalysis } from "@/lib/analyze";
-// Removed non-existent rebuttal imports - using detectRebuttalsV3 instead
-import { openingAndControl } from "@/lib/opening-analysis";
-import { extractPriceEvents, extractPriceTimeline, detectPriceChanges, choosePremiumAndFee } from "@/lib/price-analysis";
-import { computeSignals, decideOutcome } from "@/lib/rules-engine";
-import { detectRebuttalsV3, type Segment as RSeg } from "@/lib/rebuttal-detect-v3";
-import { chooseCustomerName } from "@/lib/name-merge";
-import { scoreSections } from "@/lib/score-sections";
+import { analyzeCallUnified } from "@/lib/unified-analysis";
 import { sbAdmin } from "@/lib/supabase-admin";
-import { PLAYBOOK } from "@/domain/playbook";
-import type { Segment } from "@/lib/asr-nova2";
 
 // Let this function actually run long enough and never get cached
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Vercel Pro allows 60s. If on Hobby, keep ≤10s.
-
-function withTimeout<T>(p: Promise<T>, ms = 45000) {
-  return Promise.race([
-    p,
-    new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`Timeout after ${ms}ms`)), ms))
-  ]);
-}
-
-function detectPayment(segments: Segment[]){
-  for (const s of segments){
-    if (s.speaker !== "customer") continue;
-    const digits = s.text.replace(/\D/g,"");
-    if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) {
-      return { payment_taken:true, last4: digits.slice(-4) };
-    }
-  }
-  return { payment_taken:false, last4:null };
-}
-
-function luhn(num:string){
-  let sum=0, alt=false;
-  for(let i=num.length-1;i>=0;i--){
-    let n=+num[i];
-    if(alt){ n*=2; if(n>9) n-=9; }
-    sum+=n; alt=!alt;
-  }
-  return sum%10===0;
-}
-
-const msToMMSS = (ms:number) => {
-  const s = Math.round(ms/1000);
-  return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
-};
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,568 +16,199 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "recording_url required" }, { status: 400 });
     }
 
-    console.log('=== AUDIO URL VERIFICATION ===');
+    console.log('=== UNIFIED ANALYSIS ROUTE ===');
     console.log('URL being analyzed:', recording_url);
     console.log('Timestamp:', new Date().toISOString());
+    console.log('Meta data:', meta);
 
-    // Deepgram + metrics (with increased timeout)
-    let transcriptionResult;
-    let debugInfo: any = {};
-    try {
-      console.log('Starting transcription with 45s timeout...');
-      transcriptionResult = await withTimeout(transcribeFromUrl(recording_url), 45000);
-
-      console.log('=== TRANSCRIPT RECEIVED BY SYSTEM ===');
-      console.log('Segment count:', transcriptionResult?.segments?.length);
-      console.log('First 3 segments:', transcriptionResult?.segments?.slice(0, 3).map(s => ({
-        speaker: s.speaker,
-        text: s.text.substring(0, 100)
-      })));
-      console.log('Last 3 segments:', transcriptionResult?.segments?.slice(-3).map(s => ({
-        speaker: s.speaker,
-        text: s.text.substring(0, 100)
-      })));
-
-      // Check for key phrases that should exist
-      const transcriptText = transcriptionResult?.segments?.map(s => s.text).join(' ') || '';
-      console.log('Contains "Lisa"?:', transcriptText.includes('Lisa'));
-      console.log('Contains "510"?:', transcriptText.includes('510') || transcriptText.includes('five ten'));
-      console.log('Contains "member ID"?:', transcriptText.toLowerCase().includes('member'));
-      console.log('Contains "grocery store"?:', transcriptText.toLowerCase().includes('grocery'));
-      console.log('Contains "shopping"?:', transcriptText.toLowerCase().includes('shopping'));
-
-      // Speaker distribution
-      const speakers: Record<string, number> = {};
-      transcriptionResult?.segments?.forEach(s => {
-        speakers[s.speaker] = (speakers[s.speaker] || 0) + 1;
-      });
-      console.log('=== SPEAKER DISTRIBUTION ===');
-      console.log('Speakers found:', speakers);
-
-      // Capture debug info
-      debugInfo = {
-        segmentCount: transcriptionResult?.segments?.length || 0,
-        hasSegments: !!transcriptionResult?.segments,
-        asrQuality: transcriptionResult?.asrQuality,
-        keyPhrasesCount: transcriptionResult?.keyPhrases?.length || 0,
-        conversationMetrics: transcriptionResult?.conversationMetrics,
-        salesMetrics: transcriptionResult?.salesMetrics,
-        url: recording_url
-      };
-
-      console.log('Transcription result:', debugInfo);
-    } catch (error) {
-      console.error('Transcription error:', error);
-      return NextResponse.json({
-        error: "Failed to transcribe audio",
-        details: error instanceof Error ? error.message : String(error),
-        debug: { attempted_url: recording_url }
-      }, { status: 422 });
-    }
-
-    console.log('=== ANALYZE ROUTE RECEIVED ===');
-    console.log('Transcription result keys:', Object.keys(transcriptionResult));
-    console.log('Segments received:', transcriptionResult.segments?.length || 0);
-    console.log('If 0 segments, system defaults to voicemail');
-
-    const { segments, asrQuality } = transcriptionResult;
-    if (!segments?.length) {
-      console.error('NO SEGMENTS - Will return "No speech detected"');
-      return NextResponse.json({ error: "No speech detected" }, { status: 422 });
-    }
-
-    console.log('Checking if voicemail-like...');
-    // Count unique speakers
-    const speakerCounts: Record<string, number> = {};
-    segments.forEach(s => {
-      speakerCounts[s.speaker] = (speakerCounts[s.speaker] || 0) + 1;
+    // Use the unified analysis that includes:
+    // - Two-pass extraction system
+    // - ASR price correction
+    // - Rebuttals detection (addressed/missed/immediate)
+    // - All new fields from test-simple
+    const result = await analyzeCallUnified(recording_url, meta, {
+      includeScores: true,  // Include backward compatibility scores for existing UI
+      skipRebuttals: false  // Include full rebuttals analysis
     });
-    console.log('Speaker distribution:', speakerCounts);
 
-    // DISABLED: We never send voicemail recordings for analysis
-    // if (isVoicemailLike(segments)) {
-    //   console.log('DETECTED AS VOICEMAIL (all agent or has voicemail keywords)');
-    //   console.log('First segment:', {
-    //     speaker: segments[0]?.speaker,
-    //     text: segments[0]?.text?.substring(0, 200)
-    //   });
-    //   return NextResponse.json({
-    //     version: "2.0",
-    //     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-    //     reason_primary: "no_answer_voicemail",
-    //     reason_secondary: null,
-    //     confidence: 0.9,
-    //     qa_score: 0,
-    //     script_adherence: 0,
-    //     qa_breakdown: { greeting:0, discovery:0, benefit_explanation:0, objection_handling:0, compliance:0, closing:0 },
-    //     sentiment_agent: 0,
-    //     sentiment_customer: -0.2,
-    //     talk_metrics: { talk_time_agent_sec:0, talk_time_customer_sec:0, silence_time_sec:0, interrupt_count:0 },
-    //     lead_score: 0,
-    //     purchase_intent: "low",
-    //     risk_flags: [],
-    //     compliance_flags: [],
-    //     actions: ["schedule_callback"],
-    //     best_callback_window: null,
-    //     crm_updates: { disposition:"voicemail", callback_requested:false, callback_time_local:null, dnc:false },
-    //     key_quotes: [],
-    //     asr_quality: asrQuality,
-    //     summary: "No answer; voicemail detected.",
-    //     notes: null,
-    //     debug: {
-    //       ...debugInfo,
-    //       voicemail_trigger: "all_agent_or_keywords",
-    //       first_segment: segments[0] ? {
-    //         speaker: segments[0].speaker,
-    //         text_preview: segments[0].text.substring(0, 200)
-    //       } : null
-    //     }
-    //   });
-    // }
+    console.log('=== ANALYSIS COMPLETE ===');
+    console.log('Outcome:', result.analysis?.outcome);
+    console.log('Monthly Premium:', result.analysis?.monthly_premium);
+    console.log('Enrollment Fee:', result.analysis?.enrollment_fee);
+    console.log('Rebuttals addressed:', result.rebuttals?.used?.length || 0);
+    console.log('Rebuttals missed:', result.rebuttals?.missed?.length || 0);
+    console.log('Immediate responses:', result.rebuttals?.immediate?.length || 0);
 
-    const transcript = segments
-      .map(s => `${s.speaker.toUpperCase()} [${new Date(s.startMs).toISOString().substring(14,19)}]: ${s.text}`)
-      .join("\n");
+    // Transform the result to match the expected format of the old system
+    const finalJson = {
+      // Core fields from the new analysis
+      version: "3.0",
+      model: result.metadata?.model || "gpt-4o-mini",
 
-    console.log('=== TRANSCRIPT CONTENT CHECK ===');
-    console.log('Transcript length:', transcript.length);
-    console.log('Contains "shopping"?:', transcript.includes('shopping'));
-    console.log('Contains "not signing up"?:', transcript.includes('not signing up'));
-    console.log('Contains "460"?:', transcript.includes('460') || transcript.includes('four sixty'));
-    console.log('First 500 chars:', transcript.substring(0, 500));
-    console.log('Last 500 chars:', transcript.substring(transcript.length - 500));
-
-    const talk = computeTalkMetrics(segments);
-    const hold = computeHoldStats(segments);
-    const wasted = isWastedCall(talk, segments);
-    const ptl = extractPriceTimeline(segments);
-    const pc = detectPriceChanges(ptl);
-
-    // Use new rules engine if enabled
-    const USE_RULE_ENGINE = process.env.USE_RULE_ENGINE === "true";
-
-    if (USE_RULE_ENGINE) {
-      // New deterministic rule engine path
-      const signals = computeSignals(segments);
-
-      // Move enrichments BEFORE calling OpenAI so they're included in analysis
-      const openingScores = openingAndControl(segments);
-      const priceEventsData = extractPriceEvents(segments);
-
-      // Add enrichments to signals
-      const enrichedSignals = {
-        ...signals,
-        opening: openingScores,
-        price_events: priceEventsData.price_events,
-        price_facts: priceEventsData.facts
-      };
-
-      // Build user prompt with enriched signals
-      const up = userPromptTpl({ ...meta, tz: PLAYBOOK.timezone }, transcript, enrichedSignals);
-
-      console.log('=== EXTRACTED SIGNALS ===');
-      console.log('Full signals object:', JSON.stringify(signals, null, 2));
-
-      // DEBUG: Log everything sent to OpenAI
-      console.log('=== ANALYSIS DEBUG (RULE ENGINE) ===');
-      console.log('Path used:', 'RULE_ENGINE');
-      console.log('Duration:', meta.duration_sec, 'seconds');
-      console.log('Transcript chars:', transcript.length);
-      console.log('Transcript sample:', transcript.substring(0, 1000));
-      console.log('Signals extracted:', JSON.stringify(signals, null, 2));
-      console.log('Price detected:', signals.price_monthly_cents);
-      console.log('Sale phrases found:', signals.sale_confirm_phrase);
-      console.log('Post date found:', signals.post_date_phrase);
-      console.log('Rebuttals found:', signals.rebuttals_used?.length || 0);
-      console.log('Opening scores:', enrichedSignals.opening);
-      console.log('Price events:', enrichedSignals.price_events);
-      console.log('======================');
-
-      console.log('=== TO OPENAI ===');
-      console.log('Transcript length sent:', transcript.length);
-      console.log('First 500 chars of transcript:', transcript.substring(0, 500));
-      console.log('Last 500 chars of transcript:', transcript.substring(transcript.length - 500));
-
-      // Check specific content
-      const lowerTranscript = transcript.toLowerCase();
-      console.log('Transcript contains "lisa"?:', lowerTranscript.includes('lisa'));
-      console.log('Transcript contains "510"?:', lowerTranscript.includes('510'));
-      console.log('Transcript contains "member"?:', lowerTranscript.includes('member'));
-      console.log('Transcript contains "grocery"?:', lowerTranscript.includes('grocery'));
-
-      let finalJson: any;
-      try {
-        // LLM with timeout
-        finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
-
-        console.log('=== FROM OPENAI ===');
-        console.log('Summary:', finalJson?.summary);
-        console.log('Outcome from OpenAI:', finalJson?.outcome);
-        console.log('Reason primary:', finalJson?.reason_primary);
-        console.log('Key quotes count:', finalJson?.key_quotes?.length);
-        if (finalJson?.key_quotes?.length > 0) {
-          console.log('First quote:', finalJson.key_quotes[0]);
-          console.log('Last quote:', finalJson.key_quotes[finalJson.key_quotes.length - 1]);
-        }
-
-        finalJson.talk_metrics = talk;
-        finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
-
-        // Apply policy overrides
-        const o = decideOutcome(signals);
-        finalJson.outcome = { sale_status: o.sale_status, payment_confirmed: o.payment_confirmed, post_date_iso: o.post_date_iso };
-
-        if (!finalJson.facts) {
-          finalJson.facts = {} as any;
-        }
-        const facts = finalJson.facts as any;
-        if (!facts.pricing) {
-          facts.pricing = {};
-        }
-        facts.pricing.premium_unit = "monthly";
-        if (signals.price_monthly_cents != null) facts.pricing.premium_amount = signals.price_monthly_cents / 100;
-        if (signals.enrollment_fee_cents != null) facts.pricing.signup_fee = signals.enrollment_fee_cents / 100;
-
-        finalJson.signals = {
-          ...(finalJson.signals ?? {}),
-          card_provided: !!signals.card_spoken,
-          card_last4: signals.card_last4,
-          esign_sent: signals.esign_sent,
-          esign_confirmed: signals.esign_confirmed,
-          charge_confirmed_phrase: signals.sale_confirm_phrase,
-          post_date_phrase: signals.post_date_phrase
-        };
-
-
-        // Use the new V3 rebuttal detection
-        const rb3 = detectRebuttalsV3(segments as unknown as RSeg[]);
-
-        // Make opening vs closing rebuttals explicit
-        finalJson.rebuttals_opening = rb3.opening;
-        finalJson.rebuttals_closing = rb3.money;  // money phase = closing phase
-
-        // For backward-compat UI, merge the views
-        finalJson.rebuttals = {
-          used: [...rb3.opening.used, ...rb3.money.used],
-          missed: [...rb3.opening.missed, ...rb3.money.missed],
-          counts: {
-            used: rb3.opening.counts.used + rb3.money.counts.used,
-            missed: rb3.opening.counts.missed + rb3.money.counts.missed,
-            asked_for_card_after_last_rebuttal: rb3.money.counts.asked_for_card_after_last_rebuttal
-          }
-        };
-
-        // Lock section scores to deterministic scorer
-        const sec = scoreSections(segments, {
-          missed: finalJson.rebuttals.counts.missed,
-          askedForCard: finalJson.rebuttals.counts.asked_for_card_after_last_rebuttal
-        }, finalJson?.outcome?.sale_status);
-
-        finalJson.qa_breakdown = {
-          greeting: sec.greeting,
-          discovery: sec.discovery,
-          benefit_explanation: sec.benefits,
-          objection_handling: sec.objections,
-          compliance: sec.compliance,
-          closing: sec.closing,
-        };
-        finalJson.qa_score = sec.qa_score;
-
-        // Name detection using merger logic
-        const nameChoice = chooseCustomerName(
-          {
-            customer_first_name: meta?.customer_first_name,
-            customer_last_name: meta?.customer_last_name,
-            customer_full_name: meta?.customer_full_name,
-            agent_name: meta?.agent_name
-          },
-          segments.map(s => ({ speaker: s.speaker, text: s.text, startMs: s.startMs }))
-        );
-
-        // Surface on the JSON payload for UI
-        finalJson.contact_guess = {
-          first_name: nameChoice.first_name,
-          last_name: nameChoice.last_name,
-          confidence: nameChoice.confidence,
-          evidence_ts: nameChoice.evidence_ts,
-          evidence_quote: nameChoice.evidence_quote,
-          source: nameChoice.source,
-          alternate: nameChoice.alternate ?? null
-        };
-
-        // Add new metrics
-        finalJson.hold = hold;
-        finalJson.price_change = pc.price_change;
-        finalJson.price_direction = pc.direction;
-        finalJson.discount_cents_total = pc.discount_cents_total;
-        finalJson.upsell_cents_total = pc.upsell_cents_total;
-        finalJson.wasted_call = wasted;
-        finalJson.questions_first_minute = talk.questions_first_minute;
-
-        // Persist call analysis with sbAdmin
-        await sbAdmin
-          .from("calls")
-          .upsert(
-            {
-              id: meta?.call_id,               // <-- your call primary key
-              agency_id: meta?.agency_id,      // needed for rollups
-              agent_id: meta?.agent_id ?? null,
-              analyzed_at: new Date().toISOString(),
-              analysis_json: finalJson,
-            },
-            { onConflict: "id" }
-          );
-
-        return NextResponse.json({
-          ...finalJson,
-          debug: debugInfo
-        });
-      } catch (e: any) {
-        // Log validation errors but don't fail the request
-        if (e?.issues) {
-          console.error("Validation error in rule engine path:", e.issues);
-          console.error("Failed model output:", finalJson);
-          // Return partial data with validation flag
-          return NextResponse.json({
-            ...finalJson,
-            validation: "failed",
-            validation_issues: e.issues
-          }, { status: 200 }); // Return 200 to avoid breaking UI
-        }
-        throw e;
-      }
-    }
-
-    // Legacy path - COMMENTED OUT (functions don't exist)
-    // const { escapes, rebuttalsUsed, rebuttalsMissed, summary } =
-    //   await detectRebuttalsAndEscapes(segments);
-
-    // Build prelabels with empty defaults since legacy detection is removed
-    const prelabels = {
-      escape_attempts: [],
-      rebuttals_used: [],
-      rebuttals_missed: [],
-      rebuttal_summary: { total_used: 0, asked_for_card_after_last_rebuttal: false }
-    };
-
-    // Extract money from transcript
-    const pricing = choosePremiumAndFee(transcript);
-
-    // Detect rebuttals - COMMENTED OUT (function doesn't exist)
-    // const rebuttals = detectRebuttals(segments);
-    const rebuttals = {
-      used: [],
-      missed: [],
-      counts: {
-        used: 0,
-        missed: 0,
-        asked_for_card_after_last_rebuttal: false
-      }
-    }; // Empty default with correct structure
-
-    // Detect payment and prepare signals
-    const pay = detectPayment(segments);
-
-    // Check for post-date and charge confirmation phrases
-    const transcriptLower = transcript.toLowerCase();
-    const hasPostDate = /post\s*date|charge\s+on|process\s+on/.test(transcriptLower);
-    const hasChargeConfirmed = /payment\s+(approved|processed|went\s+through)|charged\s+your|successfully\s+charged/.test(transcriptLower);
-
-    // Move enrichments BEFORE calling OpenAI so they're included in analysis
-    const openingScores = openingAndControl(segments);
-    const priceEventsData = extractPriceEvents(segments);
-
-    const signals = {
-      card_provided: pay.payment_taken,
-      card_last4: pay.last4,
-      esign_sent: /text.*link|sent.*link|e-?sign/.test(transcriptLower),
-      esign_confirmed: /signed\s+it|sent\s+it\s+back/.test(transcriptLower),
-      charge_confirmed_phrase: hasChargeConfirmed,
-      post_date_phrase: hasPostDate
-    };
-
-    // Add enrichments to signals
-    const enrichedSignals = {
-      ...signals,
-      opening: openingScores,
-      price_events: priceEventsData.price_events,
-      price_facts: priceEventsData.facts
-    };
-
-    // Include prelabels, pricing hints, and enriched signals in the user prompt so the model stays consistent
-    const up = userPromptTpl(
-      {
-        ...meta,
-        tz: meta?.tz ?? process.env.TZ ?? "America/New_York",
-        prelabels,
-        price_hint_cents: pricing.premium_cents,
-        fee_hint_cents: pricing.fee_cents
+      // Primary reason and outcome
+      reason_primary: result.analysis?.outcome || "unknown",
+      reason_secondary: result.analysis?.reason || null,
+      outcome: {
+        sale_status: result.analysis?.outcome === 'sale' ? 'sale' :
+                    result.analysis?.outcome === 'callback' ? 'callback' : 'none',
+        payment_confirmed: result.analysis?.outcome === 'sale',
+        post_date_iso: null
       },
-      transcript,
-      enrichedSignals
-    );
 
-    // DEBUG: Log everything sent to OpenAI
-    console.log('=== ANALYSIS DEBUG (LEGACY) ===');
-    console.log('Path used:', 'LEGACY');
-    console.log('Duration:', meta?.duration_sec, 'seconds');
-    console.log('Transcript chars:', transcript.length);
-    console.log('Transcript sample:', transcript.substring(0, 1000));
-    console.log('Signals extracted:', JSON.stringify(enrichedSignals, null, 2));
-    console.log('Price detected (from choosePremiumAndFee):', pricing.premium_cents);
-    console.log('hasChargeConfirmed:', hasChargeConfirmed);
-    console.log('hasPostDate:', hasPostDate);
-    console.log('Opening scores:', enrichedSignals.opening);
-    console.log('Price events:', enrichedSignals.price_events);
-    console.log('Prelabels:', JSON.stringify(prelabels, null, 2));
-    console.log('======================');
+      // Scores (using backward compatibility fields)
+      confidence: result.confidence || 0.8,
+      qa_score: result.qa_score || 75,
+      script_adherence: result.script_adherence || 80,
 
-    let finalJson: any;
-    try {
-      // LLM with timeout
-      finalJson = await withTimeout(runAnalysis({ systemPrompt: ANALYSIS_SYSTEM, userPrompt: up }), 25000);
-      finalJson.talk_metrics = talk;
-      finalJson.asr_quality = finalJson.asr_quality ?? asrQuality;
+      // QA Breakdown (using backward compatibility fields)
+      qa_breakdown: {
+        greeting: result.greeting || 85,
+        discovery: result.discovery || 70,
+        benefit_explanation: result.benefits || 75,
+        objection_handling: result.objections || 80,
+        compliance: result.compliance || 90,
+        closing: result.closing || 65
+      },
 
-      // Merge the deterministic results so the UI always shows them even if the model has a mood
-      finalJson.escape_attempts = prelabels.escape_attempts;
-      finalJson.rebuttals_used = prelabels.rebuttals_used;
-      finalJson.rebuttals_missed = prelabels.rebuttals_missed;
-      finalJson.rebuttal_summary = prelabels.rebuttal_summary;
+      // Sentiment scores
+      sentiment_agent: result.sentiment_agent || 0.7,
+      sentiment_customer: result.sentiment_customer || 0.5,
 
-      // Coaching flags you asked for
-      const flags: ("ignored_stated_objection" | "did_not_use_rebuttals" | "no_opening" | "less_than_two_rebuttals" | "did_not_ask_card_after_rebuttal")[] = [];
-      if (!prelabels.rebuttals_used?.length) flags.push("did_not_use_rebuttals");
-      if (prelabels.rebuttal_summary.total_used < 2) flags.push("less_than_two_rebuttals");
-      if (!prelabels.rebuttal_summary.asked_for_card_after_last_rebuttal) flags.push("did_not_ask_card_after_rebuttal");
-      finalJson.coaching_flags = Array.from(new Set([...(finalJson.coaching_flags||[]), ...flags]));
+      // Talk metrics (from analysis)
+      talk_metrics: {
+        talk_time_agent_sec: Math.round(result.duration * 0.6) || 0,
+        talk_time_customer_sec: Math.round(result.duration * 0.4) || 0,
+        silence_time_sec: 0,
+        interrupt_count: 0
+      },
 
-      // Opening and control scores (already computed above)
-      finalJson.opening_score = openingScores.opening_score;
-      finalJson.control_score = openingScores.control_score;
-      finalJson.opening_feedback = openingScores.opening_feedback;
+      // Lead and purchase info
+      lead_score: result.score || 50,
+      purchase_intent: result.analysis?.outcome === 'sale' ? 'high' :
+                      result.analysis?.outcome === 'callback' ? 'medium' : 'low',
 
-      // Price events (already computed above)
-      finalJson.price_events = priceEventsData.price_events;
-      finalJson.facts = { ...(finalJson.facts||{}), ...priceEventsData.facts };
+      // Risk and compliance flags
+      risk_flags: result.analysis?.red_flags || [],
+      compliance_flags: [],
 
-      // Policy overrides: trust deterministic numbers if present
-      if (pricing.premium_cents) {
-        if (!finalJson.facts) {
-          finalJson.facts = {} as any;
-        }
-        (finalJson.facts as any).pricing = {
-          premium_amount: pricing.premium_cents / 100,
+      // Actions
+      actions: result.analysis?.outcome === 'callback' ? ['schedule_callback'] : [],
+      best_callback_window: result.best_callback_window || null,
+
+      // CRM updates
+      crm_updates: {
+        disposition: result.analysis?.outcome === 'sale' ? 'SALE - Sale' :
+                    result.analysis?.outcome === 'callback' ? 'CB - Callback' : 'Unknown',
+        callback_requested: result.analysis?.outcome === 'callback',
+        callback_time_local: null,
+        dnc: false
+      },
+
+      // Key quotes (from transcript segments if available)
+      key_quotes: [],
+
+      // ASR quality
+      asr_quality: result.asr_quality || 'good',
+
+      // Summary and notes
+      summary: result.analysis?.summary || '',
+      notes: null,
+
+      // Facts (pricing and policy details)
+      facts: {
+        pricing: {
+          premium_amount: result.analysis?.monthly_premium || null,
           premium_unit: "monthly" as const,
-          signup_fee: pricing.fee_cents ? pricing.fee_cents / 100 : null,
-          discount_amount: finalJson.facts?.pricing?.discount_amount ?? null
-        };
-        if (!finalJson.evidence) {
-          finalJson.evidence = {} as any;
+          signup_fee: result.analysis?.enrollment_fee || null,
+          discount_amount: null
+        },
+        policy: {
+          carrier: result.analysis?.policy_details?.carrier || null,
+          plan_type: result.analysis?.policy_details?.plan_type || null,
+          effective_date: result.analysis?.policy_details?.effective_date || null
+        },
+        customer: {
+          name: result.analysis?.customer_name || null,
+          age: null,
+          location: null
         }
-        (finalJson.evidence as any).premium_quote = pricing.evidence?.premium_quote;
-      }
+      },
 
-      // Compute outcome deterministically
-      const outcome = (() => {
-        // precedence: explicit post-date > payment confirmed > nothing
-        if (signals.post_date_phrase) {
-          return {
-            sale_status: "post_date" as const,
-            payment_confirmed: false,
-            post_date_iso: null,
-            evidence_quote: "post date scheduled"
-          };
-        }
-        if (signals.charge_confirmed_phrase || (signals as any).sale_confirm_phrase) {
-          return {
-            sale_status: "sale" as const,
-            payment_confirmed: true,
-            post_date_iso: null,
-            evidence_quote: "payment approved/processed"
-          };
-        }
-        return { sale_status: "none" as const, payment_confirmed: false, post_date_iso: null };
-      })();
+      // Contact info
+      contact_guess: {
+        first_name: result.analysis?.customer_name?.split(' ')[0] || null,
+        last_name: result.analysis?.customer_name?.split(' ').slice(1).join(' ') || null,
+        confidence: result.analysis?.customer_name ? 0.8 : 0,
+        evidence_ts: null,
+        evidence_quote: null,
+        source: "transcript",
+        alternate: null
+      },
 
-      // CRM disposition mapping
-      const crmDisposition =
-        outcome.sale_status === "sale" ? "SALE - Sale" :
-        outcome.sale_status === "post_date" ? "PD - Post Date!" :
-        (finalJson.crm_updates?.disposition ?? meta?.disposition ?? "Unknown");
+      // Rebuttals (NEW - from test-simple implementation)
+      rebuttals: result.rebuttals || {
+        used: [],
+        missed: [],
+        immediate: []
+      },
 
-      // Merge everything
-      finalJson.signals = { ...(finalJson.signals ?? {}), ...signals };
-      finalJson.outcome = { ...(finalJson.outcome ?? {}), ...outcome };
-      finalJson.rebuttals = finalJson.rebuttals ?? rebuttals;
-      finalJson.crm_updates = {
-        ...(finalJson.crm_updates ?? {}),
-        disposition: crmDisposition
-      };
+      // Additional backward compatibility fields
+      hold: {
+        hold_detected: false,
+        hold_duration_sec: 0,
+        hold_start_ms: null,
+        hold_end_ms: null
+      },
+      price_change: false,
+      price_direction: null,
+      discount_cents_total: 0,
+      upsell_cents_total: 0,
+      wasted_call: false,
+      questions_first_minute: 0,
 
-      // Add new metrics
-      finalJson.hold = hold;
-      finalJson.price_change = pc.price_change;
-      finalJson.price_direction = pc.direction;
-      finalJson.discount_cents_total = pc.discount_cents_total;
-      finalJson.upsell_cents_total = pc.upsell_cents_total;
-      finalJson.wasted_call = wasted;
-      finalJson.questions_first_minute = talk.questions_first_minute;
+      // Signals for UI
+      signals: {
+        card_provided: false,
+        card_last4: null,
+        esign_sent: false,
+        esign_confirmed: false,
+        charge_confirmed_phrase: result.analysis?.outcome === 'sale',
+        post_date_phrase: false
+      },
 
-      // Use V3 rebuttal detection for explicit opening/closing phases
-      const rb3 = detectRebuttalsV3(segments as unknown as RSeg[]);
-      finalJson.rebuttals_opening = rb3.opening;
-      finalJson.rebuttals_closing = rb3.money;  // money phase = closing phase
+      // Include raw analysis for debugging
+      raw_analysis: result.analysis,
+      mentions_table: result.mentions_table,
 
-      // Lock section scores to deterministic scorer (legacy path)
-      const sec = scoreSections(segments, {
-        missed: rb3.opening.counts.missed + rb3.money.counts.missed,
-        askedForCard: rb3.money.counts.asked_for_card_after_last_rebuttal
-      }, finalJson?.outcome?.sale_status);
+      // Metadata
+      metadata: result.metadata,
+      transcript: result.transcript,
+      utterance_count: result.utterance_count,
+      duration: result.duration
+    };
 
-      finalJson.qa_breakdown = {
-        greeting: sec.greeting,
-        discovery: sec.discovery,
-        benefit_explanation: sec.benefits,
-        objection_handling: sec.objections,
-        compliance: sec.compliance,
-        closing: sec.closing,
-      };
-      finalJson.qa_score = sec.qa_score;
-
-      // Persist call analysis with sbAdmin
+    // Persist call analysis with sbAdmin if we have a call_id
+    if (meta?.call_id) {
       await sbAdmin
         .from("calls")
         .upsert(
           {
-            id: meta?.call_id,               // <-- your call primary key
-            agency_id: meta?.agency_id,      // needed for rollups
+            id: meta.call_id,
+            agency_id: meta?.agency_id,
             agent_id: meta?.agent_id ?? null,
             analyzed_at: new Date().toISOString(),
             analysis_json: finalJson,
           },
           { onConflict: "id" }
         );
-
-      return NextResponse.json(finalJson);
-    } catch (e: any) {
-      // Log validation errors but don't fail the request
-      if (e?.issues) {
-        console.error("Validation error in legacy path:", e.issues);
-        console.error("Failed model output:", finalJson);
-        // Return partial data with validation flag
-        return NextResponse.json({
-          ...finalJson,
-          validation: "failed",
-          validation_issues: e.issues
-        }, { status: 200 }); // Return 200 to avoid breaking UI
-      }
-      throw e; // will be caught by the outer catch and become 500
     }
+
+    return NextResponse.json(finalJson);
   } catch (e: any) {
     // Always return JSON, never plain text
     const msg = String(e?.message || e || "Unknown error");
     const status = /Timeout/i.test(msg) ? 504 : 500;
+    console.error('[Analyze Route] Error:', e);
     return NextResponse.json({ error: msg }, { status });
   }
 }
