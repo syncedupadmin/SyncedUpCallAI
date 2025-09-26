@@ -138,7 +138,10 @@ DECISION RULES (from project code, apply exactly):
 - Policy details:
   • carrier and plan_type only if they appear in transcript.
   • If agent states a plan type then corrects it later, use the latest correction (e.g., "PPO" then "actually open access" → "Open access").
-  • effective_date: parse month/day references to ISO YYYY-MM-DD using the call year from CALL_META, tz America/New_York. Only when month and day are explicit; else null.
+  • effective_date: parse month/day references to ISO YYYY-MM-DD using the call year from CALL_META, tz America/New_York.
+    - Formats to parse: "MM/DD", "M/D", "Month Day", "effective MM/DD", "starts MM/DD"
+    - Use current year from call_started_at_iso for the year
+    - Only when month and day are explicit; else null
 
 - Reason (≤140 chars): plain-English cause grounded in conversation; avoid advice.
 - Summary (≤40 words): objective.
@@ -160,7 +163,11 @@ PLAN_MENTIONS: ["PPO" at pos 1200, "Open access" at pos 3400]
 
 EXAMPLE D (effective date):
 Text: "effective November 1"
-CALL_META year=2025 → effective_date="2025-11-01"`;
+CALL_META year=2025 → effective_date="2025-11-01"
+
+EXAMPLE E (slash date format):
+Text: "this is effective 09/25"
+CALL_META year=2025 → effective_date="2025-09-25"`;
 
 const whiteCardSchema = {
   "type": "object",
