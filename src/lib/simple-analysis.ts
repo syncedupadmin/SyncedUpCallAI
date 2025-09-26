@@ -1,6 +1,7 @@
 import { createClient } from "@deepgram/sdk";
 import OpenAI from "openai";
 import { buildAgentSnippetsAroundObjections, classifyRebuttals, buildImmediateReplies, type Segment, type ObjectionSpan } from "./rebuttals";
+import { computeTalkMetrics } from "./talk-metrics";
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -312,6 +313,11 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
 
   const analysis = JSON.parse(passBResponse.choices[0].message.content || "{}");
 
+  // Compute deterministic talk metrics from diarized segments
+  const talk_metrics = segments && segments.length > 0
+    ? computeTalkMetrics(segments)
+    : { talk_time_agent_sec: 0, talk_time_customer_sec: 0, silence_time_sec: 0, interrupt_count: 0 };
+
   // Step 4: Return combined result
   return {
     transcript: formattedTranscript,
@@ -328,6 +334,7 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       ...rebuttals,
       immediate: immediate
     } : null,  // Include rebuttals with immediate responses if detected
+    talk_metrics,
     metadata: {
       model: "two-pass-v1",
       deepgram_request_id: result?.metadata?.request_id,

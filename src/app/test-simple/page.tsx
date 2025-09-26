@@ -311,10 +311,35 @@ export default function TestSimple() {
                   <h3 className="font-semibold mb-3 text-lg">Talk Metrics</h3>
 
                   <div className="space-y-1 text-sm">
-                    <p>Agent: {result.talk_metrics?.agent_talk_time || '—'}</p>
-                    <p>Customer: {result.talk_metrics?.customer_talk_time || '—'}</p>
-                    <p>Silence: {result.talk_metrics?.silence_time || '—'}</p>
-                    <p>Interrupts: {result.talk_metrics?.interrupts ?? '—'}</p>
+                    {result.talk_metrics ? (
+                      <>
+                        {(() => {
+                          const fmt = (sec: number) => {
+                            if (!Number.isFinite(sec) || sec <= 0) return "0s";
+                            const m = Math.floor(sec / 60);
+                            const s = Math.floor(sec % 60);
+                            if (m > 0) return `${m}m ${s}s`;
+                            return `${s}s`;
+                          };
+                          const tm = result.talk_metrics;
+                          return (
+                            <>
+                              <p>Agent: {fmt(tm.talk_time_agent_sec)}</p>
+                              <p>Customer: {fmt(tm.talk_time_customer_sec)}</p>
+                              <p>Silence: {fmt(tm.silence_time_sec)}</p>
+                              <p>Interrupts: {tm.interrupt_count ?? 0}</p>
+                            </>
+                          );
+                        })()}
+                      </>
+                    ) : (
+                      <>
+                        <p>Agent: —</p>
+                        <p>Customer: —</p>
+                        <p>Silence: —</p>
+                        <p>Interrupts: —</p>
+                      </>
+                    )}
                   </div>
                 </div>
 

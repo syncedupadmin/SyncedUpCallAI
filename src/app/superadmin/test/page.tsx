@@ -361,6 +361,98 @@ export default function SuperAdminTestPage() {
             </div>
           )}
 
+          {/* Talk Metrics */}
+          {result.talk_metrics && (
+            <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">Talk Metrics</h2>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  {(() => {
+                    const fmt = (sec: number) => {
+                      if (!Number.isFinite(sec) || sec <= 0) return "0s";
+                      const m = Math.floor(sec / 60);
+                      const s = Math.floor(sec % 60);
+                      if (m > 0) return `${m}m ${s}s`;
+                      return `${s}s`;
+                    };
+                    const tm = result.talk_metrics;
+                    return (
+                      <>
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                          <label className="text-base font-semibold text-gray-700 block mb-1">Agent Talk Time</label>
+                          <div className="text-xl font-bold text-blue-600">
+                            {fmt(tm.talk_time_agent_sec)}
+                          </div>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <label className="text-base font-semibold text-gray-700 block mb-1">Customer Talk Time</label>
+                          <div className="text-xl font-bold text-green-600">
+                            {fmt(tm.talk_time_customer_sec)}
+                          </div>
+                        </div>
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                          <label className="text-base font-semibold text-gray-700 block mb-1">Silence Time</label>
+                          <div className="text-xl font-bold text-yellow-600">
+                            {fmt(tm.silence_time_sec)}
+                          </div>
+                        </div>
+                        <div className="bg-purple-50 p-4 rounded-lg">
+                          <label className="text-base font-semibold text-gray-700 block mb-1">Interruptions</label>
+                          <div className="text-xl font-bold text-purple-600">
+                            {tm.interrupt_count}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Talk Ratio Bar */}
+                {(() => {
+                  const tm = result.talk_metrics;
+                  const total = tm.talk_time_agent_sec + tm.talk_time_customer_sec + tm.silence_time_sec;
+                  if (total > 0) {
+                    const agentPct = Math.round((tm.talk_time_agent_sec / total) * 100);
+                    const custPct = Math.round((tm.talk_time_customer_sec / total) * 100);
+                    const silencePct = Math.round((tm.silence_time_sec / total) * 100);
+                    return (
+                      <div className="mt-6">
+                        <label className="text-base font-semibold text-gray-700 block mb-2">Talk Distribution</label>
+                        <div className="flex h-8 rounded-lg overflow-hidden">
+                          {agentPct > 0 && (
+                            <div className="bg-blue-500 flex items-center justify-center text-white text-xs font-semibold"
+                                 style={{width: `${agentPct}%`}}>
+                              {agentPct}%
+                            </div>
+                          )}
+                          {custPct > 0 && (
+                            <div className="bg-green-500 flex items-center justify-center text-white text-xs font-semibold"
+                                 style={{width: `${custPct}%`}}>
+                              {custPct}%
+                            </div>
+                          )}
+                          {silencePct > 0 && (
+                            <div className="bg-gray-400 flex items-center justify-center text-white text-xs font-semibold"
+                                 style={{width: `${silencePct}%`}}>
+                              {silencePct}%
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 mt-1">
+                          <span>Agent: {agentPct}%</span>
+                          <span>Customer: {custPct}%</span>
+                          <span>Silence: {silencePct}%</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Metadata */}
           <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
             <div className="p-6">
