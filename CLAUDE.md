@@ -49,6 +49,13 @@ Use the scripts in the `scripts/` directory for testing real-time features:
 4. Transcribe → `/api/cron/process-transcription-queue` (runs every minute)
 5. Batch analysis → `/api/jobs/batch` (runs every 5 min, processes calls ≥10s)
 
+**Analysis Engine**:
+- `unified-analysis.ts` - Main analysis combining simple-analysis + rebuttal detection
+- `simple-analysis.ts` - Two-pass analysis (first pass for context, second for structured extraction)
+- Uses Deepgram for transcription with carrier name keyword boosting
+- Money normalization with configurable thresholds (`src/config/asr-analysis.ts`)
+- Detects sales outcomes, premiums, enrollment fees, policy details, red flags, rebuttals
+
 **Key Libraries**:
 - `@supabase/supabase-js` - Database and auth
 - `@deepgram/sdk` - Primary ASR
@@ -65,16 +72,24 @@ Use the scripts in the `scripts/` directory for testing real-time features:
 Required variables (see `.env.local.example`):
 - `DATABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
 - `CONVOSO_WEBHOOK_SECRET`, `CONVOSO_AUTH_TOKEN`
-- `DEEPGRAM_API_KEY`, `OPENAI_API_KEY`
+- `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY`, `OPENAI_API_KEY`
+- `ASR_PRIMARY`, `ASR_FALLBACK` - Configure ASR service priority
 - `JOBS_SECRET`, `CRON_SECRET`
 - `APP_URL` (production URL)
+- Optional: `ANTHROPIC_API_KEY` (fallback), `REDACTION`, `HIPAA_MODE`
 
 ### Vercel Cron Jobs
 Configured in `vercel.json`:
-- Every minute: process recordings, transcription queue
-- Every 5 minutes: queue recordings, batch analysis
-- Every 15 minutes: Convoso auto-sync
-- Daily: rollup stats, retention cleanup, KPI calculations
+- Every minute: process-recordings-v3, process-transcription-queue, process-transcriptions
+- Every 5 minutes: queue-bulk-recordings, batch analysis, queue-bulk-tests
+- Every 15 minutes: convoso-auto (auto-sync)
+- Hourly: backfill job
+- Daily (1am): rollup stats
+- Daily (2am): retention cleanup
+- Daily (3am): kpi-daily calculations
+- Weekly (4am Monday): kpi-weekly calculations
+
+Note: Most API routes have 60s timeout; retention, backfill, and process-transcriptions have 300s (5 min)
 
 ### API Route Patterns
 - Protected routes check auth via Supabase session

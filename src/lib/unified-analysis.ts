@@ -50,11 +50,17 @@ export interface UnifiedAnalysisResult {
   } | null;
   metadata: {
     model: string;
-    deepgram_request_id?: string;
+    deepgram_request_id?: string | null;
     processed_at: string;
     agent_name?: string | null;
     agent_id?: string | null;
+    normalization_applied?: any;
   };
+
+  // New fields from Deepgram enhancements
+  dg_features?: string[];
+  entities_summary?: Record<string, number>;
+  talk_metrics?: any;
 
   // Additional fields for backward compatibility
   score?: number;
@@ -95,10 +101,11 @@ export async function analyzeCallUnified(
   options?: {
     includeScores?: boolean;  // Include QA scores for backward compatibility
     skipRebuttals?: boolean;  // Option to skip rebuttals if not needed
+    settings?: any;  // Settings from config/asr-analysis
   }
 ): Promise<UnifiedAnalysisResult> {
-  // Call the simple-analysis function
-  const simpleResult = await analyzeCallSimple(audioUrl, meta);
+  // Call the simple-analysis function with settings
+  const simpleResult = await analyzeCallSimple(audioUrl, meta, options?.settings);
 
   // Build unified result
   const result: UnifiedAnalysisResult = {
@@ -110,6 +117,9 @@ export async function analyzeCallUnified(
     analysis: simpleResult.analysis,
     rebuttals: simpleResult.rebuttals,
     metadata: simpleResult.metadata,
+    talk_metrics: (simpleResult as any).talk_metrics,
+    dg_features: (simpleResult as any).dg_features,
+    entities_summary: (simpleResult as any).entities_summary,
   };
 
   // Add backward compatibility fields if requested

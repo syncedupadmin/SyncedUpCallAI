@@ -1,10 +1,11 @@
-import { createClient } from "@deepgram/sdk";
 import OpenAI from "openai";
 import { buildAgentSnippetsAroundObjections, classifyRebuttals, buildImmediateReplies, type Segment, type ObjectionSpan } from "./rebuttals";
 import { computeTalkMetrics } from "./talk-metrics";
 import { normalizeMoney, parseMoneyValue, type MoneyContext } from "./money-normalizer";
+import { transcribeBulk, type Entity, type AsrOverrides } from "./asr-nova2";
+import type { Settings } from "@/config/asr-analysis";
+import { DEFAULTS } from "@/config/asr-analysis";
 
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 // Embedded prompts to avoid file system issues in Next.js
@@ -224,50 +225,56 @@ const whiteCardSchema = {
   }
 };
 
-export async function analyzeCallSimple(audioUrl: string, meta?: any) {
-  // Step 1: Get transcript from Deepgram with diarization
-  console.log('Getting transcript from Deepgram...');
+export async function analyzeCallSimple(audioUrl: string, meta?: any, settings?: Settings) {
+  // Use provided settings or fall back to defaults
+  const config = settings || DEFAULTS;
 
-  const { result } = await deepgram.listen.prerecorded.transcribeUrl(
-    { url: audioUrl },
-    {
-      model: "nova-2",
-      language: "en",
-      summarize: "v2",
-      smart_format: true,
-      punctuate: true,
-      utterances: true,
-      diarize: true,
-    }
-  );
+  console.log('Settings being used:', config);
 
-  // Extract utterances with speakers and segments for rebuttals
-  const utterances = result?.results?.utterances || [];
+  // Step 1: Get transcript from Deepgram with diarization and entity detection
+  console.log('Getting transcript from Deepgram with enhanced features...');
 
-  // Extract segments with millisecond timestamps for rebuttals
-  const segments: Segment[] = utterances.map(u => ({
-    speaker: u.speaker === 0 ? "agent" : "customer",
-    startMs: Math.round((u.start || 0) * 1000),
-    endMs: Math.round((u.end || 0) * 1000),
-    text: u.transcript || "",
-    conf: u.confidence || 0
-  }));
+  // Convert Settings.asr to AsrOverrides format
+  const asrOverrides: AsrOverrides = {
+    model: config.asr.model,
+    utt_split: config.asr.utt_split,
+    diarize: config.asr.diarize,
+    utterances: config.asr.utterances,
+    smart_format: config.asr.smart_format,
+    punctuate: config.asr.punctuate,
+    numerals: config.asr.numerals,
+    paragraphs: config.asr.paragraphs,
+    detect_entities: config.asr.detect_entities,
+    keywords: config.asr.keywords
+  };
 
-  // Extract summary if available (from summarize: v2)
-  const deepgramSummary = result?.results?.summary?.short || null;
+  const enrichedResult = await transcribeBulk(audioUrl, asrOverrides);
+
+  // Extract segments for rebuttals and metrics
+  const segments: Segment[] = enrichedResult.segments;
+
+  // Extract entities
+  const entities = enrichedResult.entities || [];
 
   // Format transcript with speakers
-  const formattedTranscript = utterances.map(u =>
-    `Speaker ${u.speaker}: ${u.transcript}`
-  ).join('\n\n');
+  const formattedTranscript = enrichedResult.formatted;
+  const utterances = segments.map(s => ({
+    speaker: s.speaker === "agent" ? 0 : 1,
+    transcript: s.text
+  }));
 
-  console.log(`Transcript ready: ${utterances.length} utterances`);
-  if (deepgramSummary) {
-    console.log(`Deepgram summary: ${deepgramSummary}`);
+  console.log(`Transcript ready: ${segments.length} utterances, ${entities.length} entities detected`);
+  if (enrichedResult.summary) {
+    console.log(`Deepgram summary: ${enrichedResult.summary}`);
   }
 
-  // Step 2: Pass A - Extract mentions
+  // Step 2: Pass A - Extract mentions with entity augmentation
   console.log('Running Pass A: Extracting mentions...');
+
+  // Build entities context for Pass A
+  const entitiesContext = entities.map(e =>
+    `[${e.label}] "${e.value}" at ${e.startMs}ms (${e.speaker || 'unknown'})`
+  ).join('\n');
 
   const passAResponse = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -275,7 +282,7 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       { role: "system", content: passAPrompt },
       {
         role: "user",
-        content: `CALL_META:\n- call_started_at_iso: ${new Date().toISOString()}\n- tz: America/New_York\n\nTRANSCRIPT:\n${formattedTranscript}`
+        content: `CALL_META:\n- call_started_at_iso: ${new Date().toISOString()}\n- tz: America/New_York\n\nDEEPGRAM_ENTITIES:\n${entitiesContext || '(none detected)'}\n\nTRANSCRIPT:\n${formattedTranscript}`
       }
     ],
     temperature: 0.1,
@@ -283,7 +290,14 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
   });
 
   const mentionsTable = JSON.parse(passAResponse.choices[0].message.content || "{}");
-  console.log(`Pass A complete: ${mentionsTable.money_mentions?.length || 0} money mentions, ${mentionsTable.objection_spans?.length || 0} objections found`);
+
+  // Augment mentions with Deepgram entities
+  augmentMentionsWithEntities(mentionsTable, entities);
+
+  // Add timestamps to all mentions using position-to-timestamp mapping
+  addTimestampsToMentions(mentionsTable, segments, formattedTranscript);
+
+  console.log(`Pass A complete: ${mentionsTable.money_mentions?.length || 0} money mentions (${entities.filter(e => e.label === 'money').length} from entities), ${mentionsTable.objection_spans?.length || 0} objections found`);
 
   // Step 2b: Run rebuttals detection if objections exist
   let rebuttals = null;
@@ -303,6 +317,13 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
 
   // Step 3: Pass B - Generate final white card
   console.log('Running Pass B: Generating final white card...');
+
+  console.log('=== PASS B INPUT DEBUG ===');
+  console.log('Money mentions count:', mentionsTable.money_mentions?.length || 0);
+  console.log('Carrier mentions count:', mentionsTable.carrier_mentions?.length || 0);
+  console.log('Objection spans count:', mentionsTable.objection_spans?.length || 0);
+  console.log('First money mention:', JSON.stringify(mentionsTable.money_mentions?.[0], null, 2));
+  console.log('First carrier mention:', JSON.stringify(mentionsTable.carrier_mentions?.[0], null, 2));
 
   const passBResponse = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -325,6 +346,12 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
   });
 
   const analysis = JSON.parse(passBResponse.choices[0].message.content || "{}");
+
+  console.log('=== PASS B DEBUG ===');
+  console.log('Raw Pass B response:', passBResponse.choices[0].message.content);
+  console.log('Parsed analysis:', JSON.stringify(analysis, null, 2));
+  console.log('Mentions table passed to Pass B had money_mentions:', mentionsTable.money_mentions?.length || 0);
+  console.log('Mentions table passed to Pass B had carrier_mentions:', mentionsTable.carrier_mentions?.length || 0);
 
   // Step 3b: Apply deterministic money normalization
   // Store both raw and normalized values for auditing
@@ -386,12 +413,26 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
     ? computeTalkMetrics(segments)
     : { talk_time_agent_sec: 0, talk_time_customer_sec: 0, silence_time_sec: 0, interrupt_count: 0 };
 
+  // Prepare entities summary
+  const entitiesSummary = summarizeEntities(entities);
+
+  // List enabled Deepgram features
+  const dgFeatures = [
+    'smart_format',
+    'utterances (utt_split=1.1)',
+    'diarize',
+    'detect_entities',
+    'punctuate',
+    'numerals',
+    'paragraphs'
+  ];
+
   // Step 4: Return combined result
   return {
     transcript: formattedTranscript,
     utterance_count: utterances.length,
-    duration: result?.results?.channels?.[0]?.alternatives?.[0]?.words?.slice(-1)[0]?.end || 0,
-    deepgram_summary: deepgramSummary,
+    duration: enrichedResult.duration || 0,
+    deepgram_summary: enrichedResult.summary,
     mentions_table: mentionsTable,  // Include Pass A results for debugging
     analysis: {
       ...analysis,
@@ -403,9 +444,11 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       immediate: immediate
     } : null,  // Include rebuttals with immediate responses if detected
     talk_metrics,
+    dg_features: dgFeatures,  // New field: list of enabled Deepgram features
+    entities_summary: entitiesSummary,  // New field: summary of detected entities
     metadata: {
       model: "two-pass-v1",
-      deepgram_request_id: result?.metadata?.request_id,
+      deepgram_request_id: enrichedResult.requestId,
       processed_at: new Date().toISOString(),
       agent_name: meta?.agent_name || null,
       agent_id: meta?.agent_id || null,
@@ -421,4 +464,149 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any) {
       }
     }
   };
+}
+
+/**
+ * Convert character position to timestamp using segments
+ */
+function positionToTimestamp(position: number, segments: Segment[], formattedTranscript: string): number | null {
+  if (!segments || segments.length === 0 || position < 0) return null;
+
+  // Build a cumulative character offset map for each segment
+  let charOffset = 0;
+  for (const segment of segments) {
+    const segmentText = `Speaker ${segment.speaker === 'agent' ? '0' : '1'}: ${segment.text}\n\n`;
+    const segmentLength = segmentText.length;
+
+    // If position falls within this segment, return its start timestamp
+    if (position >= charOffset && position < charOffset + segmentLength) {
+      return segment.startMs;
+    }
+
+    charOffset += segmentLength;
+  }
+
+  // If position is beyond all segments, return the last segment's end time
+  return segments[segments.length - 1]?.endMs || null;
+}
+
+/**
+ * Augment mentions with timestamps from positions
+ */
+function addTimestampsToMentions(mentions: any, segments: Segment[], formattedTranscript: string) {
+  // Add timestamps to money mentions
+  if (mentions.money_mentions) {
+    for (const mention of mentions.money_mentions) {
+      if (!mention.timestamp_ms && mention.position) {
+        mention.timestamp_ms = positionToTimestamp(mention.position, segments, formattedTranscript);
+      }
+    }
+  }
+
+  // Add timestamps to carrier mentions
+  if (mentions.carrier_mentions) {
+    for (const mention of mentions.carrier_mentions) {
+      if (!mention.timestamp_ms && mention.position) {
+        mention.timestamp_ms = positionToTimestamp(mention.position, segments, formattedTranscript);
+      }
+    }
+  }
+
+  // Add timestamps to date mentions
+  if (mentions.date_mentions) {
+    for (const mention of mentions.date_mentions) {
+      if (!mention.timestamp_ms && mention.position) {
+        mention.timestamp_ms = positionToTimestamp(mention.position, segments, formattedTranscript);
+      }
+    }
+  }
+
+  // Add timestamps to objection spans
+  if (mentions.objection_spans) {
+    for (const objection of mentions.objection_spans) {
+      if ((!objection.startMs || objection.startMs === 0) && objection.position) {
+        const ts = positionToTimestamp(objection.position, segments, formattedTranscript);
+        objection.startMs = ts || 0;
+        objection.endMs = ts ? ts + 2000 : 0; // Assume 2 second duration for objections
+      }
+    }
+  }
+}
+
+/**
+ * Augment mentions with Deepgram entities
+ */
+function augmentMentionsWithEntities(mentions: any, entities: Entity[]) {
+  // Add money entities with timestamps
+  const moneyEntities = entities.filter(e => e.label === 'money');
+  for (const entity of moneyEntities) {
+    const exists = mentions.money_mentions?.some((m: any) =>
+      m.quote?.includes(entity.value) || m.value_raw?.includes(entity.value)
+    );
+
+    if (!exists) {
+      mentions.money_mentions = mentions.money_mentions || [];
+      mentions.money_mentions.push({
+        field_hint: 'generic',
+        value_raw: entity.value,
+        quote: entity.value,
+        position: 0,
+        speaker: entity.speaker || 'unknown',
+        source: 'deepgram_entity',
+        timestamp_ms: entity.startMs
+      });
+    }
+  }
+
+  // Add organization entities as potential carriers with timestamps
+  const orgEntities = entities.filter(e => e.label === 'organization');
+  for (const entity of orgEntities) {
+    const exists = mentions.carrier_mentions?.some((c: any) =>
+      c.carrier === entity.value || c.quote?.includes(entity.value)
+    );
+
+    if (!exists) {
+      mentions.carrier_mentions = mentions.carrier_mentions || [];
+      mentions.carrier_mentions.push({
+        carrier: entity.value,
+        quote: entity.value,
+        position: 0,
+        source: 'deepgram_entity',
+        timestamp_ms: entity.startMs
+      });
+    }
+  }
+
+  // Add date entities with timestamps
+  const dateEntities = entities.filter(e => e.label === 'date');
+  for (const entity of dateEntities) {
+    const exists = mentions.date_mentions?.some((d: any) =>
+      d.value_raw === entity.value || d.quote?.includes(entity.value)
+    );
+
+    if (!exists) {
+      mentions.date_mentions = mentions.date_mentions || [];
+      mentions.date_mentions.push({
+        kind: 'generic',
+        value_raw: entity.value,
+        quote: entity.value,
+        position: 0,
+        source: 'deepgram_entity',
+        timestamp_ms: entity.startMs
+      });
+    }
+  }
+}
+
+/**
+ * Summarize detected entities by type
+ */
+function summarizeEntities(entities: Entity[]) {
+  const summary: Record<string, number> = {};
+
+  for (const entity of entities) {
+    summary[entity.label] = (summary[entity.label] || 0) + 1;
+  }
+
+  return summary;
 }

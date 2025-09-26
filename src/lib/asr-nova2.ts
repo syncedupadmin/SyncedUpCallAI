@@ -1,4 +1,4 @@
-// src/lib/asr-nova2-optimized.ts
+// src/lib/asr-nova2.ts
 import { createClient } from "@deepgram/sdk";
 
 export type Segment = {
@@ -7,6 +7,14 @@ export type Segment = {
   endMs: number;
   text: string;
   conf: number;
+};
+
+export type Entity = {
+  label: string;
+  value: string;
+  startMs: number;
+  endMs: number;
+  speaker?: "agent" | "customer" | null;
 };
 
 export type KeyPhrase = {
@@ -22,6 +30,7 @@ export type EnrichedTranscript = {
   segments: Segment[];
   asrQuality: "poor" | "fair" | "good" | "excellent";
   keyPhrases: KeyPhrase[];
+  entities?: Entity[];
   conversationMetrics: {
     totalDuration: number;
     agentTalkTime: number;
@@ -68,8 +77,24 @@ const PRICE_CORRECTIONS: Record<string, string> = {
   "$5.00": "$500"
 };
 
-export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscript> {
+export type AsrOverrides = {
+  model?: string;
+  utt_split?: number;
+  diarize?: boolean;
+  utterances?: boolean;
+  smart_format?: boolean;
+  punctuate?: boolean;
+  numerals?: boolean;
+  paragraphs?: boolean;
+  detect_entities?: boolean;
+  keywords?: Array<[string, number]>;
+};
+
+export async function transcribeFromUrl(mp3Url: string, overrides?: AsrOverrides): Promise<EnrichedTranscript> {
   console.log('Starting transcription for URL:', mp3Url);
+  if (overrides) {
+    console.log('ASR overrides provided:', overrides);
+  }
 
   // Define search terms array - REDUCED TO 20 CRITICAL TERMS FOR SPEED
   const searchTerms = [
@@ -102,38 +127,40 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
 
   console.log('SEARCH TERMS COUNT:', searchTerms.length);
 
+  // Convert keywords from overrides format [["term", weight]] to Deepgram format ["term:weight"]
+  const keywordsFromOverrides = overrides?.keywords?.map(([term, weight]) => `${term}:${weight}`) || [];
+
   const options = {
-    model: "nova-2-phonecall",
-      
+    model: overrides?.model || "nova-2-phonecall",
+
       // ESSENTIAL - Cannot remove
-      diarize: true,
-      utterances: true,
-      utt_split: 0.9,
-      
+      diarize: overrides?.diarize !== undefined ? overrides.diarize : true,
+      utterances: overrides?.utterances !== undefined ? overrides.utterances : true,
+      utt_split: overrides?.utt_split !== undefined ? overrides.utt_split : 1.1,
+
       // FREE formatting
-      smart_format: true,
-      punctuate: true,
-      numerals: true,
-      paragraphs: true,
-      
-      // ALL INTELLIGENCE FEATURES REMOVED (100x boost!)
+      smart_format: overrides?.smart_format !== undefined ? overrides.smart_format : true,
+      punctuate: overrides?.punctuate !== undefined ? overrides.punctuate : true,
+      numerals: overrides?.numerals !== undefined ? overrides.numerals : true,
+      paragraphs: overrides?.paragraphs !== undefined ? overrides.paragraphs : true,
+
+      // Entity detection
+      detect_entities: overrides?.detect_entities !== undefined ? overrides.detect_entities : true,
+
+      // NO SENTIMENT
       // sentiment: false,
-      // intents: false,
-      // detect_entities: false,
-      // topics: false,
-      // summarize: false,
-      
+
       // COMPREHENSIVE SEARCH PATTERNS (using searchTerms variable)
       search: searchTerms,
-      
-      // MINIMAL KEYWORDS
-      keywords: [
+
+      // KEYWORDS - use overrides if provided, otherwise use defaults
+      keywords: keywordsFromOverrides.length > 0 ? keywordsFromOverrides : [
         "PPO:1.5",
         "HMO:1.5",
         "copay:1.5",
         "deductible:1.5"
       ],
-      
+
       // Remove filler words to save tokens
       filler_words: false
   };
@@ -141,6 +168,16 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
   console.log('=== CALLING DEEPGRAM ===');
   console.log('URL:', mp3Url);
   console.log('Search terms:', searchTerms.length);
+  console.log('Features enabled:', {
+    smart_format: true,
+    diarize: true,
+    utterances: true,
+    utt_split: 1.1,
+    detect_entities: true,
+    punctuate: true,
+    numerals: true,
+    paragraphs: true
+  });
 
   let resp;
   let lastError;
@@ -170,6 +207,14 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       console.log('Utterances length:', debugResults?.utterances?.length || 0);
       console.log('Has channels?:', !!debugResults?.channels);
       console.log('Channels length:', debugResults?.channels?.length || 0);
+
+      // Check for entities
+      const entities = debugResults?.channels?.[0]?.alternatives?.[0]?.entities;
+      console.log('Has entities?:', !!entities);
+      console.log('Entities length:', entities?.length || 0);
+      if (entities && entities.length > 0) {
+        console.log('First 3 entities:', entities.slice(0, 3));
+      }
 
       // If no utterances but has channels, show what's in channels
       if (!debugResults?.utterances?.length && debugResults?.channels?.length) {
@@ -276,28 +321,28 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
   // Process segments with price fixing
   const segments: Segment[] = uts.map((u: any, idx: number, all: any[]) => {
     const prevUtt = idx > 0 ? all[idx - 1] : null;
-    
+
     let text = String(u.transcript || "");
-    
+
     // === FIX PRICE FORMATTING ===
     // Fix "$2.50 per month" → "$250 per month"
     if (text.match(/\$\d\.\d{2}\s*(per|a|\/)\s*month/i)) {
-      text = text.replace(/\$(\d)\.(\d{2})\s*(per|a|\/)\s*month/gi, 
+      text = text.replace(/\$(\d)\.(\d{2})\s*(per|a|\/)\s*month/gi,
         (match, dollars, cents) => `$${dollars}${cents} per month`);
     }
-    
+
     // Fix common price shortcuts
     Object.entries(PRICE_CORRECTIONS).forEach(([wrong, right]) => {
       const regex = new RegExp(wrong.replace('$', '\\$'), 'g');
       text = text.replace(regex, right);
     });
-    
+
     // Fix card/routing numbers with decimals
     if (prevUtt && prevUtt.transcript.match(/card|routing|account|CVV/i)) {
       // Remove decimals from number sequences
       text = text.replace(/\b(\d)\.(\d+)\b/g, "$1$2");
     }
-    
+
     // Redact any 7+ digit numbers (except phone)
     text = text.replace(/\b\d{7,}\b/g, (match) => {
       // Keep if it looks like a phone number
@@ -306,10 +351,9 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       }
       return "#######";
     });
-    
+
     return {
-      // Keep raw speaker IDs since we handle multi-party calls
-      speaker: `speaker_${u.speaker}` as any,
+      speaker: u.speaker === 0 ? "agent" : "customer",
       startMs: Math.round(u.start * 1000),
       endMs: Math.round(u.end * 1000),
       text: text,
@@ -327,6 +371,54 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
     })));
   }
 
+  // Process entities if available
+  let processedEntities: Entity[] = [];
+  const entitiesRaw = channels[0]?.alternatives?.[0]?.entities;
+
+  if (entitiesRaw && Array.isArray(entitiesRaw)) {
+    console.log('Processing entities:', entitiesRaw.length);
+
+    processedEntities = entitiesRaw.map((entity: any) => {
+      // Calculate timestamps from character offsets if available
+      const words = channels[0]?.alternatives?.[0]?.words || [];
+      let startMs = 0;
+      let endMs = 0;
+      let speaker: "agent" | "customer" | null = null;
+
+      // Try to find the word that contains this entity based on character offsets
+      if (entity.start_word !== undefined && entity.end_word !== undefined && words.length > 0) {
+        const startWord = words[entity.start_word];
+        const endWord = words[entity.end_word];
+
+        if (startWord && endWord) {
+          startMs = Math.round(startWord.start * 1000);
+          endMs = Math.round(endWord.end * 1000);
+
+          // Find which utterance this falls into to determine speaker
+          const utt = uts.find((u: any) =>
+            startWord.start >= u.start && startWord.start <= u.end
+          );
+          if (utt) {
+            speaker = utt.speaker === 0 ? "agent" : "customer";
+          }
+        }
+      }
+
+      return {
+        label: entity.label || entity.type || "unknown",
+        value: entity.value || entity.text || "",
+        startMs,
+        endMs,
+        speaker
+      };
+    });
+
+    console.log('Entities processed:', processedEntities.length);
+    if (processedEntities.length > 0) {
+      console.log('First 3 processed entities:', processedEntities.slice(0, 3));
+    }
+  }
+
   // Process search results into key phrases
   const searchResults = (results as any)?.search || [];
   const keyPhrases: KeyPhrase[] = searchResults.flatMap((searchItem: any) =>
@@ -334,19 +426,19 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       .filter((hit: any) => hit.confidence > 0.6)
       .map((hit: any) => {
         const query = searchItem.query?.toLowerCase() || "";
-        
+
         // Categorize the phrase
         let type: KeyPhrase["type"] = "other";
         let category = "general";
-        
+
         // Opening objections
-        if (query.includes("tenth person") || query.includes("never looking") || 
+        if (query.includes("tenth person") || query.includes("never looking") ||
             query.includes("weeks ago") || query.includes("just looking")) {
           type = "objection";
           category = "opening";
         }
         // Closing objections
-        else if (query.includes("talk to my") || query.includes("send me") || 
+        else if (query.includes("talk to my") || query.includes("send me") ||
                  query.includes("too good") || query.includes("call me back")) {
           type = "objection";
           category = "closing";
@@ -358,7 +450,7 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
           category = "response";
         }
         // Payment
-        else if (query.includes("visa") || query.includes("mastercard") || 
+        else if (query.includes("visa") || query.includes("mastercard") ||
                  query.includes("routing") || query.includes("CVV")) {
           type = "payment";
           category = "capture";
@@ -373,14 +465,14 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
           type = "compliance";
           category = "critical";
         }
-        
+
         // Find speaker
         const hitTime = hit.start;
-        const speakerUtt = uts.find((u: any) => 
+        const speakerUtt = uts.find((u: any) =>
           hitTime >= u.start && hitTime <= u.end
         );
         const speaker = speakerUtt?.speaker === 0 ? "agent" : "customer";
-        
+
         return {
           phrase: searchItem.query,
           type,
@@ -393,26 +485,20 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
   );
 
   // Calculate conversation metrics
-  const totalDuration = segments.length > 0 
-    ? segments[segments.length - 1].endMs 
+  const totalDuration = segments.length > 0
+    ? segments[segments.length - 1].endMs
     : 0;
 
-  // For multi-party calls, speaker_0 is usually the first speaker (could be agent or customer)
-  // We'll count all speakers for now since we can't reliably identify roles
-  const speaker0Segments = segments.filter(s => (s.speaker as any) === "speaker_0");
-  const otherSpeakerSegments = segments.filter(s => (s.speaker as any) !== "speaker_0");
+  const agentSegments = segments.filter(s => s.speaker === "agent");
+  const customerSegments = segments.filter(s => s.speaker === "customer");
 
-  const speaker0TalkTime = speaker0Segments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
-  const otherSpeakersTalkTime = otherSpeakerSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+  const agentTalkTime = agentSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+  const customerTalkTime = customerSegments.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
 
-  // For compatibility, we'll map speaker_0 to agent metrics and others to customer
-  const agentTalkTime = speaker0TalkTime;
-  const customerTalkTime = otherSpeakersTalkTime;
-  
   // Calculate overlapping talk
   let overlappingTalkTime = 0;
   let interruptionCount = 0;
-  
+
   for (let i = 1; i < segments.length; i++) {
     if (segments[i].speaker !== segments[i-1].speaker) {
       const overlap = segments[i-1].endMs - segments[i].startMs;
@@ -422,7 +508,7 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       }
     }
   }
-  
+
   // Response latency
   const responseLatencies: number[] = [];
   for (let i = 1; i < segments.length; i++) {
@@ -433,7 +519,7 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
       }
     }
   }
-  
+
   const avgResponseLatency = responseLatencies.length > 0
     ? responseLatencies.reduce((a, b) => a + b, 0) / responseLatencies.length
     : 0;
@@ -457,11 +543,13 @@ export async function transcribeFromUrl(mp3Url: string): Promise<EnrichedTranscr
   console.log('Returning segments:', segments.length);
   console.log('ASR quality:', asrQuality);
   console.log('Key phrases found:', keyPhrases.length);
+  console.log('Entities found:', processedEntities.length);
 
   return {
     segments,
     asrQuality,
     keyPhrases,
+    entities: processedEntities.length > 0 ? processedEntities : undefined,
     conversationMetrics: {
       totalDuration,
       agentTalkTime,
@@ -492,7 +580,7 @@ function calculateSalesMetrics(keyPhrases: KeyPhrase[], segments: Segment[]): En
 
   // Find plan search
   const searchPhrases = keyPhrases.filter(kp =>
-    kp.phrase.includes("let me look") || 
+    kp.phrase.includes("let me look") ||
     kp.phrase.includes("hold on") ||
     kp.phrase.includes("one moment")
   );
@@ -501,7 +589,7 @@ function calculateSalesMetrics(keyPhrases: KeyPhrase[], segments: Segment[]): En
     metrics.searchOccurred = true;
     const searchTime = searchPhrases[0].timestamp;
     metrics.rapportDuration = searchTime;
-    
+
     // Find next speech after hold
     const nextSegment = segments.find(s => s.startMs > searchTime + 1000);
     if (nextSegment) {
@@ -510,7 +598,7 @@ function calculateSalesMetrics(keyPhrases: KeyPhrase[], segments: Segment[]): En
   }
 
   // Payment capture
-  metrics.cardRequested = keyPhrases.some(kp => 
+  metrics.cardRequested = keyPhrases.some(kp =>
     kp.phrase.includes("visa or mastercard") ||
     kp.phrase.includes("credit or debit")
   );
@@ -538,4 +626,21 @@ function calculateSalesMetrics(keyPhrases: KeyPhrase[], segments: Segment[]): En
   metrics.rebuttalCount = keyPhrases.filter(kp => kp.type === "rebuttal").length;
 
   return metrics;
+}
+
+// Wrapper function for simple-analysis.ts compatibility
+export async function transcribeBulk(audioUrl: string, overrides?: AsrOverrides) {
+  const enriched = await transcribeFromUrl(audioUrl, overrides);
+
+  // Return simplified format for simple-analysis
+  return {
+    segments: enriched.segments,
+    entities: enriched.entities || [],
+    formatted: enriched.segments.map(s =>
+      `Speaker ${s.speaker === 'agent' ? 0 : 1}: ${s.text}`
+    ).join('\n\n'),
+    summary: null, // Summary is not available in keyPhrases
+    duration: enriched.conversationMetrics?.totalDuration || 0,
+    requestId: null // We don't have this in the new format
+  };
 }

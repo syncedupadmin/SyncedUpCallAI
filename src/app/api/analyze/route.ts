@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeCallUnified } from "@/lib/unified-analysis";
 import { sbAdmin } from "@/lib/supabase-admin";
+import { SettingsSchema, mergeSettings, type Settings } from "@/config/asr-analysis";
 
 // Let this function actually run long enough and never get cached
 export const runtime = "nodejs";
@@ -10,16 +11,32 @@ export const maxDuration = 60; // Vercel Pro allows 60s. If on Hobby, keep ≤10
 
 export async function POST(req: NextRequest) {
   try {
-    const { recording_url, meta } = await req.json();
+    const raw = await req.json();
+    const recording_url = raw.recording_url ?? raw.url;
+    const partialSettings = raw.settings;
+    const meta = raw.meta;
 
     if (!recording_url) {
       return NextResponse.json({ error: "recording_url required" }, { status: 400 });
+    }
+
+    // Validate and merge settings
+    let settings: Settings;
+    try {
+      const validated = partialSettings ? SettingsSchema.partial().parse(partialSettings) : {};
+      settings = mergeSettings(validated);
+    } catch (err: any) {
+      return NextResponse.json({
+        error: "Invalid settings",
+        details: err.errors || err.message
+      }, { status: 400 });
     }
 
     console.log('=== UNIFIED ANALYSIS ROUTE ===');
     console.log('URL being analyzed:', recording_url);
     console.log('Timestamp:', new Date().toISOString());
     console.log('Meta data:', meta);
+    console.log('Settings:', settings);
 
     // Use the unified analysis that includes:
     // - Two-pass extraction system
@@ -28,7 +45,8 @@ export async function POST(req: NextRequest) {
     // - All new fields from test-simple
     const result = await analyzeCallUnified(recording_url, meta, {
       includeScores: true,  // Include backward compatibility scores for existing UI
-      skipRebuttals: false  // Include full rebuttals analysis
+      skipRebuttals: false,  // Include full rebuttals analysis
+      settings  // Pass settings to analysis
     });
 
     console.log('=== ANALYSIS COMPLETE ===');
@@ -74,10 +92,10 @@ export async function POST(req: NextRequest) {
       sentiment_agent: result.sentiment_agent || 0.7,
       sentiment_customer: result.sentiment_customer || 0.5,
 
-      // Talk metrics (from analysis)
-      talk_metrics: {
-        talk_time_agent_sec: Math.round(result.duration * 0.6) || 0,
-        talk_time_customer_sec: Math.round(result.duration * 0.4) || 0,
+      // Talk metrics (from analysis) - use actual computed metrics, not fake percentages
+      talk_metrics: result.talk_metrics || {
+        talk_time_agent_sec: 0,
+        talk_time_customer_sec: 0,
         silence_time_sec: 0,
         interrupt_count: 0
       },

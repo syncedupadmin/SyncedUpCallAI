@@ -1,483 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { DEFAULTS, Settings, SettingsSchema } from '@/config/asr-analysis';
+import { useState, useEffect } from 'react';
 
-type SettingsFormProps = {
-  value: Settings;
-  onChange(next: Settings): void;
-  disabled?: boolean;
-  onReset(): void;
-  onCopyLink(): void;
-  errors?: Record<string, string>;
-};
-
-function SettingsForm(props: SettingsFormProps) {
-  const { value, onChange, disabled = false, onReset, onCopyLink, errors = {} } = props;
-
-  const updateAsr = <K extends keyof Settings['asr']>(key: K, val: Settings['asr'][K]) => {
-    onChange({ ...value, asr: { ...value.asr, [key]: val } });
-  };
-
-  const updateMoney = <K extends keyof Settings['money']>(key: K, val: Settings['money'][K]) => {
-    onChange({ ...value, money: { ...value.money, [key]: val } });
-  };
-
-  const updateRebuttal = <K extends keyof Settings['rebuttal']>(key: K, val: Settings['rebuttal'][K]) => {
-    onChange({ ...value, rebuttal: { ...value.rebuttal, [key]: val } });
-  };
-
-  const updateInterrupt = <K extends keyof Settings['interrupt']>(key: K, val: Settings['interrupt'][K]) => {
-    onChange({ ...value, interrupt: { ...value.interrupt, [key]: val } });
-  };
-
-  const addKeyword = () => {
-    const newKeywords: [string, number][] = [...value.asr.keywords, ['', 2]];
-    updateAsr('keywords', newKeywords);
-  };
-
-  const removeKeyword = (idx: number) => {
-    const newKeywords = value.asr.keywords.filter((_, i) => i !== idx);
-    updateAsr('keywords', newKeywords);
-  };
-
-  const updateKeyword = (idx: number, term: string, weight: number) => {
-    const newKeywords = value.asr.keywords.map((kw, i) =>
-      i === idx ? [term, weight] as [string, number] : kw
-    );
-    updateAsr('keywords', newKeywords);
-  };
-
-  const ErrorMessage = ({ path }: { path: string }) => {
-    const err = errors[path];
-    return err ? <div className="text-red-600 text-sm mt-1">{err}</div> : null;
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onReset}
-          disabled={disabled}
-          className="px-4 py-2 bg-gray-500 text-white text-sm font-semibold rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Reset to defaults
-        </button>
-        <button
-          type="button"
-          onClick={onCopyLink}
-          disabled={disabled}
-          className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Copy link with settings
-        </button>
-      </div>
-
-      <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">ASR Settings</legend>
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="model" className="block text-sm font-semibold text-gray-700 mb-1">
-              Model
-            </label>
-            <select
-              id="model"
-              value={value.asr.model}
-              onChange={(e) => updateAsr('model', e.target.value as 'nova-2-phonecall' | 'nova-2' | 'nova-3')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
-            >
-              <option value="nova-2-phonecall">nova-2-phonecall</option>
-              <option value="nova-2">nova-2</option>
-              <option value="nova-3">nova-3</option>
-            </select>
-            <ErrorMessage path="asr.model" />
-          </div>
-
-          <div>
-            <label htmlFor="utt_split" className="block text-sm font-semibold text-gray-700 mb-1">
-              Utterance Split (0.4 - 2.0)
-            </label>
-            <input
-              id="utt_split"
-              type="number"
-              step="0.1"
-              min="0.4"
-              max="2.0"
-              value={value.asr.utt_split}
-              onChange={(e) => updateAsr('utt_split', parseFloat(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-            />
-            <ErrorMessage path="asr.utt_split" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {(['diarize', 'utterances', 'smart_format', 'punctuate', 'numerals', 'paragraphs', 'detect_entities'] as const).map((key) => (
-              <label key={key} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={value.asr[key]}
-                  onChange={(e) => updateAsr(key, e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-gray-700">{key.replace(/_/g, ' ')}</span>
-              </label>
-            ))}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-semibold text-gray-700">
-                Keywords (term, weight 1-5)
-              </label>
-              <button
-                type="button"
-                onClick={addKeyword}
-                className="px-3 py-1 bg-green-500 text-white text-xs font-semibold rounded hover:bg-green-600"
-              >
-                Add
-              </button>
-            </div>
-            <div className="space-y-2">
-              {value.asr.keywords.map((kw, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={kw[0]}
-                    onChange={(e) => updateKeyword(idx, e.target.value, kw[1])}
-                    placeholder="Carrier name"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="5"
-                    value={kw[1]}
-                    onChange={(e) => updateKeyword(idx, kw[0], Math.max(1, Math.min(5, parseInt(e.target.value) || 2)))}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeKeyword(idx)}
-                    className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded hover:bg-red-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-            <ErrorMessage path="asr.keywords" />
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Money Settings</legend>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="premiumHundredsIfUnder" className="block text-sm font-semibold text-gray-700 mb-1">
-              Premium Hundreds If Under (0-200)
-            </label>
-            <input
-              id="premiumHundredsIfUnder"
-              type="number"
-              min="0"
-              max="200"
-              value={value.money.premiumHundredsIfUnder}
-              onChange={(e) => updateMoney('premiumHundredsIfUnder', parseInt(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-            />
-            <ErrorMessage path="money.premiumHundredsIfUnder" />
-          </div>
-          <div>
-            <label htmlFor="feeHundredsIfUnder" className="block text-sm font-semibold text-gray-700 mb-1">
-              Fee Hundreds If Under (0-200)
-            </label>
-            <input
-              id="feeHundredsIfUnder"
-              type="number"
-              min="0"
-              max="200"
-              value={value.money.feeHundredsIfUnder}
-              onChange={(e) => updateMoney('feeHundredsIfUnder', parseInt(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-            />
-            <ErrorMessage path="money.feeHundredsIfUnder" />
-          </div>
-          <div>
-            <label htmlFor="priceCarrierWindowMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Price Carrier Window Ms (0-120000)
-            </label>
-            <input
-              id="priceCarrierWindowMs"
-              type="number"
-              min="0"
-              max="120000"
-              value={value.money.priceCarrierWindowMs}
-              onChange={(e) => updateMoney('priceCarrierWindowMs', parseInt(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-              />
-            <ErrorMessage path="money.priceCarrierWindowMs" />
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Rebuttal Settings</legend>
-        <div>
-          <label htmlFor="rebuttalWindowMs" className="block text-sm font-semibold text-gray-700 mb-1">
-            Window Ms (1000-600000)
-          </label>
-          <input
-            id="rebuttalWindowMs"
-            type="number"
-            min="1000"
-            max="600000"
-            value={value.rebuttal.windowMs}
-            onChange={(e) => updateRebuttal('windowMs', parseInt(e.target.value) || 1000)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-          />
-          <ErrorMessage path="rebuttal.windowMs" />
-        </div>
-      </fieldset>
-
-      <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Interrupt Settings</legend>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="maxGapMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Max Gap Ms (50-2000)
-            </label>
-            <input
-              id="maxGapMs"
-              type="number"
-              min="50"
-              max="2000"
-              value={value.interrupt.maxGapMs}
-              onChange={(e) => updateInterrupt('maxGapMs', parseInt(e.target.value) || 50)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-            />
-            <ErrorMessage path="interrupt.maxGapMs" />
-          </div>
-          <div>
-            <label htmlFor="prevMinDurMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Previous Min Duration Ms (200-5000)
-            </label>
-            <input
-              id="prevMinDurMs"
-              type="number"
-              min="200"
-              max="5000"
-              value={value.interrupt.prevMinDurMs}
-              onChange={(e) => updateInterrupt('prevMinDurMs', parseInt(e.target.value) || 200)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-            />
-            <ErrorMessage path="interrupt.prevMinDurMs" />
-          </div>
-        </div>
-      </fieldset>
-    </div>
-  );
-}
-
-function SuperAdminTestPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
+export default function SuperAdminTestPage() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
 
-  const [settings, setSettings] = useState<Settings>(() => JSON.parse(JSON.stringify(DEFAULTS)));
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [collapsed, setCollapsed] = useState(false);
-  const LS_KEY = 'suai.test.settings.v1';
-
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-
-  const parseSettingsFromURL = (params: URLSearchParams): Partial<Settings> => {
-    const partial: any = { asr: {}, money: {}, rebuttal: {}, interrupt: {} };
-
-    if (params.has('model')) partial.asr.model = params.get('model');
-    if (params.has('utt_split')) partial.asr.utt_split = parseFloat(params.get('utt_split')!);
-    if (params.has('diarize')) partial.asr.diarize = params.get('diarize') === '1';
-    if (params.has('utterances')) partial.asr.utterances = params.get('utterances') === '1';
-    if (params.has('smart_format')) partial.asr.smart_format = params.get('smart_format') === '1';
-    if (params.has('punctuate')) partial.asr.punctuate = params.get('punctuate') === '1';
-    if (params.has('numerals')) partial.asr.numerals = params.get('numerals') === '1';
-    if (params.has('paragraphs')) partial.asr.paragraphs = params.get('paragraphs') === '1';
-    if (params.has('detect_entities')) partial.asr.detect_entities = params.get('detect_entities') === '1';
-
-    if (params.has('kw')) {
-      const kwStr = params.get('kw')!;
-      const keywords: [string, number][] = kwStr.split(',').map((pair) => {
-        const [term, weight] = pair.split(':');
-        return [decodeURIComponent(term), parseInt(weight) || 2];
-      });
-      partial.asr.keywords = keywords;
-    }
-
-    if (params.has('premiumHundredsIfUnder')) partial.money.premiumHundredsIfUnder = parseInt(params.get('premiumHundredsIfUnder')!);
-    if (params.has('feeHundredsIfUnder')) partial.money.feeHundredsIfUnder = parseInt(params.get('feeHundredsIfUnder')!);
-    if (params.has('priceCarrierWindowMs')) partial.money.priceCarrierWindowMs = parseInt(params.get('priceCarrierWindowMs')!);
-
-    if (params.has('rebuttalWindowMs')) partial.rebuttal.windowMs = parseInt(params.get('rebuttalWindowMs')!);
-
-    if (params.has('interruptMaxGapMs')) partial.interrupt.maxGapMs = parseInt(params.get('interruptMaxGapMs')!);
-    if (params.has('interruptPrevMinDurMs')) partial.interrupt.prevMinDurMs = parseInt(params.get('interruptPrevMinDurMs')!);
-
-    return partial;
-  };
-
-  const encodeSettingsToURL = (s: Settings): URLSearchParams => {
-    const params = new URLSearchParams();
-
-    if (s.asr.model !== DEFAULTS.asr.model) params.set('model', s.asr.model);
-    if (s.asr.utt_split !== DEFAULTS.asr.utt_split) params.set('utt_split', s.asr.utt_split.toString());
-    if (s.asr.diarize !== DEFAULTS.asr.diarize) params.set('diarize', s.asr.diarize ? '1' : '0');
-    if (s.asr.utterances !== DEFAULTS.asr.utterances) params.set('utterances', s.asr.utterances ? '1' : '0');
-    if (s.asr.smart_format !== DEFAULTS.asr.smart_format) params.set('smart_format', s.asr.smart_format ? '1' : '0');
-    if (s.asr.punctuate !== DEFAULTS.asr.punctuate) params.set('punctuate', s.asr.punctuate ? '1' : '0');
-    if (s.asr.numerals !== DEFAULTS.asr.numerals) params.set('numerals', s.asr.numerals ? '1' : '0');
-    if (s.asr.paragraphs !== DEFAULTS.asr.paragraphs) params.set('paragraphs', s.asr.paragraphs ? '1' : '0');
-    if (s.asr.detect_entities !== DEFAULTS.asr.detect_entities) params.set('detect_entities', s.asr.detect_entities ? '1' : '0');
-
-    const kwStr = s.asr.keywords.map(([term, weight]) => `${encodeURIComponent(term)}:${weight}`).join(',');
-    const defaultKwStr = DEFAULTS.asr.keywords.map(([term, weight]) => `${encodeURIComponent(term)}:${weight}`).join(',');
-    if (kwStr !== defaultKwStr) params.set('kw', kwStr);
-
-    if (s.money.premiumHundredsIfUnder !== DEFAULTS.money.premiumHundredsIfUnder) {
-      params.set('premiumHundredsIfUnder', s.money.premiumHundredsIfUnder.toString());
-    }
-    if (s.money.feeHundredsIfUnder !== DEFAULTS.money.feeHundredsIfUnder) {
-      params.set('feeHundredsIfUnder', s.money.feeHundredsIfUnder.toString());
-    }
-    if (s.money.priceCarrierWindowMs !== DEFAULTS.money.priceCarrierWindowMs) {
-      params.set('priceCarrierWindowMs', s.money.priceCarrierWindowMs.toString());
-    }
-
-    if (s.rebuttal.windowMs !== DEFAULTS.rebuttal.windowMs) {
-      params.set('rebuttalWindowMs', s.rebuttal.windowMs.toString());
-    }
-
-    if (s.interrupt.maxGapMs !== DEFAULTS.interrupt.maxGapMs) {
-      params.set('interruptMaxGapMs', s.interrupt.maxGapMs.toString());
-    }
-    if (s.interrupt.prevMinDurMs !== DEFAULTS.interrupt.prevMinDurMs) {
-      params.set('interruptPrevMinDurMs', s.interrupt.prevMinDurMs.toString());
-    }
-
-    return params;
-  };
-
-  const validateAndSetErrors = (s: Settings): boolean => {
-    const result = SettingsSchema.safeParse(s);
-    if (result.success) {
-      setErrors({});
-      return true;
-    } else {
-      const errorMap: Record<string, string> = {};
-      result.error.issues.forEach((issue) => {
-        const path = issue.path.join('.');
-        errorMap[path] = issue.message;
-      });
-      setErrors(errorMap);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    let merged: Settings = JSON.parse(JSON.stringify(DEFAULTS));
-
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(LS_KEY);
-        if (stored) {
-          const lsPartial = JSON.parse(stored);
-          merged = {
-            asr: { ...merged.asr, ...lsPartial.asr },
-            money: { ...merged.money, ...lsPartial.money },
-            rebuttal: { ...merged.rebuttal, ...lsPartial.rebuttal },
-            interrupt: { ...merged.interrupt, ...lsPartial.interrupt }
-          };
-        }
-      } catch (e) {
-        console.error('Failed to parse localStorage settings:', e);
-      }
-    }
-
-    const urlPartial = parseSettingsFromURL(searchParams);
-    merged = {
-      asr: { ...merged.asr, ...urlPartial.asr },
-      money: { ...merged.money, ...urlPartial.money },
-      rebuttal: { ...merged.rebuttal, ...urlPartial.rebuttal },
-      interrupt: { ...merged.interrupt, ...urlPartial.interrupt }
-    };
-
-    const validationResult = SettingsSchema.safeParse(merged);
-    if (validationResult.success) {
-      setSettings(validationResult.data);
-      setErrors({});
-    } else {
-      setSettings(merged as Settings);
-      const errorMap: Record<string, string> = {};
-      validationResult.error.issues.forEach((issue) => {
-        const path = issue.path.join('.');
-        errorMap[path] = issue.message;
-      });
-      setErrors(errorMap);
-    }
-  }, [searchParams]);
-
-  const handleSettingsChange = (next: Settings) => {
-    setSettings(next);
-    const isValid = validateAndSetErrors(next);
-
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    debounceTimer.current = setTimeout(() => {
-      if (isValid) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LS_KEY, JSON.stringify(next));
-        }
-
-        const params = encodeSettingsToURL(next);
-        router.replace(`?${params.toString()}`, { scroll: false });
-      }
-    }, 250);
-  };
-
-  const handleReset = () => {
-    setSettings(JSON.parse(JSON.stringify(DEFAULTS)));
-    setErrors({});
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(LS_KEY);
-    }
-    router.replace(window.location.pathname, { scroll: false });
-  };
-
-  const handleCopyLink = () => {
-    const params = encodeSettingsToURL(settings);
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-    navigator.clipboard.writeText(url).then(() => {
-      alert('Link copied to clipboard!');
-    });
-  };
-
   const analyzeCall = async () => {
     if (!url) {
       setError('Please enter a recording URL');
-      return;
-    }
-
-    const isValid = validateAndSetErrors(settings);
-    if (!isValid) {
-      setError('Please fix settings errors before analyzing');
       return;
     }
 
@@ -486,10 +19,20 @@ function SuperAdminTestPageContent() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/analyze', {
+      const response = await fetch('/api/admin/test-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recording_url: url, settings })
+        body: JSON.stringify({
+          recording_url: url,
+          meta: {
+            agent_id: 'test',
+            agent_name: 'Test Agent',
+            campaign: 'test',
+            duration_sec: 0,
+            disposition: 'Unknown',
+            direction: 'outbound'
+          }
+        })
       });
 
       if (!response.ok) {
@@ -499,7 +42,6 @@ function SuperAdminTestPageContent() {
 
       const data = await response.json();
       setResult(data);
-      setCollapsed(true);
     } catch (err: any) {
       setError(err.message || 'Analysis failed');
       console.error('Analysis error:', err);
@@ -507,8 +49,6 @@ function SuperAdminTestPageContent() {
       setLoading(false);
     }
   };
-
-  const isAnalyzeDisabled = !url || loading || Object.keys(errors).length > 0 || !SettingsSchema.safeParse(settings).success;
 
   const formatMoney = (value: number | null) => {
     if (value === null || value === undefined) return '—';
@@ -525,32 +65,6 @@ function SuperAdminTestPageContent() {
     const seconds = totalSeconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
-
-  // --- Time normalization helpers (ms/seconds mix safety) ---
-  const TEN_DAYS_SEC = 10 * 24 * 60 * 60;
-
-  function toSeconds(maybeSecondsOrMs: number | null | undefined): number {
-    if (!maybeSecondsOrMs || maybeSecondsOrMs < 0) return 0;
-    const n = Number(maybeSecondsOrMs);
-    // If it's insanely large (e.g., > 10 days), it was almost certainly milliseconds.
-    return n > TEN_DAYS_SEC ? Math.round(n / 1000) : Math.round(n);
-  }
-
-  function toMsFromUnknown(n: number | null | undefined, durationMsFallback?: number) {
-    if (!n || n < 0) return null;
-    // If n looks like seconds (small), convert to ms. If it looks like ms (big), keep it.
-    if (n > TEN_DAYS_SEC) return Math.round(n); // already ms
-    // if duration is known and huge, prefer seconds→ms conversion
-    return Math.round(n * 1000);
-  }
-
-  // Guard against nonsense (negative, > duration, NaN)
-  function clampTimestampMs(ts: number | null, durationMs: number) {
-    if (ts == null || !Number.isFinite(ts)) return null;
-    if (ts < 0) return null;
-    if (ts > durationMs && ts > 1000) return null; // drop obviously bad points
-    return ts;
-  }
 
   return (
     <div className="p-6 max-w-full mx-auto bg-gray-50 min-h-screen">
@@ -575,35 +89,13 @@ function SuperAdminTestPageContent() {
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-base text-gray-900 bg-white placeholder-gray-400"
               />
             </div>
-
-            {!collapsed && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h2 className="text-xl font-bold mb-4 text-gray-900">Analysis Settings</h2>
-                <SettingsForm
-                  value={settings}
-                  onChange={handleSettingsChange}
-                  disabled={loading}
-                  onReset={handleReset}
-                  onCopyLink={handleCopyLink}
-                  errors={errors}
-                />
-              </div>
-            )}
-
             <button
               onClick={analyzeCall}
-              disabled={isAnalyzeDisabled}
+              disabled={loading}
               className="px-6 py-3 bg-blue-600 text-white text-base font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Analyzing...' : 'Analyze Recording'}
             </button>
-
-            {process.env.NODE_ENV !== 'production' && (
-              <div className="mt-2 p-2 bg-gray-100 border border-gray-300 rounded text-xs font-mono text-gray-600">
-                <div>Endpoint: <span className="font-semibold">/api/analyze</span></div>
-                <div>Body includes recording_url: <span className="font-semibold">true</span></div>
-              </div>
-            )}
           </div>
 
           {error && (
@@ -614,37 +106,7 @@ function SuperAdminTestPageContent() {
         </div>
       </div>
 
-      {result && (() => {
-        // Normalize duration and talk metrics once at the top
-        const durationSec = toSeconds(result.duration) || 180;
-        const durationMs = durationSec * 1000;
-
-        // Normalize talk metrics if present
-        const agentTalkSecRaw = result.talk_metrics?.talk_time_agent_sec ?? result.talk_metrics?.agent_seconds ?? result.talk_metrics?.agent ?? 0;
-        const customerTalkSecRaw = result.talk_metrics?.talk_time_customer_sec ?? result.talk_metrics?.customer_seconds ?? result.talk_metrics?.customer ?? 0;
-        const silenceSecRaw = result.talk_metrics?.silence_time_sec ?? result.talk_metrics?.silence_seconds ?? result.talk_metrics?.silence ?? 0;
-
-        const agentTalkSec = Math.min(toSeconds(agentTalkSecRaw), durationSec);
-        const customerTalkSec = Math.min(toSeconds(customerTalkSecRaw), durationSec);
-        let silenceSec = Math.min(toSeconds(silenceSecRaw), durationSec);
-
-        // If metrics don't sum to duration, try to balance (best-effort)
-        const total = agentTalkSec + customerTalkSec + silenceSec;
-        if (durationSec > 0 && (total === 0 || total > durationSec * 1.5)) {
-          // Fallback: recompute silence as residual if agent+customer look sane
-          const ac = agentTalkSec + customerTalkSec;
-          silenceSec = ac <= durationSec ? Math.max(0, durationSec - ac) : 0;
-        }
-
-        // Create normalized talk metrics object
-        const normalizedTalkMetrics = {
-          talk_time_agent_sec: agentTalkSec,
-          talk_time_customer_sec: customerTalkSec,
-          silence_time_sec: silenceSec,
-          interrupt_count: result.talk_metrics?.interrupt_count ?? 0
-        };
-
-        return (
+      {result && (
         <div className="space-y-6">
           {/* Core Analysis Results */}
           <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
@@ -749,10 +211,13 @@ function SuperAdminTestPageContent() {
                     <h3 className="text-lg font-bold mb-3 text-gray-800">Money Mentions</h3>
                     <div className="space-y-3">
                       {result.mentions_table.money_mentions.map((item: any, i: number) => {
+                        // Determine if ASR correction was applied based on Pass B rules
                         const getCorrectedInfo = () => {
+                          // Parse the raw value to check if correction is needed
                           const rawStr = item.value_raw?.replace(/[$,]/g, '').trim();
 
                           if (item.field_hint === 'monthly_premium' && result.analysis?.monthly_premium) {
+                            // Check if raw value is under $20 and corrected to hundreds (typical range $150-$2000)
                             if (rawStr && parseFloat(rawStr) < 20 && result.analysis.monthly_premium >= 150) {
                               return { value: `$${result.analysis.monthly_premium}`, needsCorrection: true };
                             }
@@ -760,9 +225,11 @@ function SuperAdminTestPageContent() {
                           }
 
                           if (item.field_hint === 'first_month_bill' && result.analysis?.monthly_premium) {
+                            // First month bill = premium + enrollment
                             const enrollment = result.analysis?.enrollment_fee || 0;
                             const premium = result.analysis?.monthly_premium || 0;
                             const total = premium + enrollment;
+                            // Check if raw value is under $20 and corrected to hundreds (typical total $175+)
                             if (rawStr && parseFloat(rawStr) < 20 && total >= 175) {
                               return { value: `$${total}`, needsCorrection: true };
                             }
@@ -770,13 +237,16 @@ function SuperAdminTestPageContent() {
                           }
 
                           if (item.field_hint === 'enrollment_fee' && result.analysis?.enrollment_fee) {
+                            // Enrollment fee correction: Common values are $27.50, $50, $99, $125
+                            // Check if raw is misheard version (e.g., "$0.99" → $99, "$1.25" → $125)
                             const rawNum = parseFloat(rawStr);
                             const finalNum = result.analysis.enrollment_fee;
 
-                            if ((rawNum < 2 && finalNum === 99) ||
-                                (rawNum < 2 && finalNum === 125) ||
-                                (rawNum === 27.5 && finalNum === 27.5) ||
-                                (rawNum < 10 && finalNum >= 27.5)) {
+                            // Check for common misheard patterns
+                            if ((rawNum < 2 && finalNum === 99) || // "$0.99" → $99
+                                (rawNum < 2 && finalNum === 125) || // "$1.25" → $125
+                                (rawNum === 27.5 && finalNum === 27.5) || // $27.50 stays as-is
+                                (rawNum < 10 && finalNum >= 27.5)) { // Other low values corrected
                               return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: rawNum !== finalNum };
                             }
                             return { value: `$${result.analysis.enrollment_fee}`, needsCorrection: false };
@@ -852,22 +322,7 @@ function SuperAdminTestPageContent() {
           )}
 
           {/* Rebuttals Analysis */}
-          {result.rebuttals && (() => {
-            // De-duplicate: remove from "missed" any objection that has an immediate response
-            const missed = result.rebuttals.missed ?? [];
-            const immediate = result.rebuttals.immediate ?? [];
-
-            // Build a quick key (type + rough time bucket) so nearby responses match
-            function bucketKey(o: any) {
-              const t = toMsFromUnknown(o?.timestamp_ms, durationMs) ?? 0;
-              const bucket = Math.round((t / 1000) / 5); // 5s buckets
-              return `${o?.kind || o?.type || o?.stall_type || 'unknown'}:${bucket}`;
-            }
-
-            const respondedBuckets = new Set(immediate.map((i: any) => bucketKey(i)));
-            const missedFiltered = missed.filter((m: any) => !respondedBuckets.has(bucketKey(m)));
-
-            return (
+          {result.rebuttals && (
             <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
               <div className="p-6">
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">Objection Handling Analysis</h2>
@@ -904,11 +359,11 @@ function SuperAdminTestPageContent() {
                   {/* Missed */}
                   <div>
                     <h3 className="text-lg font-bold mb-3 text-red-700">
-                      ✗ Missed Objections ({missedFiltered.length})
+                      ✗ Missed Objections ({result.rebuttals.missed?.length || 0})
                     </h3>
-                    {missedFiltered.length > 0 ? (
+                    {result.rebuttals.missed?.length > 0 ? (
                       <div className="space-y-3">
-                        {missedFiltered.map((item: any, i: number) => (
+                        {result.rebuttals.missed.map((item: any, i: number) => (
                           <div key={i} className="border-2 border-red-300 rounded-lg p-4 bg-red-50">
                             <div className="text-base font-semibold text-gray-700 mb-2">
                               [{item.ts}] {item.stall_type}
@@ -953,8 +408,7 @@ function SuperAdminTestPageContent() {
                 </div>
               </div>
             </div>
-            );
-          })()}
+          )}
 
           {/* Red Flags */}
           {result.analysis?.red_flags?.length > 0 && (
@@ -994,7 +448,7 @@ function SuperAdminTestPageContent() {
                       if (m > 0) return `${m}m ${s}s`;
                       return `${s}s`;
                     };
-                    const tm = normalizedTalkMetrics;
+                    const tm = result.talk_metrics;
                     return (
                       <>
                         <div className="bg-blue-50 p-4 rounded-lg">
@@ -1028,7 +482,7 @@ function SuperAdminTestPageContent() {
 
                 {/* Talk Ratio Bar */}
                 {(() => {
-                  const tm = normalizedTalkMetrics;
+                  const tm = result.talk_metrics;
                   const total = tm.talk_time_agent_sec + tm.talk_time_customer_sec + tm.silence_time_sec;
                   if (total > 0) {
                     const agentPct = Math.round((tm.talk_time_agent_sec / total) * 100);
@@ -1094,6 +548,7 @@ function SuperAdminTestPageContent() {
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">🏢 All Carrier Mentions</h2>
                 <div className="space-y-3">
                   {(() => {
+                    // Helper function to find nearest price within ±15s
                     const findNearestPrice = (carrierTs: number, moneyMentions: any[]) => {
                       const window = 15000;
                       let best = null;
@@ -1157,39 +612,42 @@ function SuperAdminTestPageContent() {
               <div className="p-6">
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">⏱️ Call Timeline</h2>
                 {(() => {
-                  const firstPricingTsRaw = result.mentions_table.money_mentions?.[0]?.timestamp_ms ?? null;
-                  const firstPricingTs = clampTimestampMs(toMsFromUnknown(firstPricingTsRaw, durationMs), durationMs);
-
+                  // Identify 4 key moments
+                  const firstPricingTs = result.mentions_table.money_mentions?.[0]?.timestamp_ms || null;
                   const effectiveDate = result.analysis?.policy_details?.effective_date;
-                  const effectiveDateTsRaw = result.mentions_table.date_mentions?.find((d: any) =>
+                  const effectiveDateTs = result.mentions_table.date_mentions?.find((d: any) =>
                     d.value_raw?.includes(effectiveDate?.split('-')[1] || '')
-                  )?.timestamp_ms ?? null;
-                  const effectiveDateTs = clampTimestampMs(toMsFromUnknown(effectiveDateTsRaw, durationMs), durationMs);
+                  )?.timestamp_ms || null;
 
+                  // Customer agreed: look for sale_cues like "approved", "member ID", "signature"
                   const agreedTs = result.mentions_table.signals?.sale_cues?.length > 0
-                    ? (firstPricingTs ? clampTimestampMs(firstPricingTs + 30000, durationMs) : null)
+                    ? (firstPricingTs ? firstPricingTs + 30000 : null)
                     : null;
 
+                  // Billing taken: look for redacted sequences (7+ digits)
                   const billingTs = result.transcript?.match(/#{7,}/)
-                    ? (firstPricingTs ? clampTimestampMs(firstPricingTs + 60000, durationMs) : null)
+                    ? (firstPricingTs ? firstPricingTs + 60000 : null)
                     : null;
+
+                  const callDuration = result.duration || 180; // seconds
+                  const durationMs = callDuration * 1000;
 
                   const moments = [
                     { label: 'Pricing discussed', ts: firstPricingTs, icon: '💵', color: 'bg-blue-500' },
                     { label: 'Customer agreed', ts: agreedTs, icon: '✅', color: 'bg-green-500' },
                     { label: 'Billing taken', ts: billingTs, icon: '💳', color: 'bg-purple-500' },
                     { label: 'Effective date confirmed', ts: effectiveDateTs, icon: '📅', color: 'bg-orange-500' }
-                  ].filter(m => m.ts !== null && m.ts > 0);
+                  ].filter(m => m.ts !== null);
 
-                  const timelineEvents = moments.filter(Boolean);
-                  if (timelineEvents.length === 0) {
+                  if (moments.length === 0) {
                     return <div className="text-gray-500 text-center py-8">No timeline events detected</div>;
                   }
 
                   return (
                     <div>
+                      {/* Timeline bar */}
                       <div className="relative h-3 bg-gray-200 rounded-full mb-8">
-                        {timelineEvents.map((moment, i) => {
+                        {moments.map((moment, i) => {
                           const percent = ((moment.ts! / durationMs) * 100).toFixed(1);
                           return (
                             <div
@@ -1202,8 +660,9 @@ function SuperAdminTestPageContent() {
                         })}
                       </div>
 
+                      {/* Moment labels */}
                       <div className="space-y-2">
-                        {timelineEvents.map((moment, i) => {
+                        {moments.map((moment, i) => {
                           const timeSec = Math.floor((moment.ts! / 1000));
                           const minutes = Math.floor(timeSec / 60);
                           const seconds = timeSec % 60;
@@ -1259,7 +718,7 @@ function SuperAdminTestPageContent() {
                 <div>
                   <label className="text-base font-semibold text-gray-700 block mb-1">Duration</label>
                   <div className="text-lg font-medium text-gray-800">
-                    {durationSec ? `${durationSec}s` : '—'}
+                    {result.duration ? `${Math.round(result.duration)}s` : '—'}
                   </div>
                 </div>
                 <div>
@@ -1307,35 +766,8 @@ function SuperAdminTestPageContent() {
               </div>
             </div>
           </div>
-
-          {collapsed && (
-            <details className="bg-white border border-gray-300 rounded-lg shadow-lg">
-              <summary className="p-6 cursor-pointer text-xl font-bold text-gray-900 hover:bg-gray-50">
-                Settings (advanced)
-              </summary>
-              <div className="p-6 border-t border-gray-300">
-                <SettingsForm
-                  value={settings}
-                  onChange={handleSettingsChange}
-                  disabled={loading}
-                  onReset={handleReset}
-                  onCopyLink={handleCopyLink}
-                  errors={errors}
-                />
-              </div>
-            </details>
-          )}
         </div>
-        );
-      })()}
+      )}
     </div>
-  );
-}
-
-export default function SuperAdminTestPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-center">Loading...</div>}>
-      <SuperAdminTestPageContent />
-    </Suspense>
   );
 }
