@@ -113,7 +113,6 @@ export default function SuperAdminTestPage() {
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-gray-900">
                 Core Analysis Results
-                <span className="ml-3 text-sm font-normal text-gray-600">(Pass B - ASR Corrected)</span>
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -124,26 +123,13 @@ export default function SuperAdminTestPage() {
                   </div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-base font-semibold text-gray-700 block mb-1">
-                    Monthly Premium
-                    {result.analysis?.monthly_premium >= 150 && (
-                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Corrected</span>
-                    )}
-                  </label>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Monthly Premium</label>
                   <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.monthly_premium)}
                   </div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-base font-semibold text-gray-700 block mb-1">
-                    Enrollment Fee
-                    {(result.analysis?.enrollment_fee === 27.5 ||
-                      result.analysis?.enrollment_fee === 50 ||
-                      result.analysis?.enrollment_fee === 99 ||
-                      result.analysis?.enrollment_fee === 125) && (
-                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">✓ Standard</span>
-                    )}
-                  </label>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">Enrollment Fee</label>
                   <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.enrollment_fee)}
                   </div>
@@ -278,25 +264,13 @@ export default function SuperAdminTestPage() {
                               <div className="flex-1">
                                 <div className="text-base font-semibold text-gray-700">
                                   {item.field_hint.replace(/_/g, ' ')}: {' '}
-                                  {needsCorrection ? (
-                                    <>
-                                      <span className="line-through text-red-500">{item.value_raw}</span>
-                                      <span className="ml-2 text-green-600 font-bold">
-                                        → {correctedValue} ✓
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-gray-900 ml-1">{item.value_raw}</span>
-                                  )}
+                                  <span className="text-gray-900 ml-1">
+                                    {needsCorrection && correctedValue ? correctedValue : item.value_raw}
+                                  </span>
                                 </div>
                                 <div className="text-base text-gray-700 italic mt-1">"{item.quote}"</div>
                                 <div className="text-sm text-gray-600 mt-1">Speaker: {item.speaker}</div>
                               </div>
-                              {needsCorrection && (
-                                <div className="ml-3 px-2 py-1 bg-green-100 border border-green-300 rounded text-xs font-semibold text-green-700">
-                                  ASR Corrected
-                                </div>
-                              )}
                             </div>
                           </div>
                         );
