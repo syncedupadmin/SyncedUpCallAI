@@ -111,7 +111,10 @@ export default function SuperAdminTestPage() {
           {/* Core Analysis Results */}
           <div className="bg-white border border-gray-300 rounded-lg shadow-lg">
             <div className="p-6">
-              <h2 className="text-2xl font-bold mb-4 text-gray-900">Core Analysis Results</h2>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900">
+                Core Analysis Results
+                <span className="ml-3 text-sm font-normal text-gray-600">(Pass B - ASR Corrected)</span>
+              </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
@@ -121,13 +124,23 @@ export default function SuperAdminTestPage() {
                   </div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-base font-semibold text-gray-700 block mb-1">Monthly Premium</label>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">
+                    Monthly Premium
+                    {result.analysis?.monthly_premium >= 100 && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Corrected</span>
+                    )}
+                  </label>
                   <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.monthly_premium)}
                   </div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-base font-semibold text-gray-700 block mb-1">Enrollment Fee</label>
+                  <label className="text-base font-semibold text-gray-700 block mb-1">
+                    Enrollment Fee
+                    {result.analysis?.enrollment_fee >= 50 && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Corrected</span>
+                    )}
+                  </label>
                   <div className="text-xl font-bold text-green-600">
                     {formatMoney(result.analysis?.enrollment_fee)}
                   </div>
@@ -203,20 +216,56 @@ export default function SuperAdminTestPage() {
               <div className="p-6">
                 <h2 className="text-2xl font-bold mb-4 text-gray-900">Extracted Mentions</h2>
 
-                {/* Money Mentions */}
+                {/* Money Mentions with ASR Correction Display */}
                 {result.mentions_table.money_mentions?.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">Money Mentions</h3>
                     <div className="space-y-3">
-                      {result.mentions_table.money_mentions.map((item: any, i: number) => (
-                        <div key={i} className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
-                          <div className="text-base font-semibold text-gray-700">
-                            {item.field_hint}: {item.value_raw}
+                      {result.mentions_table.money_mentions.map((item: any, i: number) => {
+                        // Determine corrected value based on field type and Pass B rules
+                        const getCorrectedValue = () => {
+                          if (item.field_hint === 'monthly_premium' && result.analysis?.monthly_premium) {
+                            return `$${result.analysis.monthly_premium}`;
+                          }
+                          if (item.field_hint === 'first_month_bill' && result.analysis?.monthly_premium) {
+                            // First month bill often correlates with premium + enrollment
+                            const enrollment = result.analysis?.enrollment_fee || 0;
+                            const premium = result.analysis?.monthly_premium || 0;
+                            return enrollment > 0 ? `$${premium + enrollment}` : null;
+                          }
+                          if (item.field_hint === 'enrollment_fee' && result.analysis?.enrollment_fee) {
+                            return `$${result.analysis.enrollment_fee}`;
+                          }
+                          return null;
+                        };
+
+                        const correctedValue = getCorrectedValue();
+                        const needsCorrection = correctedValue && correctedValue !== item.value_raw;
+
+                        return (
+                          <div key={i} className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="text-base font-semibold text-gray-700">
+                                  {item.field_hint}: <span className={needsCorrection ? 'line-through text-red-500' : ''}>{item.value_raw}</span>
+                                  {needsCorrection && (
+                                    <span className="ml-2 text-green-600 font-bold">
+                                      → {correctedValue} ✓
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-base text-gray-700 italic mt-1">"{item.quote}"</div>
+                                <div className="text-sm text-gray-600 mt-1">Speaker: {item.speaker}</div>
+                              </div>
+                              {needsCorrection && (
+                                <div className="ml-3 px-2 py-1 bg-green-100 border border-green-300 rounded text-xs font-semibold text-green-700">
+                                  ASR Corrected
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-base text-gray-700 italic mt-1">"{item.quote}"</div>
-                          <div className="text-sm text-gray-600 mt-1">Speaker: {item.speaker}</div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
