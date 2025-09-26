@@ -86,7 +86,7 @@ export default function SuperAdminTestPage() {
                 placeholder="https://admin-dt.convoso.com/play-recording-public/..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-base"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-base text-gray-900 bg-white placeholder-gray-400"
               />
             </div>
             <button

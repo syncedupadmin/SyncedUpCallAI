@@ -3,6 +3,11 @@ import { analyzeCallUnified } from '@/lib/unified-analysis';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+// Configure runtime for longer execution
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Maximum allowed on Vercel Pro
+
 export async function POST(request: NextRequest) {
   try {
     // Create Supabase client with cookies for auth

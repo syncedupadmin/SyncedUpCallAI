@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeCallUnified } from '@/lib/unified-analysis';
 
+// Configure runtime for longer execution
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Maximum allowed on Vercel Pro
+
 export async function POST(request: NextRequest) {
   try {
     const { recording_url, meta } = await request.json();
