@@ -1,39 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient, validateResourceAccess } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   const id = req.nextUrl.searchParams.get('id');
   const format = req.nextUrl.searchParams.get('format') || 'json';
-  
+
   if (!id) {
     return NextResponse.json({ ok: false, error: 'id_required' }, { status: 400 });
   }
 
   try {
-    // Get transcript with call metadata
-    const result = await db.oneOrNone(`
-      SELECT 
-        t.*,
-        c.started_at,
-        c.duration_sec,
-        c.agent_name,
-        c.customer_phone
-      FROM transcripts t
-      JOIN calls c ON c.id = t.call_id
-      WHERE t.call_id = $1
-    `, [id]);
+    const supabase = createSecureClient();
 
-    if (!result) {
-      return NextResponse.json({ ok: false, error: 'transcript_not_found' }, { status: 404 });
+    // SECURITY: Validate user has access to this call
+    const hasAccess = await validateResourceAccess(id, 'calls', context);
+
+    if (!hasAccess) {
+      console.error(`[SECURITY] User ${context.userId} attempted to access transcript ${id} without permission`);
+      return NextResponse.json({
+        ok: false,
+        error: 'transcript_not_found'
+      }, { status: 404 });
+    }
+
+    // Get transcript with call metadata using RLS-enabled client
+    const { data: transcript, error: transcriptError } = await supabase
+      .from('transcripts')
+      .select(`
+        *,
+        calls!inner(
+          started_at,
+          duration_sec,
+          agent_name,
+          agency_id,
+          contacts(primary_phone)
+        )
+      `)
+      .eq('call_id', id)
+      .in('calls.agency_id', context.agencyIds)
+      .single();
+
+    if (transcriptError || !transcript) {
+      return NextResponse.json({
+        ok: false,
+        error: 'transcript_not_found'
+      }, { status: 404 });
     }
 
     // Parse diarized segments if available
     let segments = [];
-    if (result.diarized) {
+    if (transcript.diarized) {
       try {
-        segments = JSON.parse(result.diarized);
+        segments = typeof transcript.diarized === 'string'
+          ? JSON.parse(transcript.diarized)
+          : transcript.diarized;
       } catch {}
     }
 
@@ -42,22 +64,20 @@ export async function GET(req: NextRequest) {
       let content = `CALL TRANSCRIPT\n`;
       content += `================\n`;
       content += `Call ID: ${id}\n`;
-      content += `Date: ${result.started_at ? new Date(result.started_at).toLocaleString() : 'Unknown'}\n`;
-      content += `Duration: ${result.duration_sec ? `${Math.floor(result.duration_sec / 60)}:${(result.duration_sec % 60).toString().padStart(2, '0')}` : 'Unknown'}\n`;
-      content += `Language: ${result.lang || 'en'}\n`;
-      content += `Engine: ${result.engine || 'Unknown'}\n`;
+      content += `Date: ${transcript.calls?.started_at ? new Date(transcript.calls.started_at).toLocaleString() : 'Unknown'}\n`;
+      content += `Duration: ${transcript.calls?.duration_sec ? `${Math.floor(transcript.calls.duration_sec / 60)}:${(transcript.calls.duration_sec % 60).toString().padStart(2, '0')}` : 'Unknown'}\n`;
+      content += `Language: ${transcript.lang || 'en'}\n`;
+      content += `Engine: ${transcript.engine || 'Unknown'}\n`;
       content += `\n================\n\n`;
 
       if (segments.length > 0) {
-        // Format with speaker labels
         segments.forEach((seg: any) => {
           const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
           const time = seg.start ? `[${Math.floor(seg.start / 60)}:${(seg.start % 60).toFixed(0).padStart(2, '0')}]` : '';
           content += `${speaker} ${time}:\n${seg.text || seg.transcript || ''}\n\n`;
         });
       } else {
-        // Plain text
-        content += result.translated_text || result.text || 'No transcript available';
+        content += transcript.translated_text || transcript.text || 'No transcript available';
       }
 
       return new Response(content, {
@@ -72,24 +92,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       call_id: id,
-      lang: result.lang,
-      engine: result.engine,
-      text: result.text,
-      translated_text: result.translated_text,
+      lang: transcript.lang,
+      engine: transcript.engine,
+      text: transcript.text,
+      translated_text: transcript.translated_text,
       segments,
-      words: result.words ? JSON.parse(result.words) : [],
+      words: transcript.words ? (typeof transcript.words === 'string' ? JSON.parse(transcript.words) : transcript.words) : [],
       metadata: {
-        started_at: result.started_at,
-        duration_sec: result.duration_sec,
-        agent_name: result.agent_name,
-        customer_phone: result.customer_phone,
+        started_at: transcript.calls?.started_at,
+        duration_sec: transcript.calls?.duration_sec,
+        agent_name: transcript.calls?.agent_name,
+        customer_phone: transcript.calls?.contacts?.primary_phone,
       }
     });
   } catch (error: any) {
-    console.error('Error fetching transcript:', error);
-    return NextResponse.json({ 
-      ok: false, 
-      error: error.message 
+    console.error('[SECURITY] Error fetching transcript for user', context.userId, ':', error);
+    return NextResponse.json({
+      ok: false,
+      error: 'server_error'
     }, { status: 500 });
   }
-}
+});

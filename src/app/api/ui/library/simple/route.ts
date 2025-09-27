@@ -1,109 +1,113 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
+    const supabase = createSecureClient();
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
     // Get best calls (successful dispositions, longer duration)
-    const best = await db.manyOrNone(`
-      SELECT 
-        c.id,
-        c.started_at,
-        c.duration_sec,
-        c.disposition,
-        c.campaign,
-        COALESCE(c.agent_name, ag.name) as agent,
-        an.qa_score,
-        an.reason_primary,
-        an.reason_secondary,
-        an.summary,
-        an.risk_flags
-      FROM calls c
-      LEFT JOIN agents ag ON ag.id = c.agent_id
-      LEFT JOIN analyses an ON an.call_id = c.id
-      WHERE c.disposition IN ('Completed', 'Success', 'Connected', 'Answered')
-        AND c.duration_sec > 60
-      ORDER BY 
-        an.qa_score DESC NULLS LAST,
-        c.duration_sec DESC,
-        c.started_at DESC
-      LIMIT 20
-    `);
-    
-    // Get worst calls (failed dispositions, short duration)
-    const worst = await db.manyOrNone(`
-      SELECT 
-        c.id,
-        c.started_at,
-        c.duration_sec,
-        c.disposition,
-        c.campaign,
-        COALESCE(c.agent_name, ag.name) as agent,
-        an.qa_score,
-        an.reason_primary,
-        an.reason_secondary,
-        an.summary,
-        an.risk_flags
-      FROM calls c
-      LEFT JOIN agents ag ON ag.id = c.agent_id
-      LEFT JOIN analyses an ON an.call_id = c.id
-      WHERE c.disposition IN ('Failed', 'No Answer', 'Busy', 'Voicemail', 'Disconnected', 'Rejected')
-        OR c.duration_sec < 30
-      ORDER BY 
-        an.qa_score ASC NULLS LAST,
-        c.duration_sec ASC,
-        c.started_at DESC
-      LIMIT 20
-    `);
-    
-    // Get recent calls
-    const recent = await db.manyOrNone(`
-      SELECT 
-        c.id,
-        c.started_at,
-        c.duration_sec,
-        c.disposition,
-        c.campaign,
-        COALESCE(c.agent_name, ag.name) as agent,
-        an.qa_score,
-        an.reason_primary,
-        an.reason_secondary,
-        an.summary,
-        an.risk_flags
-      FROM calls c
-      LEFT JOIN agents ag ON ag.id = c.agent_id
-      LEFT JOIN analyses an ON an.call_id = c.id
-      WHERE c.started_at >= NOW() - INTERVAL '7 days'
-      ORDER BY c.started_at DESC
-      LIMIT 20
-    `);
-    
-    // Calculate average QA score from analyzed calls
-    const avgScoreResult = await db.oneOrNone(`
-      SELECT AVG(qa_score) as avg_score
-      FROM analyses
-      WHERE qa_score IS NOT NULL
-    `);
-    
-    return NextResponse.json({ 
-      ok: true, 
-      best: best || [],
-      worst: worst || [],
-      recent: recent || [],
-      avgScore: avgScoreResult?.avg_score ? parseFloat(avgScoreResult.avg_score) : null
+    const { data: bestCalls } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        started_at,
+        duration_sec,
+        disposition,
+        campaign,
+        agent_name,
+        agents(name),
+        analyses(qa_score, reason_primary, reason_secondary, summary, risk_flags)
+      `)
+      .in('agency_id', context.agencyIds)
+      .in('disposition', ['Completed', 'Success', 'Connected', 'Answered'])
+      .gt('duration_sec', 60)
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    // Get worst calls (failed dispositions or short duration)
+    const { data: worstCalls } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        started_at,
+        duration_sec,
+        disposition,
+        campaign,
+        agent_name,
+        agents(name),
+        analyses(qa_score, reason_primary, reason_secondary, summary, risk_flags)
+      `)
+      .in('agency_id', context.agencyIds)
+      .or('disposition.in.(Failed,No Answer,Busy,Voicemail,Disconnected,Rejected),duration_sec.lt.30')
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    // Get recent calls (last 7 days)
+    const { data: recentCalls } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        started_at,
+        duration_sec,
+        disposition,
+        campaign,
+        agent_name,
+        agents(name),
+        analyses(qa_score, reason_primary, reason_secondary, summary, risk_flags)
+      `)
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', sevenDaysAgo)
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    // Calculate average QA score from this agency's analyzed calls
+    const { data: analysisData } = await supabase
+      .from('analyses')
+      .select('qa_score')
+      .in('agency_id', context.agencyIds)
+      .not('qa_score', 'is', null);
+
+    const avgScore = analysisData && analysisData.length > 0
+      ? analysisData.reduce((sum, a) => sum + (a.qa_score || 0), 0) / analysisData.length
+      : null;
+
+    // Format call data
+    const formatCall = (call: any) => ({
+      id: call.id,
+      started_at: call.started_at,
+      duration_sec: call.duration_sec,
+      disposition: call.disposition,
+      campaign: call.campaign,
+      agent: call.agent_name || call.agents?.name,
+      qa_score: call.analyses?.[0]?.qa_score,
+      reason_primary: call.analyses?.[0]?.reason_primary,
+      reason_secondary: call.analyses?.[0]?.reason_secondary,
+      summary: call.analyses?.[0]?.summary,
+      risk_flags: call.analyses?.[0]?.risk_flags
     });
-    
+
+    return NextResponse.json({
+      ok: true,
+      best: bestCalls?.map(formatCall) || [],
+      worst: worstCalls?.map(formatCall) || [],
+      recent: recentCalls?.map(formatCall) || [],
+      avgScore
+    });
+
   } catch (err: any) {
-    console.error('ui/library/simple GET error', err);
-    
-    // Return empty arrays on error
-    return NextResponse.json({ 
+    console.error('[SECURITY] ui/library/simple GET error for user', context.userId, ':', err);
+
+    return NextResponse.json({
       ok: true,
       best: [],
       worst: [],
       recent: [],
-      avgScore: null
+      avgScore: null,
+      error: 'Failed to load library data'
     });
   }
-}
+});
