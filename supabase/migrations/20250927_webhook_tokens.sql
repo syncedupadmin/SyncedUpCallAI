@@ -64,7 +64,7 @@ CREATE POLICY "Users can view webhook tokens for their agencies"
   USING (
     agency_id IN (
       SELECT agency_id
-      FROM agency_members
+      FROM user_agencies
       WHERE user_id = auth.uid()
     )
   );
@@ -76,7 +76,7 @@ CREATE POLICY "Agency owners and admins can create webhook tokens"
   WITH CHECK (
     agency_id IN (
       SELECT agency_id
-      FROM agency_members
+      FROM user_agencies
       WHERE user_id = auth.uid()
         AND role IN ('owner', 'admin')
     )
@@ -89,7 +89,7 @@ CREATE POLICY "Agency owners and admins can update webhook tokens"
   USING (
     agency_id IN (
       SELECT agency_id
-      FROM agency_members
+      FROM user_agencies
       WHERE user_id = auth.uid()
         AND role IN ('owner', 'admin')
     )
@@ -102,7 +102,7 @@ CREATE POLICY "Agency owners and admins can delete webhook tokens"
   USING (
     agency_id IN (
       SELECT agency_id
-      FROM agency_members
+      FROM user_agencies
       WHERE user_id = auth.uid()
         AND role IN ('owner', 'admin')
     )
