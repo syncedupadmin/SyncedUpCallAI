@@ -5,8 +5,8 @@
 --
 -- Date: 2025-09-27
 
--- Drop existing problematic policy
-DROP POLICY IF EXISTS user_agencies_read ON user_agencies;
+-- Drop existing problematic policy (CASCADE to handle dependencies)
+DROP POLICY IF EXISTS user_agencies_read ON user_agencies CASCADE;
 
 -- Create corrected policy with proper agency scoping
 CREATE POLICY user_agencies_read ON user_agencies
