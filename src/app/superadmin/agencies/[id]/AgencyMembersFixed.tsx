@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { UserPlus, Trash2, RefreshCw, Users, Mail, Shield, Calendar, CheckCircle, X, Send } from 'lucide-react'
+import { UserPlus, Trash2, RefreshCw, Users, Mail, Shield, Calendar, CheckCircle, X, Send, Key } from 'lucide-react'
 
 interface AgencyMembersProps {
   agencyId: string
@@ -26,6 +26,11 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState({ email: '', name: '', isInvite: false })
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null)
+  const [resetPasswordEmail, setResetPasswordEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
 
   // Form state
   const [email, setEmail] = useState('')
@@ -233,6 +238,42 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
     }
   }
 
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
+    setResettingPassword(true)
+    try {
+      const response = await fetch('/api/admin/reset-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: resetPasswordEmail,
+          password: newPassword
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to reset password')
+      }
+
+      toast.success('Password reset successfully!')
+      setShowPasswordDialog(false)
+      setNewPassword('')
+      setResetPasswordUserId(null)
+      setResetPasswordEmail('')
+    } catch (error: any) {
+      console.error('Error resetting password:', error)
+      toast.error(error.message || 'Failed to reset password')
+    } finally {
+      setResettingPassword(false)
+    }
+  }
+
   const formatDate = (date: string) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -403,7 +444,18 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setResetPasswordUserId(member.user_id)
+                              setResetPasswordEmail(member.email || '')
+                              setShowPasswordDialog(true)
+                            }}
+                            className="p-1 text-blue-500 hover:bg-gray-800 rounded transition-colors"
+                            title="Reset password"
+                          >
+                            <Key className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => {
                               setDeleteUserId(member.user_id)
@@ -453,6 +505,64 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Dialog */}
+      {showPasswordDialog && resetPasswordUserId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-800">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <Key className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Reset Password</h3>
+                <p className="text-sm text-gray-400">{resetPasswordEmail}</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                New Password
+              </label>
+              <input
+                type="text"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 6 chars)"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                minLength={6}
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                User will need to sign in again with this new password
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowPasswordDialog(false)
+                  setNewPassword('')
+                  setResetPasswordUserId(null)
+                  setResetPasswordEmail('')
+                }}
+                disabled={resettingPassword}
+                className="px-4 py-2 text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={resettingPassword || !newPassword || newPassword.length < 6}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {resettingPassword && <RefreshCw className="h-4 w-4 animate-spin" />}
+                Reset Password
               </button>
             </div>
           </div>
