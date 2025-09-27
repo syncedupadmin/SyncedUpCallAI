@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { logInfo, logError } from '@/lib/log';
+import { authenticateWebhook } from '@/lib/webhook-auth';
 
 export const dynamic = 'force-dynamic';
-
-// Validate webhook secret
-function validateWebhook(req: NextRequest): boolean {
-  const secret = req.headers.get('x-webhook-secret');
-  if (secret && process.env.CONVOSO_WEBHOOK_SECRET) {
-    return secret === process.env.CONVOSO_WEBHOOK_SECRET;
-  }
-  // Allow if no secret configured OR no secret sent by Convoso
-  return true;
-}
 
 export async function POST(req: NextRequest) {
   let webhookLogId: number | null = null;
 
   try {
-    // Validate webhook
-    if (!validateWebhook(req)) {
-      logError('Invalid webhook secret for lead webhook');
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    // SECURITY: Authenticate webhook and get agency_id
+    const authResult = await authenticateWebhook(req);
+
+    if (!authResult.success || !authResult.agencyId) {
+      logError('Webhook authentication failed', null, { error: authResult.error });
+      return NextResponse.json({
+        ok: false,
+        error: authResult.error || 'Authentication required'
+      }, { status: 401 });
     }
+
+    const agencyId = authResult.agencyId;
 
     const bodyText = await req.text();
     const body = JSON.parse(bodyText);
@@ -74,8 +72,8 @@ export async function POST(req: NextRequest) {
       const upsertValue = leadData.lead_id || leadData.phone_number;
 
       const result = await db.oneOrNone(`
-        INSERT INTO contacts (lead_id, phone_number, first_name, last_name, email, address, city, state, list_id, office_id, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        INSERT INTO contacts (lead_id, phone_number, first_name, last_name, email, address, city, state, list_id, office_id, agency_id, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
         ON CONFLICT (${upsertKey})
         DO UPDATE SET
           phone_number = COALESCE(EXCLUDED.phone_number, contacts.phone_number),
@@ -86,7 +84,8 @@ export async function POST(req: NextRequest) {
           city = COALESCE(EXCLUDED.city, contacts.city),
           state = COALESCE(EXCLUDED.state, contacts.state),
           list_id = COALESCE(EXCLUDED.list_id, contacts.list_id),
-          office_id = COALESCE(contacts.office_id, 1), -- Keep existing office_id or default to 1
+          office_id = COALESCE(contacts.office_id, 1),
+          agency_id = COALESCE(contacts.agency_id, EXCLUDED.agency_id),
           updated_at = NOW()
         RETURNING id
       `, [
@@ -99,7 +98,8 @@ export async function POST(req: NextRequest) {
         leadData.city,
         leadData.state,
         leadData.list_id,
-        1 // Default office_id
+        1,
+        agencyId
       ]);
 
       contactId = result?.id;
@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
       lead_id: leadData.lead_id,
       phone_number: leadData.phone_number,
       contact_id: contactId,
+      agency_id: agencyId,
       source: 'convoso'
     });
 
