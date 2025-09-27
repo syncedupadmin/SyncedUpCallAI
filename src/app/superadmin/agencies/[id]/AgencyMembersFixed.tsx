@@ -36,7 +36,6 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState<'admin' | 'agent'>('agent')
-  const [createNewUser, setCreateNewUser] = useState(false)
 
   const supabase = createClient()
 
@@ -107,14 +106,11 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
       return
     }
 
-    if (createNewUser && !name.trim()) {
-      toast.error('Please enter a name for the new user')
-      return
-    }
-
     setAdding(true)
     try {
-      if (createNewUser) {
+      const hasName = name && name.trim().length > 0
+
+      if (hasName) {
         console.log('Creating new user with invite...')
         // Use the new API route to invite and add user
         const res = await fetch('/api/superadmin/invite-and-add', {
@@ -196,7 +192,6 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
       setEmail('')
       setName('')
       setRole('agent')
-      setCreateNewUser(false)
       await loadMembers()
     } catch (error: any) {
       console.error('Error adding member:', error)
@@ -304,25 +299,6 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
             Add Member
           </h3>
 
-          {/* Checkbox to toggle between adding existing vs creating new */}
-          <div className="mb-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={createNewUser}
-                onChange={(e) => setCreateNewUser(e.target.checked)}
-                disabled={adding}
-                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
-              />
-              <span className="text-gray-300">Create new user</span>
-            </label>
-            <p className="text-xs text-gray-500 mt-1 ml-6">
-              {createNewUser
-                ? "Create a brand new user and add them to this agency"
-                : "Add an existing user by their email address"}
-            </p>
-          </div>
-
           <form onSubmit={handleAddMember} className="space-y-3">
             <div className="flex gap-3">
               <div className="flex-1">
@@ -337,19 +313,16 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                 />
               </div>
 
-              {createNewUser && (
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Full name"
-                    disabled={adding}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
-                    required={createNewUser}
-                  />
-                </div>
-              )}
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Full name (optional)"
+                  disabled={adding}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
 
               <select
                 value={role}
@@ -367,7 +340,7 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {adding && <RefreshCw className="h-4 w-4 animate-spin" />}
-                {createNewUser ? 'Create & Add' : 'Add Member'}
+                Add Member
               </button>
             </div>
           </form>
