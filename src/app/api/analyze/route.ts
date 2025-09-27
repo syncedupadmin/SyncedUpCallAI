@@ -194,7 +194,10 @@ export async function POST(req: NextRequest) {
         post_date_phrase: false
       },
 
-      // Include raw analysis for debugging
+      // Core analysis object (for UI consumption)
+      analysis: result.analysis,
+
+      // Include raw analysis for debugging (duplicate for backward compatibility)
       raw_analysis: result.analysis,
       mentions_table: result.mentions_table,
 

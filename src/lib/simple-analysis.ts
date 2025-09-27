@@ -318,13 +318,6 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any, settings?:
   // Step 3: Pass B - Generate final white card
   console.log('Running Pass B: Generating final white card...');
 
-  console.log('=== PASS B INPUT DEBUG ===');
-  console.log('Money mentions count:', mentionsTable.money_mentions?.length || 0);
-  console.log('Carrier mentions count:', mentionsTable.carrier_mentions?.length || 0);
-  console.log('Objection spans count:', mentionsTable.objection_spans?.length || 0);
-  console.log('First money mention:', JSON.stringify(mentionsTable.money_mentions?.[0], null, 2));
-  console.log('First carrier mention:', JSON.stringify(mentionsTable.carrier_mentions?.[0], null, 2));
-
   const passBResponse = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -346,12 +339,6 @@ export async function analyzeCallSimple(audioUrl: string, meta?: any, settings?:
   });
 
   const analysis = JSON.parse(passBResponse.choices[0].message.content || "{}");
-
-  console.log('=== PASS B DEBUG ===');
-  console.log('Raw Pass B response:', passBResponse.choices[0].message.content);
-  console.log('Parsed analysis:', JSON.stringify(analysis, null, 2));
-  console.log('Mentions table passed to Pass B had money_mentions:', mentionsTable.money_mentions?.length || 0);
-  console.log('Mentions table passed to Pass B had carrier_mentions:', mentionsTable.carrier_mentions?.length || 0);
 
   // Step 3b: Apply deterministic money normalization
   // Store both raw and normalized values for auditing
