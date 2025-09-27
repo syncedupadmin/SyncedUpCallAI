@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 import { logInfo, logError } from '@/lib/log';
+import { authenticateWebhook } from '@/lib/webhook-auth';
 
 export const dynamic = 'force-dynamic';
-
-// Validate webhook secret
-function validateWebhook(req: NextRequest): boolean {
-  const secret = req.headers.get('x-webhook-secret');
-  if (secret && process.env.CONVOSO_WEBHOOK_SECRET) {
-    return secret === process.env.CONVOSO_WEBHOOK_SECRET;
-  }
-  // Allow if no secret configured (for testing)
-  return true;
-}
 
 export async function POST(req: NextRequest) {
   let webhookLogId: number | null = null;
 
   try {
-    // Validate webhook
-    if (!validateWebhook(req)) {
-      logError('Invalid webhook secret for call webhook');
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    // SECURITY: Authenticate webhook and get agency_id
+    const authResult = await authenticateWebhook(req);
+
+    if (!authResult.success || !authResult.agencyId) {
+      logError('Webhook authentication failed', null, { error: authResult.error });
+      return NextResponse.json({
+        ok: false,
+        error: authResult.error || 'Authentication required'
+      }, { status: 401 });
     }
+
+    const agencyId = authResult.agencyId;
 
     // Parse body
     const bodyText = await req.text();
@@ -114,14 +112,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Upsert call record
+    // Upsert call record with agency_id
     const result = await db.oneOrNone(`
       INSERT INTO calls (
         call_id, lead_id, agent_name, phone_number, disposition,
         duration_sec, campaign, recording_url, started_at, ended_at,
-        contact_id, office_id, source, created_at
+        contact_id, office_id, agency_id, source, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
       ON CONFLICT (call_id) WHERE call_id IS NOT NULL
       DO UPDATE SET
         lead_id = COALESCE(EXCLUDED.lead_id, calls.lead_id),
@@ -134,7 +132,8 @@ export async function POST(req: NextRequest) {
         started_at = COALESCE(EXCLUDED.started_at, calls.started_at),
         ended_at = COALESCE(EXCLUDED.ended_at, calls.ended_at),
         contact_id = COALESCE(EXCLUDED.contact_id, calls.contact_id),
-        office_id = COALESCE(calls.office_id, 1)
+        office_id = COALESCE(calls.office_id, 1),
+        agency_id = COALESCE(calls.agency_id, EXCLUDED.agency_id)
       RETURNING id
     `, [
       callData.call_id,
@@ -149,6 +148,7 @@ export async function POST(req: NextRequest) {
       callData.ended_at,
       contactId,
       1, // Default office_id
+      agencyId, // ✅ Agency ID from webhook token
       'convoso'
     ]);
 
@@ -236,6 +236,7 @@ export async function POST(req: NextRequest) {
       call_id: callData.call_id,
       lead_id: callData.lead_id,
       call_record_id: callRecordId,
+      agency_id: agencyId,
       has_recording: !!callData.recording_url,
       agent_name: callData.agent_name,
       disposition: callData.disposition,
