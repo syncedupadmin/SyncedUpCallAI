@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
-import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
+import { getAdminContext, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  // Check admin authentication
-  const isAdmin = await isAdminAuthenticated(req);
-  if (!isAdmin) {
+  // Get admin context with agency info
+  const adminContext = await getAdminContext(req);
+  if (!adminContext) {
     return unauthorizedResponse();
   }
 
   try {
+    // Build agency filter - super admins see all, agency admins see only their agencies
+    let agencyFilter = '';
+    let queryParams: any[] = [];
+
+    if (!adminContext.isSuperAdmin && adminContext.agencyIds.length > 0) {
+      agencyFilter = 'AND c.agency_id = ANY($1)';
+      queryParams = [adminContext.agencyIds];
+    }
+
     const calls = await db.manyOrNone(`
       SELECT
         c.id,
@@ -30,17 +39,17 @@ export async function GET(req: NextRequest) {
         c.lead_id,
         c.created_at,
         c.updated_at,
+        c.agency_id,
         a.name as agent_full_name,
         ce.payload->>'agent_name' as webhook_agent_name,
         ce.payload->>'phone_number' as webhook_phone_number
       FROM calls c
       LEFT JOIN agents a ON a.id = c.agent_id
       LEFT JOIN call_events ce ON ce.call_id = c.id AND ce.type = 'webhook_received'
-      -- Show all calls, not just convoso
-      WHERE 1=1
+      WHERE 1=1 ${agencyFilter}
       ORDER BY c.created_at DESC
       LIMIT 500
-    `);
+    `, queryParams);
 
     // Enhance with data from multiple sources
     const enhancedCalls = calls.map(call => ({
@@ -51,7 +60,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      data: enhancedCalls
+      data: enhancedCalls,
+      filtered_by_agencies: !adminContext.isSuperAdmin,
+      agency_count: adminContext.agencyIds.length
     });
   } catch (error: any) {
     console.error('Error fetching calls:', error);
