@@ -3,7 +3,7 @@ import { withStrictAgencyIsolation, createSecureClient, validateResourceAccess }
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withStrictAgencyIsolation(async (req, context) => {
+export const GET = withStrictAgencyIsolation(async (req, context): Promise<NextResponse> => {
   const id = req.nextUrl.searchParams.get('id');
   const format = req.nextUrl.searchParams.get('format') || 'json';
 
@@ -80,12 +80,12 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
         content += transcript.translated_text || transcript.text || 'No transcript available';
       }
 
-      return new Response(content, {
+      return NextResponse.json(content, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Content-Disposition': `inline; filename="transcript_${id}.txt"`,
         },
-      });
+      }) as any as NextResponse;
     }
 
     // JSON format

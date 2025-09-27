@@ -3,7 +3,7 @@ import { withStrictAgencyIsolation, createSecureClient, validateResourceAccess }
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withStrictAgencyIsolation(async (req, context) => {
+export const GET = withStrictAgencyIsolation(async (req, context): Promise<NextResponse> => {
   const searchParams = req.nextUrl.searchParams;
   const callId = searchParams.get('id');
   const format = searchParams.get('format') || 'txt';
@@ -65,8 +65,8 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
     content += `${'='.repeat(50)}\n\n`;
     content += `Date: ${date}\n`;
     content += `Duration: ${call.duration_sec ? `${Math.floor(call.duration_sec / 60)}m ${call.duration_sec % 60}s` : 'Unknown'}\n`;
-    content += `Agent: ${call.agent_name || call.agents?.name || 'Unknown'}\n`;
-    content += `Customer: ${call.contacts?.primary_phone || 'Unknown'}\n`;
+    content += `Agent: ${call.agent_name || (call.agents as any)?.name || 'Unknown'}\n`;
+    content += `Customer: ${(call.contacts as any)?.primary_phone || 'Unknown'}\n`;
     content += `Language: ${transcript.lang || 'en'}\n`;
     content += `Transcription Engine: ${transcript.engine || 'Unknown'}\n`;
     content += `\n${'='.repeat(50)}\n\n`;
@@ -111,13 +111,13 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
     // Return as downloadable file
     const filename = `transcript_${callId.substring(0, 8)}_${Date.now()}.txt`;
 
-    return new Response(content, {
+    return NextResponse.json(content, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(new TextEncoder().encode(content).length),
       },
-    });
+    }) as any as NextResponse;
   } catch (error: any) {
     console.error('[SECURITY] Export error for user', context.userId, ':', error);
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });

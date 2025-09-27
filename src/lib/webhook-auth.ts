@@ -45,17 +45,17 @@ export async function getAgencyFromWebhookToken(token: string): Promise<string |
     }
 
     // Update usage stats (fire and forget - don't wait for response)
-    sbAdmin
+    const updateResult = await sbAdmin
       .from('webhook_tokens')
       .update({
         last_used_at: new Date().toISOString(),
         usage_count: (data.usage_count || 0) + 1
       })
-      .eq('id', data.id)
-      .then(() => {})
-      .catch((err) => {
-        console.error('[WEBHOOK_AUTH] Failed to update token usage:', err);
-      });
+      .eq('id', data.id);
+
+    if (updateResult.error) {
+      console.error('[WEBHOOK_AUTH] Failed to update token usage:', updateResult.error);
+    }
 
     return data.agency_id;
   } catch (error) {

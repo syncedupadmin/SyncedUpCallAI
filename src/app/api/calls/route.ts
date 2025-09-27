@@ -3,7 +3,7 @@ import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/ag
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withStrictAgencyIsolation(async (req, context) => {
+export const GET = withStrictAgencyIsolation(async (req, context): Promise<NextResponse> => {
   try {
     const supabase = createSecureClient();
 
@@ -56,8 +56,8 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
       duration_sec: call.duration_sec,
       recording_url: call.recording_url,
       agent_id: call.agent_id,
-      agent_name: call.agent_name || call.agents?.name,
-      phone_number: call.phone_number || call.contacts?.primary_phone,
+      agent_name: call.agent_name || (call.agents as any)?.name,
+      phone_number: call.phone_number || (call.contacts as any)?.primary_phone,
       lead_id: call.lead_id,
       created_at: call.created_at,
       updated_at: call.updated_at,
