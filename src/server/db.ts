@@ -2,6 +2,28 @@ import pg from 'pg';
 import { URL } from 'url';
 
 /**
+ * ⚠️ SECURITY WARNING - RAW DATABASE CONNECTION
+ *
+ * This module provides direct PostgreSQL access using service role credentials.
+ * It BYPASSES Row-Level Security (RLS) policies.
+ *
+ * ❌ DO NOT USE for user-facing API routes that return data
+ * ❌ DO NOT USE without explicit agency_id filtering in queries
+ *
+ * ✅ ONLY USE for:
+ *    - System cron jobs (/api/cron/*)
+ *    - Background processing tasks
+ *    - Webhooks with external authentication
+ *    - Vector search operations (with agency filtering)
+ *
+ * 🔒 PREFERRED: Use createSecureClient() from @/lib/security/agency-isolation
+ *    for all user-facing routes to ensure RLS protection.
+ *
+ * If you must use this connection for vector search or other advanced features,
+ * ALWAYS add WHERE clauses that filter by agency_id using context.agencyIds.
+ */
+
+/**
  * Parse DATABASE_URL into connection parameters
  */
 const parseConnectionString = (connectionString: string) => {

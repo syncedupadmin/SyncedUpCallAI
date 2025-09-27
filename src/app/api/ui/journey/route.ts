@@ -1,64 +1,106 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
+  const supabase = createSecureClient();
   const { searchParams } = new URL(req.url);
   const phone = searchParams.get('phone');
-  
+
   if (!phone) {
     return NextResponse.json({ error: 'Phone parameter required' }, { status: 400 });
   }
-  
-  // Normalize phone to digits only
+
   const normalizedPhone = phone.replace(/\D/g, '');
-  
+
   try {
-    const calls = await db.query(`
-      select 
-        c.id,
-        c.started_at,
-        c.ended_at,
-        c.duration_sec,
-        c.disposition,
-        c.recording_url,
-        c.campaign,
-        c.direction,
-        ag.name as agent_name,
-        an.reason_primary,
-        an.qa_score,
-        an.summary,
-        t.call_id as has_transcript,
-        an.call_id as has_analysis
-      from calls c
-      left join contacts ct on ct.id = c.contact_id
-      left join agents ag on ag.id = c.agent_id
-      left join analyses an on an.call_id = c.id
-      left join transcripts t on t.call_id = c.id
-      where replace(ct.primary_phone, '-', '') = $1
-         or replace(ct.primary_phone, ' ', '') = $1
-         or ct.primary_phone = $1
-         or ct.primary_phone = '+' || $1
-         or ct.primary_phone = '+1' || $1
-      order by c.started_at desc nulls last
-    `, [normalizedPhone]);
-    
-    // Get summary stats
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('id, primary_phone')
+      .or(`primary_phone.eq.${normalizedPhone},primary_phone.eq.+${normalizedPhone},primary_phone.eq.+1${normalizedPhone}`);
+
+    if (!contacts || contacts.length === 0) {
+      return NextResponse.json({
+        phone: normalizedPhone,
+        stats: {
+          totalCalls: 0,
+          firstCall: null,
+          lastCall: null,
+          totalDuration: 0
+        },
+        calls: []
+      });
+    }
+
+    const contactIds = contacts.map(c => c.id);
+
+    const { data: calls } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        started_at,
+        ended_at,
+        duration_sec,
+        disposition,
+        recording_url,
+        campaign,
+        direction,
+        contact_id,
+        agent_id,
+        agency_id,
+        agents(name),
+        analyses(reason_primary, qa_score, summary),
+        transcripts(call_id)
+      `)
+      .in('agency_id', context.agencyIds)
+      .in('contact_id', contactIds)
+      .order('started_at', { ascending: false, nullsFirst: false });
+
+    if (!calls) {
+      return NextResponse.json({
+        phone: normalizedPhone,
+        stats: {
+          totalCalls: 0,
+          firstCall: null,
+          lastCall: null,
+          totalDuration: 0
+        },
+        calls: []
+      });
+    }
+
+    const transformedCalls = calls.map((call: any) => ({
+      id: call.id,
+      started_at: call.started_at,
+      ended_at: call.ended_at,
+      duration_sec: call.duration_sec,
+      disposition: call.disposition,
+      recording_url: call.recording_url,
+      campaign: call.campaign,
+      direction: call.direction,
+      agent_name: call.agents?.name || null,
+      reason_primary: call.analyses?.reason_primary || null,
+      qa_score: call.analyses?.qa_score || null,
+      summary: call.analyses?.summary || null,
+      has_transcript: call.transcripts?.call_id ? true : false,
+      has_analysis: call.analyses ? true : false
+    }));
+
     const stats = {
-      totalCalls: calls.rows.length,
-      firstCall: calls.rows.length > 0 ? calls.rows[calls.rows.length - 1].started_at : null,
-      lastCall: calls.rows.length > 0 ? calls.rows[0].started_at : null,
-      totalDuration: calls.rows.reduce((sum, call) => sum + (call.duration_sec || 0), 0)
+      totalCalls: transformedCalls.length,
+      firstCall: transformedCalls.length > 0 ? transformedCalls[transformedCalls.length - 1].started_at : null,
+      lastCall: transformedCalls.length > 0 ? transformedCalls[0].started_at : null,
+      totalDuration: transformedCalls.reduce((sum, call) => sum + (call.duration_sec || 0), 0)
     };
-    
+
     return NextResponse.json({
       phone: normalizedPhone,
       stats,
-      calls: calls.rows
+      calls: transformedCalls
     });
   } catch (err: any) {
-    console.error('Journey API error:', err);
+    console.error('[SECURITY] Journey API error:', err);
     return NextResponse.json({ error: 'Failed to fetch journey' }, { status: 500 });
   }
-}
+});

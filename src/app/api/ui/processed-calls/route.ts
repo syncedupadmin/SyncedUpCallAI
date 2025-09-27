@@ -1,50 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Fetch all calls with transcripts or analysis
-    const result = await db.query(`
-      SELECT
-        c.id,
-        c.source,
-        c.campaign,
-        c.disposition,
-        c.direction,
-        c.started_at,
-        c.duration_sec,
-        c.recording_url,
-        c.agent_name,
-        c.phone_number,
-        t.text as transcript_text,
-        t.lang as transcript_lang,
-        t.engine as transcript_engine,
-        a.summary as analysis_summary,
-        a.qa_score,
-        a.script_adherence,
-        a.sentiment_agent,
-        a.sentiment_customer,
-        a.reason_primary,
-        a.risk_flags,
-        a.key_quotes,
-        CASE
-          WHEN a.call_id IS NOT NULL THEN 'analyzed'
-          WHEN t.call_id IS NOT NULL THEN 'transcribed'
-          ELSE 'pending'
-        END as processing_status
-      FROM calls c
-      LEFT JOIN transcripts t ON t.call_id = c.id
-      LEFT JOIN analyses a ON a.call_id = c.id
-      WHERE (t.call_id IS NOT NULL OR a.call_id IS NOT NULL)
-        AND c.started_at > NOW() - INTERVAL '30 days'
-      ORDER BY c.started_at DESC
-      LIMIT 500
-    `);
+    const supabase = createSecureClient();
 
-    // Transform the data for the frontend
-    const calls = result.rows.map(row => ({
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: callsData, error } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        source,
+        campaign,
+        disposition,
+        direction,
+        started_at,
+        duration_sec,
+        recording_url,
+        agent_name,
+        phone_number,
+        agency_id,
+        transcripts(text, lang, engine, call_id),
+        analyses(summary, qa_score, script_adherence, sentiment_agent, sentiment_customer, reason_primary, risk_flags, key_quotes, call_id)
+      `)
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', thirtyDaysAgo)
+      .order('started_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.error('[SECURITY] Error fetching processed calls:', error);
+      return NextResponse.json(
+        { ok: false, error: 'Failed to fetch calls' },
+        { status: 500 }
+      );
+    }
+
+    const filteredCalls = callsData?.filter(call =>
+      call.transcripts || call.analyses
+    ) || [];
+
+    const calls = filteredCalls.map((row: any) => ({
       id: row.id,
       source: row.source,
       campaign: row.campaign,
@@ -55,21 +54,25 @@ export async function GET(req: NextRequest) {
       recording_url: row.recording_url,
       agent_name: row.agent_name,
       phone_number: row.phone_number,
-      processing_status: row.processing_status,
-      transcript: row.transcript_text ? {
-        text: row.transcript_text,
-        lang: row.transcript_lang,
-        engine: row.transcript_engine
+      processing_status: row.analyses
+        ? 'analyzed'
+        : row.transcripts
+        ? 'transcribed'
+        : 'pending',
+      transcript: row.transcripts ? {
+        text: row.transcripts.text,
+        lang: row.transcripts.lang,
+        engine: row.transcripts.engine
       } : null,
-      analysis: row.analysis_summary ? {
-        summary: row.analysis_summary,
-        qa_score: row.qa_score,
-        script_adherence: row.script_adherence,
-        sentiment_agent: row.sentiment_agent,
-        sentiment_customer: row.sentiment_customer,
-        reason_primary: row.reason_primary,
-        risk_flags: row.risk_flags,
-        key_quotes: row.key_quotes
+      analysis: row.analyses ? {
+        summary: row.analyses.summary,
+        qa_score: row.analyses.qa_score,
+        script_adherence: row.analyses.script_adherence,
+        sentiment_agent: row.analyses.sentiment_agent,
+        sentiment_customer: row.analyses.sentiment_customer,
+        reason_primary: row.analyses.reason_primary,
+        risk_flags: row.analyses.risk_flags,
+        key_quotes: row.analyses.key_quotes
       } : null
     }));
 
@@ -80,10 +83,10 @@ export async function GET(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Error fetching processed calls:', error);
+    console.error('[SECURITY] Error fetching processed calls:', error);
     return NextResponse.json(
       { ok: false, error: error.message },
       { status: 500 }
     );
   }
-}
+});

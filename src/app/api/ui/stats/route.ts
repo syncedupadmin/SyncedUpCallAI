@@ -1,178 +1,222 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get total calls count
-    const totalCallsResult = await db.one(`
-      SELECT COUNT(*) as total
-      FROM calls
-    `);
-    const totalCalls = parseInt(totalCallsResult.total);
+    const supabase = createSecureClient();
 
-    // Get calls from last week for comparison
-    const lastWeekResult = await db.one(`
-      SELECT COUNT(*) as total
-      FROM calls
-      WHERE started_at >= NOW() - INTERVAL '7 days'
-        AND started_at < NOW()
-    `);
-    const lastWeekCalls = parseInt(lastWeekResult.total);
+    const { count: totalCalls } = await supabase
+      .from('calls')
+      .select('*', { count: 'exact', head: true })
+      .in('agency_id', context.agencyIds);
 
-    // Get calls from previous week for percentage calculation
-    const previousWeekResult = await db.one(`
-      SELECT COUNT(*) as total
-      FROM calls
-      WHERE started_at >= NOW() - INTERVAL '14 days'
-        AND started_at < NOW() - INTERVAL '7 days'
-    `);
-    const previousWeekCalls = parseInt(previousWeekResult.total);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // Calculate week-over-week change
+    const { count: lastWeekCalls } = await supabase
+      .from('calls')
+      .select('*', { count: 'exact', head: true })
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', sevenDaysAgo);
+
+    const { count: previousWeekCalls } = await supabase
+      .from('calls')
+      .select('*', { count: 'exact', head: true })
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', fourteenDaysAgo)
+      .lt('started_at', sevenDaysAgo);
+
     let weekChange = 0;
-    if (previousWeekCalls > 0) {
-      weekChange = ((lastWeekCalls - previousWeekCalls) / previousWeekCalls) * 100;
+    if (previousWeekCalls && previousWeekCalls > 0) {
+      weekChange = ((lastWeekCalls || 0) - previousWeekCalls) / previousWeekCalls * 100;
     }
 
-    // Get average duration (in seconds)
-    const avgDurationResult = await db.one(`
-      SELECT 
-        COALESCE(AVG(duration_sec), 0) as avg_duration,
-        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_sec), 0) as median_duration
-      FROM calls
-      WHERE duration_sec > 0
-        AND duration_sec < 3600  -- Exclude outliers over 1 hour
-    `);
-    const avgDurationSec = parseFloat(avgDurationResult.avg_duration);
-    
-    // Format duration as "Xm Ys"
+    const { data: durationData } = await supabase
+      .from('calls')
+      .select('duration_sec')
+      .in('agency_id', context.agencyIds)
+      .gt('duration_sec', 0)
+      .lt('duration_sec', 3600);
+
+    let avgDurationSec = 0;
+    if (durationData && durationData.length > 0) {
+      const sum = durationData.reduce((acc, c) => acc + (c.duration_sec || 0), 0);
+      avgDurationSec = sum / durationData.length;
+    }
+
     const minutes = Math.floor(avgDurationSec / 60);
     const seconds = Math.round(avgDurationSec % 60);
     const avgDuration = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 
-    // Get success rate (based on disposition)
-    const successResult = await db.one(`
-      SELECT 
-        COUNT(*) FILTER (WHERE disposition IN ('Completed', 'Success', 'Connected', 'Answered')) as successful,
-        COUNT(*) as total
-      FROM calls
-      WHERE disposition IS NOT NULL
-        AND disposition != 'Unknown'
-    `);
-    
-    let successRate = 0;
-    if (parseInt(successResult.total) > 0) {
-      successRate = (parseInt(successResult.successful) / parseInt(successResult.total)) * 100;
-    }
+    const sorted = durationData?.map(d => d.duration_sec).sort((a, b) => a - b) || [];
+    const medianDuration = sorted.length > 0
+      ? sorted[Math.floor(sorted.length / 2)]
+      : 0;
 
-    // Get active agents count (unique agents in last 24 hours)
-    const activeAgentsResult = await db.one(`
-      SELECT COUNT(DISTINCT agent_id) as active_agents
-      FROM calls
-      WHERE started_at >= NOW() - INTERVAL '24 hours'
-        AND agent_id IS NOT NULL
-    `);
-    const activeAgents = parseInt(activeAgentsResult.active_agents);
+    const { data: dispositionData } = await supabase
+      .from('calls')
+      .select('disposition')
+      .in('agency_id', context.agencyIds)
+      .not('disposition', 'is', null)
+      .neq('disposition', 'Unknown');
 
-    // Get today's call count
-    const todayCallsResult = await db.one(`
-      SELECT COUNT(*) as today
-      FROM calls
-      WHERE DATE(started_at) = CURRENT_DATE
-    `);
-    const todayCalls = parseInt(todayCallsResult.today);
+    const successfulDispositions = ['Completed', 'Success', 'Connected', 'Answered'];
+    const successful = dispositionData?.filter(c =>
+      successfulDispositions.includes(c.disposition)
+    ).length || 0;
+    const successRate = dispositionData && dispositionData.length > 0
+      ? (successful / dispositionData.length) * 100
+      : 0;
 
-    // Get call distribution by hour for today
-    const hourlyDistribution = await db.manyOrNone(`
-      SELECT 
-        EXTRACT(HOUR FROM started_at) as hour,
-        COUNT(*) as count
-      FROM calls
-      WHERE DATE(started_at) = CURRENT_DATE
-      GROUP BY EXTRACT(HOUR FROM started_at)
-      ORDER BY hour
-    `);
+    const { data: recentCalls } = await supabase
+      .from('calls')
+      .select('agent_id')
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', oneDayAgo)
+      .not('agent_id', 'is', null);
 
-    // Get top agents by call count (last 7 days)
-    // Note: agent_name might not exist in older databases
-    const topAgents = await db.manyOrNone(`
-      SELECT 
-        COALESCE(c.agent_name, a.name, 'Unknown') as agent_name,
-        c.agent_id,
-        COUNT(*) as call_count,
-        AVG(c.duration_sec) as avg_duration
-      FROM calls c
-      LEFT JOIN agents a ON c.agent_id = a.id
-      WHERE c.started_at >= NOW() - INTERVAL '7 days'
-        AND c.agent_id IS NOT NULL
-      GROUP BY c.agent_id, c.agent_name, a.name
-      ORDER BY call_count DESC
-      LIMIT 5
-    `);
+    const activeAgents = new Set(recentCalls?.map(c => c.agent_id)).size;
 
-    // Get disposition breakdown
-    const dispositionBreakdown = await db.manyOrNone(`
-      SELECT 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { count: todayCalls } = await supabase
+      .from('calls')
+      .select('*', { count: 'exact', head: true })
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', todayStart.toISOString());
+
+    const { data: todayCallsData } = await supabase
+      .from('calls')
+      .select('started_at')
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', todayStart.toISOString());
+
+    const hourlyMap = new Map<number, number>();
+    todayCallsData?.forEach((call: any) => {
+      const hour = new Date(call.started_at).getHours();
+      hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
+    });
+
+    const hourlyDistribution = Array.from(hourlyMap.entries())
+      .map(([hour, count]) => ({ hour, count }))
+      .sort((a, b) => a.hour - b.hour);
+
+    const { data: recentCallsWithAgent } = await supabase
+      .from('calls')
+      .select('agent_id, agent_name, duration_sec, agents(name)')
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', sevenDaysAgo)
+      .not('agent_id', 'is', null);
+
+    const agentMap = new Map<string, { name: string; count: number; totalDuration: number }>();
+    recentCallsWithAgent?.forEach((call: any) => {
+      const agentId = call.agent_id!;
+      const agentName = call.agent_name || call.agents?.name || 'Unknown';
+
+      if (!agentMap.has(agentId)) {
+        agentMap.set(agentId, { name: agentName, count: 0, totalDuration: 0 });
+      }
+
+      const agent = agentMap.get(agentId)!;
+      agent.count++;
+      agent.totalDuration += call.duration_sec || 0;
+    });
+
+    const topAgents = Array.from(agentMap.entries())
+      .map(([agent_id, data]) => ({
+        agent_id,
+        agent_name: data.name,
+        call_count: data.count,
+        avg_duration: data.count > 0 ? Math.round(data.totalDuration / data.count) : 0
+      }))
+      .sort((a, b) => b.call_count - a.call_count)
+      .slice(0, 5);
+
+    const dispositionMap = new Map<string, number>();
+    dispositionData?.forEach((call: any) => {
+      if (call.disposition) {
+        dispositionMap.set(call.disposition, (dispositionMap.get(call.disposition) || 0) + 1);
+      }
+    });
+
+    const totalDispositions = dispositionData?.length || 0;
+    const dispositionBreakdown = Array.from(dispositionMap.entries())
+      .map(([disposition, count]) => ({
         disposition,
-        COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()), 1) as percentage
-      FROM calls
-      WHERE disposition IS NOT NULL
-        AND disposition != 'Unknown'
-      GROUP BY disposition
-      ORDER BY count DESC
-      LIMIT 5
-    `);
+        count,
+        percentage: totalDispositions > 0 ? Math.round((count / totalDispositions) * 1000) / 10 : 0
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-    // Get campaign performance
-    const campaignStats = await db.manyOrNone(`
-      SELECT 
+    const { data: campaignData } = await supabase
+      .from('calls')
+      .select('campaign, duration_sec, disposition')
+      .in('agency_id', context.agencyIds)
+      .gte('started_at', sevenDaysAgo)
+      .not('campaign', 'is', null);
+
+    const campaignMap = new Map<string, {
+      count: number;
+      totalDuration: number;
+      successful: number;
+    }>();
+
+    campaignData?.forEach((call: any) => {
+      const campaign = call.campaign!;
+
+      if (!campaignMap.has(campaign)) {
+        campaignMap.set(campaign, { count: 0, totalDuration: 0, successful: 0 });
+      }
+
+      const stats = campaignMap.get(campaign)!;
+      stats.count++;
+      stats.totalDuration += call.duration_sec || 0;
+
+      if (successfulDispositions.includes(call.disposition)) {
+        stats.successful++;
+      }
+    });
+
+    const campaignStats = Array.from(campaignMap.entries())
+      .map(([campaign, stats]) => ({
         campaign,
-        COUNT(*) as total_calls,
-        AVG(duration_sec) as avg_duration,
-        COUNT(*) FILTER (WHERE disposition IN ('Completed', 'Success', 'Connected', 'Answered')) as successful_calls
-      FROM calls
-      WHERE campaign IS NOT NULL
-        AND started_at >= NOW() - INTERVAL '7 days'
-      GROUP BY campaign
-      ORDER BY total_calls DESC
-      LIMIT 5
-    `);
+        total_calls: stats.count,
+        avg_duration: stats.count > 0 ? Math.round(stats.totalDuration / stats.count) : 0,
+        successful_calls: stats.successful,
+        success_rate: stats.count > 0
+          ? Math.round((stats.successful / stats.count) * 1000) / 10
+          : 0
+      }))
+      .sort((a, b) => b.total_calls - a.total_calls)
+      .slice(0, 5);
 
     return NextResponse.json({
       ok: true,
       metrics: {
-        totalCalls,
+        totalCalls: totalCalls || 0,
         avgDuration,
-        successRate: Math.round(successRate * 10) / 10, // Round to 1 decimal
+        successRate: Math.round(successRate * 10) / 10,
         activeAgents,
         weekChange: Math.round(weekChange * 10) / 10,
-        todayCalls,
-        medianDuration: Math.round(parseFloat(avgDurationResult.median_duration))
+        todayCalls: todayCalls || 0,
+        medianDuration: Math.round(medianDuration)
       },
       charts: {
         hourlyDistribution,
-        topAgents: topAgents.map(a => ({
-          ...a,
-          avg_duration: Math.round(a.avg_duration)
-        })),
+        topAgents,
         dispositionBreakdown,
-        campaignStats: campaignStats.map(c => ({
-          ...c,
-          avg_duration: Math.round(c.avg_duration),
-          success_rate: c.total_calls > 0 
-            ? Math.round((c.successful_calls / c.total_calls) * 1000) / 10 
-            : 0
-        }))
+        campaignStats
       },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error('Error fetching dashboard stats:', error);
-    
-    // Return default values on error
+    console.error('[SECURITY] Error fetching dashboard stats:', error);
+
     return NextResponse.json({
       ok: false,
       error: error.message,
@@ -193,4 +237,4 @@ export async function GET(req: NextRequest) {
       }
     });
   }
-}
+});

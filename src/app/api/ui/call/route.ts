@@ -1,64 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient, validateResourceAccess } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
+  const supabase = createSecureClient();
   const id = req.nextUrl.searchParams.get('id');
-  
+
   if (!id) {
     return NextResponse.json({ ok: false, error: 'missing_id' }, { status: 400 });
   }
 
   try {
-    // Get call details
-    const call = await db.oneOrNone(`
-      SELECT 
-        c.*,
-        false as has_policy_300_plus
-      FROM calls c
-      WHERE c.id = $1
-    `, [id]);
+    const hasAccess = await validateResourceAccess(id, 'calls', context);
 
-    if (!call) {
+    if (!hasAccess) {
+      console.error(`[SECURITY] User ${context.userId} attempted to access call ${id} without permission`);
       return NextResponse.json({ ok: false, error: 'call_not_found' }, { status: 404 });
     }
 
-    // Get transcript
-    const transcript = await db.oneOrNone(`
-      SELECT * FROM transcripts WHERE call_id = $1
-    `, [id]);
+    const { data: call, error: callError } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('id', id)
+      .in('agency_id', context.agencyIds)
+      .single();
 
-    // Get analysis
-    const analysis = await db.oneOrNone(`
-      SELECT * FROM analyses WHERE call_id = $1
-    `, [id]);
+    if (callError || !call) {
+      return NextResponse.json({ ok: false, error: 'call_not_found' }, { status: 404 });
+    }
 
-    // Get contact info if available (policies_stub disabled for now)
+    const { data: transcript } = await supabase
+      .from('transcripts')
+      .select('*')
+      .eq('call_id', id)
+      .single();
+
+    const { data: analysis } = await supabase
+      .from('analyses')
+      .select('*')
+      .eq('call_id', id)
+      .single();
+
     const contact = null;
 
-    // Get last 50 events
-    const events = await db.manyOrNone(`
-      SELECT id, type, payload, created_at as at
-      FROM call_events
-      WHERE call_id = $1
-      ORDER BY created_at DESC
-      LIMIT 50
-    `, [id]);
+    const { data: events } = await supabase
+      .from('call_events')
+      .select('id, type, payload, created_at')
+      .eq('call_id', id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    const eventsChronological = events?.map(e => ({
+      id: e.id,
+      type: e.type,
+      payload: e.payload,
+      at: e.created_at
+    })).reverse() || [];
 
     return NextResponse.json({
       ok: true,
-      call,
+      call: {
+        ...call,
+        has_policy_300_plus: false
+      },
       transcript,
       analysis,
       contact,
-      events: events.reverse() // Chronological order
+      events: eventsChronological
     });
   } catch (error: any) {
-    console.error('Error fetching call details:', error);
-    return NextResponse.json({ 
-      ok: false, 
-      error: error.message 
+    console.error('[SECURITY] Error fetching call details:', error);
+    return NextResponse.json({
+      ok: false,
+      error: error.message
     }, { status: 500 });
   }
-}
+});
