@@ -51,8 +51,12 @@ function SettingsForm(props: SettingsFormProps) {
 
   const ErrorMessage = ({ path }: { path: string }) => {
     const err = errors[path];
-    return err ? <div className="text-red-600 text-sm mt-1">{err}</div> : null;
+    return err ? <div className="text-red-600 text-sm mt-1 font-semibold">{err}</div> : null;
   };
+
+  const HelperText = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-sm text-gray-500 mt-1.5 leading-relaxed">{children}</div>
+  );
 
   return (
     <div className="space-y-6">
@@ -76,9 +80,9 @@ function SettingsForm(props: SettingsFormProps) {
       </div>
 
       <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">ASR Settings</legend>
+        <legend className="text-lg font-bold text-gray-900 px-2">🎙️ ASR Settings</legend>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
             <label htmlFor="model" className="block text-sm font-semibold text-gray-700 mb-1">
               Model
@@ -93,12 +97,15 @@ function SettingsForm(props: SettingsFormProps) {
               <option value="nova-2">nova-2</option>
               <option value="nova-3">nova-3</option>
             </select>
+            <HelperText>
+              Pick which brain to use. <strong>Phonecall</strong> is best for calls with two people talking.
+            </HelperText>
             <ErrorMessage path="asr.model" />
           </div>
 
           <div>
             <label htmlFor="utt_split" className="block text-sm font-semibold text-gray-700 mb-1">
-              Utterance Split (0.4 - 2.0)
+              Utterance Split
             </label>
             <input
               id="utt_split"
@@ -107,30 +114,55 @@ function SettingsForm(props: SettingsFormProps) {
               min="0.4"
               max="2.0"
               value={value.asr.utt_split}
-              onChange={(e) => updateAsr('utt_split', parseFloat(e.target.value))}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                const clamped = Math.max(0.4, Math.min(2.0, val));
+                updateAsr('utt_split', clamped);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
             />
+            <HelperText>
+              Lower = fewer, longer chunks. Higher = more, shorter chunks.<br />
+              <strong>Example:</strong> 0.6 → big chunks, 1.6 → many little chunks.
+            </HelperText>
             <ErrorMessage path="asr.utt_split" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {(['diarize', 'utterances', 'smart_format', 'punctuate', 'numerals', 'paragraphs', 'detect_entities'] as const).map((key) => (
-              <label key={key} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={value.asr[key]}
-                  onChange={(e) => updateAsr(key, e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-gray-700">{key.replace(/_/g, ' ')}</span>
-              </label>
-            ))}
+          <div>
+            <div className="text-sm font-semibold text-gray-700 mb-2">Features</div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'diarize' as const, label: 'Diarize', help: 'Separate speakers' },
+                { key: 'utterances' as const, label: 'Utterances', help: 'Break into sentences' },
+                { key: 'smart_format' as const, label: 'Smart Format', help: 'Auto-format text' },
+                { key: 'punctuate' as const, label: 'Punctuate', help: 'Add commas & periods' },
+                { key: 'numerals' as const, label: 'Numerals', help: 'Use numbers: 3 not three' },
+                { key: 'paragraphs' as const, label: 'Paragraphs', help: 'Group into paragraphs' },
+                { key: 'detect_entities' as const, label: 'Detect Entities', help: 'Find names & places' }
+              ].map(({ key, label, help }) => (
+                <label key={key} className="flex items-start gap-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100">
+                  <input
+                    type="checkbox"
+                    checked={value.asr[key]}
+                    onChange={(e) => updateAsr(key, e.target.checked)}
+                    className="w-4 h-4 mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-700">{label}</div>
+                    <div className="text-xs text-gray-500">{help}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <HelperText>
+              Turn these on/off to add features. <strong>Example:</strong> Punctuation makes text easier to read.
+            </HelperText>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-gray-700">
-                Keywords (term, weight 1-5)
+                Keywords
               </label>
               <button
                 type="button"
@@ -155,8 +187,13 @@ function SettingsForm(props: SettingsFormProps) {
                     min="1"
                     max="5"
                     value={kw[1]}
-                    onChange={(e) => updateKeyword(idx, kw[0], Math.max(1, Math.min(5, parseInt(e.target.value) || 2)))}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 2;
+                      const clamped = Math.max(1, Math.min(5, val));
+                      updateKeyword(idx, kw[0], clamped);
+                    }}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-md text-gray-900 text-center"
+                    title="Weight 1-5"
                   />
                   <button
                     type="button"
@@ -168,17 +205,21 @@ function SettingsForm(props: SettingsFormProps) {
                 </div>
               ))}
             </div>
+            <HelperText>
+              Add carriers or words you care about. Weight 1-5 controls importance.<br />
+              <strong>Example:</strong> Kaiser:3 means pay more attention to "Kaiser".
+            </HelperText>
             <ErrorMessage path="asr.keywords" />
           </div>
         </div>
       </fieldset>
 
       <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Money Settings</legend>
-        <div className="space-y-4">
+        <legend className="text-lg font-bold text-gray-900 px-2">💰 Money Settings</legend>
+        <div className="space-y-5">
           <div>
             <label htmlFor="premiumHundredsIfUnder" className="block text-sm font-semibold text-gray-700 mb-1">
-              Premium Hundreds If Under (0-200)
+              Premium Hundreds If Under
             </label>
             <input
               id="premiumHundredsIfUnder"
@@ -186,14 +227,22 @@ function SettingsForm(props: SettingsFormProps) {
               min="0"
               max="200"
               value={value.money.premiumHundredsIfUnder}
-              onChange={(e) => updateMoney('premiumHundredsIfUnder', parseInt(e.target.value) || 0)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 0;
+                const clamped = Math.max(0, Math.min(200, val));
+                updateMoney('premiumHundredsIfUnder', clamped);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
             />
+            <HelperText>
+              If a premium sounds too small, fix it by multiplying by 100.<br />
+              <strong>Example:</strong> If under <strong>50</strong>, then $5.10 → $510.
+            </HelperText>
             <ErrorMessage path="money.premiumHundredsIfUnder" />
           </div>
           <div>
             <label htmlFor="feeHundredsIfUnder" className="block text-sm font-semibold text-gray-700 mb-1">
-              Fee Hundreds If Under (0-200)
+              Fee Hundreds If Under
             </label>
             <input
               id="feeHundredsIfUnder"
@@ -201,54 +250,78 @@ function SettingsForm(props: SettingsFormProps) {
               min="0"
               max="200"
               value={value.money.feeHundredsIfUnder}
-              onChange={(e) => updateMoney('feeHundredsIfUnder', parseInt(e.target.value) || 0)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 0;
+                const clamped = Math.max(0, Math.min(200, val));
+                updateMoney('feeHundredsIfUnder', clamped);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
             />
+            <HelperText>
+              Same idea, but for enrollment fees.<br />
+              <strong>Example:</strong> If under <strong>20</strong>, then $0.99 → $99.
+            </HelperText>
             <ErrorMessage path="money.feeHundredsIfUnder" />
           </div>
           <div>
-            <label htmlFor="priceCarrierWindowMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Price Carrier Window Ms (0-120000)
+            <label htmlFor="priceCarrierWindowSec" className="block text-sm font-semibold text-gray-700 mb-1">
+              Price–Carrier Window (seconds)
             </label>
             <input
-              id="priceCarrierWindowMs"
+              id="priceCarrierWindowSec"
               type="number"
               min="0"
-              max="120000"
-              value={value.money.priceCarrierWindowMs}
-              onChange={(e) => updateMoney('priceCarrierWindowMs', parseInt(e.target.value) || 0)}
+              max="120"
+              value={Math.round(value.money.priceCarrierWindowMs / 1000)}
+              onChange={(e) => {
+                const sec = parseInt(e.target.value) || 0;
+                const clamped = Math.max(0, Math.min(120, sec));
+                updateMoney('priceCarrierWindowMs', clamped * 1000);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
-              />
+            />
+            <HelperText>
+              How close a price must be to a carrier mention (in seconds).<br />
+              <strong>Example:</strong> 15 = look within 15 seconds before/after.
+            </HelperText>
             <ErrorMessage path="money.priceCarrierWindowMs" />
           </div>
         </div>
       </fieldset>
 
       <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Rebuttal Settings</legend>
+        <legend className="text-lg font-bold text-gray-900 px-2">🗣️ Rebuttal Settings</legend>
         <div>
-          <label htmlFor="rebuttalWindowMs" className="block text-sm font-semibold text-gray-700 mb-1">
-            Window Ms (1000-600000)
+          <label htmlFor="rebuttalWindowSec" className="block text-sm font-semibold text-gray-700 mb-1">
+            Window (seconds)
           </label>
           <input
-            id="rebuttalWindowMs"
+            id="rebuttalWindowSec"
             type="number"
-            min="1000"
-            max="600000"
-            value={value.rebuttal.windowMs}
-            onChange={(e) => updateRebuttal('windowMs', parseInt(e.target.value) || 1000)}
+            min="1"
+            max="600"
+            value={Math.round(value.rebuttal.windowMs / 1000)}
+            onChange={(e) => {
+              const sec = parseInt(e.target.value) || 1;
+              const clamped = Math.max(1, Math.min(600, sec));
+              updateRebuttal('windowMs', clamped * 1000);
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
           />
+          <HelperText>
+            How long the system listens for a rebuttal after a customer objection.<br />
+            <strong>Example:</strong> 30 = agent has 30 seconds to respond.
+          </HelperText>
           <ErrorMessage path="rebuttal.windowMs" />
         </div>
       </fieldset>
 
       <fieldset disabled={disabled} className="border border-gray-300 rounded-lg p-4">
-        <legend className="text-lg font-bold text-gray-900 px-2">Interrupt Settings</legend>
-        <div className="space-y-4">
+        <legend className="text-lg font-bold text-gray-900 px-2">⚡ Interrupt Settings</legend>
+        <div className="space-y-5">
           <div>
             <label htmlFor="maxGapMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Max Gap Ms (50-2000)
+              Max Gap (milliseconds)
             </label>
             <input
               id="maxGapMs"
@@ -256,14 +329,22 @@ function SettingsForm(props: SettingsFormProps) {
               min="50"
               max="2000"
               value={value.interrupt.maxGapMs}
-              onChange={(e) => updateInterrupt('maxGapMs', parseInt(e.target.value) || 50)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 50;
+                const clamped = Math.max(50, Math.min(2000, val));
+                updateInterrupt('maxGapMs', clamped);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
             />
+            <HelperText>
+              Max pause between words to count as the same speech.<br />
+              <strong>Example:</strong> 300 = short breath (0.3 seconds) still counts.
+            </HelperText>
             <ErrorMessage path="interrupt.maxGapMs" />
           </div>
           <div>
             <label htmlFor="prevMinDurMs" className="block text-sm font-semibold text-gray-700 mb-1">
-              Previous Min Duration Ms (200-5000)
+              Previous Min Duration (milliseconds)
             </label>
             <input
               id="prevMinDurMs"
@@ -271,9 +352,17 @@ function SettingsForm(props: SettingsFormProps) {
               min="200"
               max="5000"
               value={value.interrupt.prevMinDurMs}
-              onChange={(e) => updateInterrupt('prevMinDurMs', parseInt(e.target.value) || 200)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 200;
+                const clamped = Math.max(200, Math.min(5000, val));
+                updateInterrupt('prevMinDurMs', clamped);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
             />
+            <HelperText>
+              How long the other person must talk before we call it an interruption.<br />
+              <strong>Example:</strong> 1500 = 1.5 seconds of talking required.
+            </HelperText>
             <ErrorMessage path="interrupt.prevMinDurMs" />
           </div>
         </div>
