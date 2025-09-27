@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       address: body.address1 ?? body.address ?? null,
       city: body.city ?? null,
       state: body.state ?? null,
+      office_id: 1, // Default office
       agency_id: agencyId
     };
 
