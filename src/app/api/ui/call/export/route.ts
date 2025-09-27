@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient, validateResourceAccess } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   const searchParams = req.nextUrl.searchParams;
   const callId = searchParams.get('id');
   const format = searchParams.get('format') || 'txt';
@@ -13,76 +13,94 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Get call details and transcript
-    const call = await db.oneOrNone(`
-      select 
-        c.id,
-        c.started_at,
-        c.duration_sec,
-        ct.primary_phone as customer_phone,
-        ag.name as agent_name,
-        t.text,
-        t.translated_text,
-        t.lang,
-        t.diarized,
-        t.engine
-      from calls c
-      left join contacts ct on ct.id = c.contact_id
-      left join agents ag on ag.id = c.agent_id
-      left join transcripts t on t.call_id = c.id
-      where c.id = $1
-    `, [callId]);
+    const supabase = createSecureClient();
 
-    if (!call) {
+    // SECURITY: Validate user has access to this call
+    const hasAccess = await validateResourceAccess(callId, 'calls', context);
+
+    if (!hasAccess) {
+      console.error(`[SECURITY] User ${context.userId} attempted to export call ${callId} without permission`);
       return NextResponse.json({ error: 'Call not found' }, { status: 404 });
     }
 
-    if (!call.text) {
+    // Get call details and transcript using RLS-enabled client
+    const { data: call, error: callError } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        started_at,
+        duration_sec,
+        agency_id,
+        agent_name,
+        agents(name),
+        contacts(primary_phone),
+        transcripts(
+          text,
+          translated_text,
+          lang,
+          diarized,
+          engine
+        )
+      `)
+      .eq('id', callId)
+      .in('agency_id', context.agencyIds)
+      .single();
+
+    if (callError || !call) {
+      return NextResponse.json({ error: 'Call not found' }, { status: 404 });
+    }
+
+    const transcript = call.transcripts?.[0];
+
+    if (!transcript?.text) {
       return NextResponse.json({ error: 'No transcript available' }, { status: 404 });
     }
 
     // Format transcript for export
     let content = '';
     const date = call.started_at ? new Date(call.started_at).toLocaleString() : 'Unknown date';
-    
+
     // Header
     content += `Call Transcript\n`;
     content += `${'='.repeat(50)}\n\n`;
     content += `Date: ${date}\n`;
     content += `Duration: ${call.duration_sec ? `${Math.floor(call.duration_sec / 60)}m ${call.duration_sec % 60}s` : 'Unknown'}\n`;
-    content += `Agent: ${call.agent_name || 'Unknown'}\n`;
-    content += `Customer: ${call.customer_phone || 'Unknown'}\n`;
-    content += `Language: ${call.lang || 'en'}\n`;
-    content += `Transcription Engine: ${call.engine || 'Unknown'}\n`;
+    content += `Agent: ${call.agent_name || call.agents?.name || 'Unknown'}\n`;
+    content += `Customer: ${call.contacts?.primary_phone || 'Unknown'}\n`;
+    content += `Language: ${transcript.lang || 'en'}\n`;
+    content += `Transcription Engine: ${transcript.engine || 'Unknown'}\n`;
     content += `\n${'='.repeat(50)}\n\n`;
 
     // Transcript content
-    if (call.diarized) {
+    if (transcript.diarized) {
       try {
-        const diarized = JSON.parse(call.diarized);
+        const diarized = typeof transcript.diarized === 'string'
+          ? JSON.parse(transcript.diarized)
+          : transcript.diarized;
+
         if (Array.isArray(diarized) && diarized.length > 0) {
           content += `TRANSCRIPT WITH SPEAKER LABELS\n\n`;
-          
+
           for (const segment of diarized) {
             const speaker = segment.speaker || `Speaker ${segment.speaker_id || 'Unknown'}`;
-            const timestamp = segment.start ? 
-              `[${Math.floor(segment.start / 60)}:${String(Math.floor(segment.start % 60)).padStart(2, '0')}]` : 
+            const timestamp = segment.start ?
+              `[${Math.floor(segment.start / 60)}:${String(Math.floor(segment.start % 60)).padStart(2, '0')}]` :
               '';
             const text = segment.text || segment.transcript || '';
-            
+
             content += `${timestamp} ${speaker}:\n${text}\n\n`;
           }
         } else {
           // Fallback to plain text
-          content += call.translated_text || call.text;
+          content += transcript.translated_text || transcript.text;
         }
       } catch {
         // If diarized parsing fails, use plain text
-        content += call.translated_text || call.text;
+        content += transcript.translated_text || transcript.text;
       }
     } else {
       // Plain text without diarization
-      content += call.translated_text || call.text;
+      content += transcript.translated_text || transcript.text;
     }
 
     // Add footer
@@ -92,7 +110,7 @@ export async function GET(req: NextRequest) {
 
     // Return as downloadable file
     const filename = `transcript_${callId.substring(0, 8)}_${Date.now()}.txt`;
-    
+
     return new Response(content, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -101,7 +119,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Export error:', error);
+    console.error('[SECURITY] Export error for user', context.userId, ':', error);
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
-}
+});
