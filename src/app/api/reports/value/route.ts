@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // SECURITY: Admin only
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
+    console.warn('[DEPRECATED] /api/reports/value accessed without auth');
+    return unauthorizedResponse();
+  }
+
+  console.warn('[DEPRECATED] /api/reports/value is deprecated and unused. Consider removing.');
   const { searchParams } = new URL(req.url);
   const from = searchParams.get('from') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const to = searchParams.get('to') || new Date().toISOString();

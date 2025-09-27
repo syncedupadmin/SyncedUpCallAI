@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // SECURITY: Admin only
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
+    console.warn('[DEPRECATED] /api/reports/rollups/simple accessed without auth');
+    return unauthorizedResponse();
+  }
+
+  console.warn('[DEPRECATED] /api/reports/rollups/simple is deprecated and unused. Consider removing.');
   try {
     const daysParam = req.nextUrl.searchParams.get('days');
     const days = Math.min(Math.max(1, parseInt(daysParam || '30', 10)), 90);
