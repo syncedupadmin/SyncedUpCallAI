@@ -1,64 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { db } from '@/server/db';
+import { withStrictAgencyIsolation, createSecureClient } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get current user
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabase = createSecureClient();
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const { data: calls, error } = await supabase
+      .from('calls')
+      .select(`
+        id,
+        source,
+        source_ref,
+        campaign,
+        disposition,
+        direction,
+        started_at,
+        ended_at,
+        duration_sec,
+        recording_url,
+        agent_id,
+        agent_name,
+        phone_number,
+        lead_id,
+        created_at,
+        updated_at,
+        agency_id,
+        agents(name),
+        contacts(primary_phone)
+      `)
+      .in('agency_id', context.agencyIds)
+      .eq('source', 'convoso')
+      .order('started_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('[SECURITY] Error fetching calls for user', context.userId, ':', error);
+      return NextResponse.json({
+        ok: false,
+        error: 'Failed to fetch calls',
+        data: []
+      });
     }
 
-    // For now, return all calls for authenticated users
-    // You can add filtering by user later if needed
-    const calls = await db.manyOrNone(`
-      SELECT
-        c.id,
-        c.source,
-        c.source_ref,
-        c.campaign,
-        c.disposition,
-        c.direction,
-        c.started_at,
-        c.ended_at,
-        c.duration_sec,
-        c.recording_url,
-        c.agent_id,
-        a.name as agent_name,
-        ce.payload->>'agent_name' as webhook_agent_name,
-        ce.payload->>'phone_number' as phone_number
-      FROM calls c
-      LEFT JOIN agents a ON a.id = c.agent_id
-      LEFT JOIN call_events ce ON ce.call_id = c.id AND ce.type = 'webhook_received'
-      WHERE c.source = 'convoso'
-      ORDER BY c.started_at DESC
-      LIMIT 100
-    `);
-
-    // Enhance with agent names from webhook data if not in agents table
-    const enhancedCalls = calls.map(call => ({
-      ...call,
-      agent_name: call.agent_name || call.webhook_agent_name
-    }));
+    const enhancedCalls = calls?.map(call => ({
+      id: call.id,
+      source: call.source,
+      source_ref: call.source_ref,
+      campaign: call.campaign,
+      disposition: call.disposition,
+      direction: call.direction,
+      started_at: call.started_at,
+      ended_at: call.ended_at,
+      duration_sec: call.duration_sec,
+      recording_url: call.recording_url,
+      agent_id: call.agent_id,
+      agent_name: call.agent_name || call.agents?.name,
+      phone_number: call.phone_number || call.contacts?.primary_phone,
+      lead_id: call.lead_id,
+      created_at: call.created_at,
+      updated_at: call.updated_at,
+      agency_id: call.agency_id
+    })) || [];
 
     return NextResponse.json({
       ok: true,
       data: enhancedCalls
     });
   } catch (error: any) {
-    console.error('Error fetching calls:', error);
+    console.error('[SECURITY] Error in /api/calls for user', context.userId, ':', error);
     return NextResponse.json({
       ok: false,
-      error: error.message,
+      error: 'Failed to fetch calls',
       data: []
     });
   }
-}
+});
