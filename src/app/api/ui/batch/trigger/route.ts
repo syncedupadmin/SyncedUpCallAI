@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export async function POST(req: NextRequest) {
+  // SECURITY: Admin only - can cause DoS by triggering expensive batch operations
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
+    console.error('[SECURITY] Unauthorized attempt to trigger batch processing');
+    return unauthorizedResponse();
+  }
+
   try {
     // Get options from request body
     const { batchSize = 50, includeShortCalls = false } = await req.json().catch(() => ({}));

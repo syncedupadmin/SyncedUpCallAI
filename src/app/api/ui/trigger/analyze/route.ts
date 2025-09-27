@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminAuthenticated, unauthorizedResponse } from '@/server/auth/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  // SECURITY: Admin only - can waste API credits
+  const isAdmin = await isAdminAuthenticated(req);
+  if (!isAdmin) {
+    console.error('[SECURITY] Unauthorized attempt to trigger analysis');
+    return unauthorizedResponse();
+  }
+
   try {
     const { call_id } = await req.json();
     if (!call_id) return NextResponse.json({ ok: false, error: 'missing_call_id' }, { status: 400 });
