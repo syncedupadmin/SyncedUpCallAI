@@ -4,10 +4,11 @@ import { transcribe, translateToEnglish } from '@/server/asr';
 import { ensureEmbedding } from '@/server/embeddings';
 import { truncatePayload } from '@/server/lib/retry';
 import { SSEManager } from '@/lib/sse';
+import { withRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.JOBS_SECRET}`)
     return NextResponse.json({ ok: false }, { status: 401 });
 
@@ -162,3 +163,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
   }
 }
+
+export const POST = withRateLimit(handler, { maxRequests: 10, windowMs: 60000 });

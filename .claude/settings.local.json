@@ -25,7 +25,8 @@
       "Bash(mv:*)",
       "Bash(dir:*)",
       "Bash(powershell:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "WebSearch"
     ]
   },
   "outputStyle": "default"

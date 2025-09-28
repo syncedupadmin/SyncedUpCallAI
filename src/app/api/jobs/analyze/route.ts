@@ -4,10 +4,11 @@ import { ANALYSIS_SCHEMA, validateAnalysis, softValidateAnalysis } from '@/serve
 import { ANALYSIS_SYSTEM, userPrompt } from '@/server/lib/prompts';
 import { alert } from '@/server/lib/alerts';
 import { withinCancelWindow } from '@/server/lib/biz';
+import { withRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.JOBS_SECRET}`)
     return NextResponse.json({ ok: false }, { status: 401 });
 
@@ -361,3 +362,5 @@ export async function POST(req: NextRequest) {
     reason_primary: j.reason_primary
   });
 }
+
+export const POST = withRateLimit(handler, { maxRequests: 20, windowMs: 60000 });
