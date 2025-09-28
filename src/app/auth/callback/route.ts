@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const next = requestUrl.searchParams.get('next') || '/dashboard';
+  const type = requestUrl.searchParams.get('type');
 
   if (code) {
     const supabase = await createClient();
@@ -13,6 +14,10 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error exchanging code for session:', error);
       return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin));
+    }
+
+    if (type === 'recovery') {
+      return NextResponse.redirect(new URL('/reset-password', requestUrl.origin));
     }
   }
 

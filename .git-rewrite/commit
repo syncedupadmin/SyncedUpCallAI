@@ -1,0 +1,14 @@
+tree 0e096240cae9d90863d55f22618c8f231315b094
+parent 47745862766cf49ed404a9c188e99940797d9cf3
+author Nick <admin@syncedupsolutions.com> 1758589720 -0400
+committer Nick <admin@syncedupsolutions.com> 1758589720 -0400
+
+fix: Add required source and analyzed_at fields to test runner
+
+- Add source='ai_test' and analyzed_at=NOW() when creating test call records
+- Fixes "null value in column source" constraint error
+- Ensures test runs can create synthetic call records properly
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

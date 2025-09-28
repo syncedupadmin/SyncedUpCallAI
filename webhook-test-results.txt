@@ -1,0 +1,55 @@
+🧪 PHASE 2: Webhook Security Testing
+====================================
+
+Test 1: Call webhook - No auth (should fail)
+Endpoint: /api/webhooks/convoso-calls
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Missing authentication. Include X-Agency-Token header."}
+
+Test 2: Call webhook - Invalid token (should fail)
+Endpoint: /api/webhooks/convoso-calls
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Invalid or inactive webhook token"}
+
+Test 3: Call webhook - Valid token (should succeed)
+Endpoint: /api/webhooks/convoso-calls
+✅ PASS - Status: 200
+Response: {"ok":true,"type":"call","call_id":"28790ca2-5864-40c2-96e9-ba87085a04cf","message":"Call data saved"}
+
+Test 4: Contact webhook - No auth (should fail)
+Endpoint: /api/webhooks/convoso
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Missing authentication. Include X-Agency-Token header."}
+
+Test 5: Contact webhook - Invalid token (should fail)
+Endpoint: /api/webhooks/convoso
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Invalid or inactive webhook token"}
+
+Test 6: Contact webhook - Valid token (should succeed)
+Endpoint: /api/webhooks/convoso
+✅ PASS - Status: 200
+Response: {"ok":true,"type":"lead"}
+
+Test 7: Lead webhook - No auth (should fail)
+Endpoint: /api/webhooks/convoso-leads
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Missing authentication. Include X-Agency-Token header."}
+
+Test 8: Lead webhook - Invalid token (should fail)
+Endpoint: /api/webhooks/convoso-leads
+✅ PASS - Status: 401
+Response: {"ok":false,"error":"Invalid or inactive webhook token"}
+
+Test 9: Lead webhook - Valid token (should succeed)
+Endpoint: /api/webhooks/convoso-leads
+✅ PASS - Status: 200
+Response: {"ok":true,"message":"Lead data saved","type":"lead","contact_id":"c8d4b948-b946-451e-a81b-69a6301789f8","lead":{"lead_id":"test-lead-999","name":"Jane Smith","phone":"555-0300","email":"jane@example.com"}}
+
+=========================================
+📊 Test Results Summary
+=========================================
+Total Tests: 9
+Passed: 9
+Failed: 0
+✅ All tests passed!

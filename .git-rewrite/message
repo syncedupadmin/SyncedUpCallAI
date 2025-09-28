@@ -1,0 +1,9 @@
+fix: Add required source and analyzed_at fields to test runner
+
+- Add source='ai_test' and analyzed_at=NOW() when creating test call records
+- Fixes "null value in column source" constraint error
+- Ensures test runs can create synthetic call records properly
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
