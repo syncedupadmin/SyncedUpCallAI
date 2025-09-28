@@ -30,7 +30,7 @@ export default function AuthCallbackPage() {
         const urlParams = new URLSearchParams(window.location.search);
         const type = urlParams.get('type');
 
-        if (type === 'recovery' || data?.session?.user?.recovery_token) {
+        if (type === 'recovery') {
           // This is a password reset - redirect to reset password page
           router.push('/reset-password');
         } else {
