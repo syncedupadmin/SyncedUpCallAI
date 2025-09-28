@@ -7,19 +7,19 @@ export async function middleware(request: NextRequest) {
   const code = searchParams.get('code');
   const type = searchParams.get('type');
 
-  // Only intercept codes at the root URL to prevent infinite loops
-  // Don't intercept if already going to auth/callback or reset-password
-  if (code && pathname === '/') {
+  // Skip code interception for password reset - let Supabase handle it directly
+  // Password reset emails redirect to /reset-password with hash fragments
+  if (type === 'recovery') {
+    console.log('Middleware: Skipping recovery code, letting Supabase handle it');
+    // Let the request continue without interception
+  } else if (code && pathname === '/' && type !== 'recovery') {
+    // Only intercept non-recovery codes at root URL
     const redirectUrl = new URL('/auth/callback', request.url);
     redirectUrl.searchParams.set('code', code);
     if (type) {
       redirectUrl.searchParams.set('type', type);
     }
-    // For recovery codes, set next to reset-password
-    if (type === 'recovery') {
-      redirectUrl.searchParams.set('next', '/reset-password');
-    }
-    console.log('Middleware: Redirecting code from root to auth/callback');
+    console.log('Middleware: Redirecting non-recovery code from root to auth/callback');
     return NextResponse.redirect(redirectUrl);
   }
 
