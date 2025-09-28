@@ -3,24 +3,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
-  const code = searchParams.get('code');
-  const type = searchParams.get('type');
-
-  // Skip code interception for password reset - let Supabase handle it directly
-  // Password reset emails redirect to /reset-password with hash fragments
-  if (type === 'recovery') {
-    console.log('Middleware: Skipping recovery code, letting Supabase handle it');
-    // Let the request continue without interception
-  } else if (code && pathname === '/' && type !== 'recovery') {
-    // Only intercept non-recovery codes at root URL
-    const redirectUrl = new URL('/auth/callback', request.url);
-    redirectUrl.searchParams.set('code', code);
-    if (type) {
-      redirectUrl.searchParams.set('type', type);
-    }
-    console.log('Middleware: Redirecting non-recovery code from root to auth/callback');
-    return NextResponse.redirect(redirectUrl);
+  // Skip middleware for auth routes - they handle their own logic
+  if (request.nextUrl.pathname.startsWith('/auth/')) {
+    return NextResponse.next();
   }
 
   // Handle admin authentication for all admin and superadmin pages

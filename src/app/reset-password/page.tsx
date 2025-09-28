@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Lock, AlertCircle, Loader2, ArrowLeft, CheckCircle, KeyRound } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -13,8 +13,7 @@ export const dynamic = 'force-dynamic';
 
 function ResetPasswordContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = createClient();
 
   const [stage, setStage] = useState<'verifying' | 'ready' | 'updating' | 'done' | 'error'>('verifying');
   const [error, setError] = useState<string | null>(null);
@@ -22,68 +21,34 @@ function ResetPasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
-    const verifyTokens = async () => {
+    const checkSession = async () => {
       try {
-        // First, try query-param flow (?code=...)
-        const code = searchParams.get('code');
-        if (code) {
-          console.log('Attempting to exchange code for session:', code);
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error('Code exchange failed:', error);
-            throw error;
-          }
-          console.log('Code exchange successful');
+        // Check if we have an active session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('Session check error:', sessionError);
+          throw sessionError;
+        }
+
+        if (session) {
+          console.log('Active session found for password reset');
           setStage('ready');
-          return;
+        } else {
+          // No session - user needs to request a new password reset
+          console.log('No active session for password reset');
+          setStage('error');
+          setError('Invalid or expired reset link. Please request a new password reset.');
         }
-
-        // Second, try hash flow (#access_token=...&refresh_token=...&type=recovery)
-        const hash = typeof window !== 'undefined' ? window.location.hash : '';
-        if (hash?.includes('access_token=')) {
-          console.log('Attempting to set session from hash params');
-          const params = new URLSearchParams(hash.replace(/^#/, ''));
-          const accessToken = params.get('access_token') || '';
-          const refreshToken = params.get('refresh_token') || '';
-          const type = params.get('type');
-
-          if (type === 'recovery' && accessToken && refreshToken) {
-            const { error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
-            if (error) {
-              console.error('Session set failed:', error);
-              throw error;
-            }
-            // Clean up the URL hash
-            window.history.replaceState({}, '', window.location.pathname);
-            console.log('Session set successful');
-            setStage('ready');
-            return;
-          }
-        }
-
-        // Check if user is already logged in (they can change password)
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          console.log('User already authenticated');
-          setStage('ready');
-          return;
-        }
-
-        // No valid tokens found
-        setStage('error');
-        setError('Invalid or missing recovery token. Please request a new password reset email.');
       } catch (e: any) {
-        console.error('Token verification error:', e);
+        console.error('Error checking session:', e);
         setStage('error');
-        setError(e?.message || 'Failed to verify recovery token. Please request a new reset link.');
+        setError('Invalid or expired reset link. Please request a new password reset.');
       }
     };
 
-    verifyTokens();
-  }, [searchParams, supabase]);
+    checkSession();
+  }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -106,6 +71,7 @@ function ResetPasswordContent() {
 
     try {
       const { error } = await supabase.auth.updateUser({ password });
+
       if (error) {
         console.error('Password update failed:', error);
         setStage('ready');
@@ -114,9 +80,12 @@ function ResetPasswordContent() {
         return;
       }
 
+      // Sign out after password reset to ensure clean login
+      await supabase.auth.signOut();
+
       setStage('done');
       toast.success('Password updated successfully!');
-      setTimeout(() => router.replace('/login?reset=1'), 1500);
+      setTimeout(() => router.push('/login?reset=success'), 1500);
     } catch (e: any) {
       setStage('ready');
       setError(e?.message || 'Failed to update password.');
@@ -134,7 +103,7 @@ function ResetPasswordContent() {
           className="text-center"
         >
           <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Verifying reset link...</p>
+          <p className="text-white text-lg">Verifying reset session...</p>
         </motion.div>
       </div>
     );
