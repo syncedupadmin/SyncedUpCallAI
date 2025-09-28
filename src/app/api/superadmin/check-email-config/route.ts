@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 
 export async function GET() {
   try {
+    // ALWAYS skip email test - this should never send actual emails
+    // This endpoint should only return configuration status
+    console.log('[check-email-config] Email test disabled - returning config only');
+
     // Check environment variables
     const config = {
       hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -10,71 +13,39 @@ export async function GET() {
       hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL || process.env.APP_URL || 'Not set',
       inviteRedirectTo: process.env.INVITE_REDIRECT_TO || 'Not set (using default)',
+      environment: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV || 'not-on-vercel'
     }
 
-    // Try to create admin client
-    if (!config.hasServiceKey || !config.hasSupabaseUrl) {
-      return NextResponse.json({
-        ok: false,
-        error: 'Missing required environment variables',
-        config,
-        emailTestSkipped: true
-      })
+    const recommendations = []
+
+    if (!config.hasServiceKey) {
+      recommendations.push('❌ Add SUPABASE_SERVICE_ROLE_KEY to environment variables')
     }
 
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // Test creating a user (we'll immediately delete it)
-    const testEmail = `test-${Date.now()}@example.com`
-    console.log('[check-email-config] Testing with email:', testEmail)
-
-    // Try to invite a test user
-    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(testEmail, {
-      data: { name: 'Test User' },
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://synced-up-call-ai.vercel.app'}/auth/callback`
-    })
-
-    let emailTestResult = {
-      testEmail,
-      inviteSuccess: false,
-      inviteError: null as any,
-      userId: null as string | null,
-      emailDetails: null as any
+    if (!config.hasSupabaseUrl) {
+      recommendations.push('❌ Add NEXT_PUBLIC_SUPABASE_URL to environment variables')
     }
 
-    if (inviteErr) {
-      emailTestResult.inviteError = {
-        message: inviteErr.message,
-        code: inviteErr.code,
-        status: inviteErr.status
-      }
-    } else if (invited?.user) {
-      emailTestResult.inviteSuccess = true
-      emailTestResult.userId = invited.user.id
-      emailTestResult.emailDetails = {
-        email_confirmed_at: invited.user.email_confirmed_at,
-        confirmation_sent_at: invited.user.confirmation_sent_at,
-        invited_at: invited.user.invited_at,
-        created_at: invited.user.created_at
-      }
+    if (!config.hasAnonKey) {
+      recommendations.push('❌ Add NEXT_PUBLIC_SUPABASE_ANON_KEY to environment variables')
+    }
 
-      // Clean up - delete the test user
-      try {
-        await admin.auth.admin.deleteUser(invited.user.id)
-        console.log('[check-email-config] Test user cleaned up')
-      } catch (deleteErr) {
-        console.error('[check-email-config] Failed to clean up test user:', deleteErr)
-      }
+    if (config.siteUrl === 'Not set') {
+      recommendations.push('⚠️ Set NEXT_PUBLIC_SITE_URL or APP_URL for proper email redirects')
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('✅ Basic configuration looks good!')
+      recommendations.push('ℹ️ Email testing has been disabled to prevent unwanted test emails')
     }
 
     return NextResponse.json({
       ok: true,
       config,
-      emailTest: emailTestResult,
-      recommendations: getRecommendations(config, emailTestResult)
+      emailTestSkipped: true,
+      message: 'Email testing has been permanently disabled to prevent unwanted emails',
+      recommendations
     })
   } catch (error) {
     console.error('[check-email-config] Unexpected error:', error)
@@ -84,46 +55,4 @@ export async function GET() {
       details: error
     }, { status: 500 })
   }
-}
-
-function getRecommendations(config: any, emailTest: any) {
-  const recommendations = []
-
-  if (!config.hasServiceKey) {
-    recommendations.push('❌ Add SUPABASE_SERVICE_ROLE_KEY to environment variables')
-  }
-
-  if (config.siteUrl === 'Not set') {
-    recommendations.push('⚠️ Set NEXT_PUBLIC_SITE_URL or APP_URL for proper email redirects')
-  }
-
-  if (emailTest.inviteError?.code === 'over_email_send_rate_limit') {
-    recommendations.push('⚠️ Email rate limit reached. Default Supabase limit is 4 emails/hour')
-    recommendations.push('   Configure custom SMTP to remove this limit')
-    recommendations.push('   Go to Supabase Dashboard → Settings → Auth → SMTP Settings')
-  }
-
-  if (!emailTest.inviteSuccess && emailTest.inviteError) {
-    recommendations.push(`❌ Email invite failed: ${emailTest.inviteError.message}`)
-
-    if (emailTest.inviteError.message?.includes('SMTP')) {
-      recommendations.push('   Configure SMTP in Supabase Dashboard → Settings → Auth → SMTP Settings')
-    }
-  }
-
-  if (emailTest.inviteSuccess) {
-    recommendations.push('✅ Email invite test successful!')
-    if (emailTest.emailDetails?.confirmation_sent_at) {
-      recommendations.push('✅ Confirmation email was sent')
-    } else {
-      recommendations.push('⚠️ User created but confirmation email may not have been sent')
-      recommendations.push('   Check SMTP configuration in Supabase')
-    }
-  }
-
-  if (recommendations.length === 0) {
-    recommendations.push('✅ Email configuration looks good!')
-  }
-
-  return recommendations
 }
