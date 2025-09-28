@@ -1,30 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const rateLimit = new Map<string, { count: number; resetTime: number }>();
+import { checkRateLimit } from '@vercel/firewall';
 
 export function withRateLimit(
   handler: (req: NextRequest) => Promise<NextResponse>,
-  options = { maxRequests: 100, windowMs: 60000 }
+  options?: { endpoint?: string }
 ) {
-  return async function rateLimitedHandler(req: NextRequest) {
-    const clientId = req.headers.get('x-forwarded-for') ||
-                     req.headers.get('x-real-ip') ||
-                     'unknown';
+  return async (req: NextRequest): Promise<NextResponse> => {
+    // Use the endpoint name or default to 'api-request'
+    const ruleName = options?.endpoint || 'api-request';
 
-    const now = Date.now();
-    const clientData = rateLimit.get(clientId);
+    const { rateLimited } = await checkRateLimit(ruleName, { request: req });
 
-    if (!clientData || clientData.resetTime < now) {
-      rateLimit.set(clientId, { count: 1, resetTime: now + options.windowMs });
-    } else {
-      clientData.count++;
-
-      if (clientData.count > options.maxRequests) {
-        return NextResponse.json(
-          { error: 'Too many requests' },
-          { status: 429 }
-        );
-      }
+    if (rateLimited) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429 }
+      );
     }
 
     return handler(req);

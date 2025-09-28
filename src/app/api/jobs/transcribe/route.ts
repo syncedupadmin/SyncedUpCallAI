@@ -164,4 +164,4 @@ async function handler(req: NextRequest) {
   }
 }
 
-export const POST = withRateLimit(handler, { maxRequests: 10, windowMs: 60000 });
+export const POST = withRateLimit(handler, { endpoint: 'transcribe' });

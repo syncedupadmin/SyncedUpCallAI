@@ -363,4 +363,4 @@ async function handler(req: NextRequest) {
   });
 }
 
-export const POST = withRateLimit(handler, { maxRequests: 20, windowMs: 60000 });
+export const POST = withRateLimit(handler, { endpoint: 'analyze' });
