@@ -224,13 +224,12 @@ export default function LoginPage() {
                   <span className="ml-2 text-sm text-gray-400">Remember me</span>
                 </label>
 
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
+                <Link
+                  href="/forgot-password"
                   className="text-sm text-cyan-400 hover:text-cyan-300 transition"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
 
               <button
