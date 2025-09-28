@@ -19,6 +19,7 @@ function ResetPasswordContent() {
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -31,15 +32,49 @@ function ResetPasswordContent() {
           throw sessionError;
         }
 
-        if (session) {
-          console.log('Active session found for password reset');
-          setStage('ready');
-        } else {
+        if (!session) {
           // No session - user needs to request a new password reset
           console.log('No active session for password reset');
           setStage('error');
           setError('Invalid or expired reset link. Please request a new password reset.');
+          return;
         }
+
+        // Check recovery session cookie validity
+        try {
+          const response = await fetch('/api/recovery-session', {
+            method: 'GET'
+          });
+          const cookieStatus = await response.json();
+
+          if (!cookieStatus.exists) {
+            // No recovery cookie but has session - might be direct access
+            console.warn('Password reset accessed without recovery session cookie');
+            // Allow access but warn
+          } else if (cookieStatus.isExpired) {
+            // Cookie expired
+            console.log('Recovery session expired');
+            // Clear the expired cookie
+            await fetch('/api/recovery-session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear' })
+            });
+            // Sign out and redirect
+            await supabase.auth.signOut();
+            router.push('/forgot-password?reason=recovery_expired');
+            return;
+          } else {
+            // Valid recovery session
+            setSessionTimeRemaining(cookieStatus.remainingSeconds || null);
+          }
+        } catch (cookieError) {
+          console.error('Error checking recovery session:', cookieError);
+          // Continue anyway if cookie check fails
+        }
+
+        console.log('Active session found for password reset');
+        setStage('ready');
       } catch (e: any) {
         console.error('Error checking session:', e);
         setStage('error');
@@ -48,7 +83,16 @@ function ResetPasswordContent() {
     };
 
     checkSession();
-  }, [supabase]);
+
+    // Check for recovery_lock reason in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('reason') === 'recovery_lock') {
+      toast('Please complete your password reset before navigating', {
+        icon: '🔒',
+        duration: 4000
+      });
+    }
+  }, [supabase, router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -78,6 +122,17 @@ function ResetPasswordContent() {
         setError(error.message);
         toast.error(error.message);
         return;
+      }
+
+      // Clear the recovery session cookie
+      try {
+        await fetch('/api/recovery-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear' })
+        });
+      } catch (clearError) {
+        console.error('Error clearing recovery session:', clearError);
       }
 
       // Sign out after password reset to ensure clean login
@@ -188,6 +243,11 @@ function ResetPasswordContent() {
                 Set New Password
               </h1>
               <p className="text-gray-400 mt-2">Enter your new password below</p>
+              {sessionTimeRemaining !== null && sessionTimeRemaining > 0 && (
+                <p className="text-xs text-yellow-400 mt-2">
+                  Session expires in {Math.floor(sessionTimeRemaining / 60)} minutes
+                </p>
+              )}
             </div>
 
             {error && (

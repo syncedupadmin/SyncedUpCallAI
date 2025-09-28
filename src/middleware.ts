@@ -8,6 +8,63 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Check for recovery session cookie
+  const recoverySessionCookie = request.cookies.get('password_reset_session');
+
+  // If recovery session exists, validate and restrict access
+  if (recoverySessionCookie?.value) {
+    try {
+      const sessionData = JSON.parse(recoverySessionCookie.value);
+      const elapsed = Date.now() - sessionData.createdAt;
+      const isExpired = elapsed > (15 * 60 * 1000); // 15 minutes
+
+      // Clear expired cookie
+      if (isExpired) {
+        const response = NextResponse.next();
+        response.cookies.set({
+          name: 'password_reset_session',
+          value: '',
+          maxAge: 0,
+          path: '/'
+        });
+        return response;
+      }
+
+      // For active recovery sessions, only allow specific paths
+      const allowedPaths = [
+        '/reset-password',
+        '/auth/callback',
+        '/api/auth',
+        '/api/recovery-session',
+        '/_next', // Next.js internals
+        '/favicon.ico'
+      ];
+
+      const isAllowed = allowedPaths.some(path =>
+        request.nextUrl.pathname.startsWith(path) ||
+        request.nextUrl.pathname === path
+      );
+
+      if (!isAllowed) {
+        // Redirect to password reset page with reason
+        return NextResponse.redirect(
+          new URL('/reset-password?reason=recovery_lock', request.url)
+        );
+      }
+    } catch (error) {
+      console.error('Invalid recovery session cookie:', error);
+      // Clear invalid cookie
+      const response = NextResponse.next();
+      response.cookies.set({
+        name: 'password_reset_session',
+        value: '',
+        maxAge: 0,
+        path: '/'
+      });
+      return response;
+    }
+  }
+
   // Handle admin authentication for all admin and superadmin pages
   if (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/superadmin')) {
     // Create Supabase client first to check authentication

@@ -31,8 +31,32 @@ export default function AuthCallbackPage() {
         const type = urlParams.get('type');
 
         if (type === 'recovery') {
-          // This is a password reset - redirect to reset password page
-          router.push('/reset-password');
+          // This is a password reset - set recovery session cookie and redirect
+          try {
+            // Set the recovery session cookie via API
+            const response = await fetch('/api/recovery-session', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                action: 'set',
+                createdAt: Date.now()
+              })
+            });
+
+            const result = await response.json();
+            if (!result.ok) {
+              console.error('Failed to set recovery session cookie:', result);
+            }
+
+            // Redirect to reset password page
+            router.push('/reset-password');
+          } catch (cookieError) {
+            console.error('Error setting recovery session:', cookieError);
+            // Still redirect even if cookie fails
+            router.push('/reset-password');
+          }
         } else {
           // Regular authentication - redirect to dashboard
           router.push('/dashboard');
