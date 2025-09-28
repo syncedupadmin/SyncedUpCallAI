@@ -3,6 +3,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // Handle password reset codes from Supabase email links
+  const code = request.nextUrl.searchParams.get('code');
+  const type = request.nextUrl.searchParams.get('type');
+
+  if (code) {
+    // If we have a code, redirect to auth/callback to handle it
+    const redirectUrl = new URL('/auth/callback', request.url);
+    redirectUrl.searchParams.set('code', code);
+    if (type) {
+      redirectUrl.searchParams.set('type', type);
+    }
+    if (type === 'recovery') {
+      redirectUrl.searchParams.set('next', '/reset-password');
+    }
+    return NextResponse.redirect(redirectUrl);
+  }
+
   // Handle admin authentication for all admin and superadmin pages
   if (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/superadmin')) {
     // Create Supabase client first to check authentication
