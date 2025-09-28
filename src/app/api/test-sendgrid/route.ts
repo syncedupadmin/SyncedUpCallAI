@@ -21,7 +21,7 @@ export async function GET() {
         personalizations: [{
           to: [{ email: 'nicholas.stults@gmail.com' }]
         }],
-        from: { email: 'noreply@syncedupsolutions.com' },
+        from: { email: 'admin@syncedupsolutions.com' },
         subject: 'SendGrid Test from Vercel',
         content: [{
           type: 'text/plain',
