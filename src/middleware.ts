@@ -3,20 +3,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  // Handle password reset codes from Supabase email links
-  const code = request.nextUrl.searchParams.get('code');
-  const type = request.nextUrl.searchParams.get('type');
+  const { pathname, searchParams } = request.nextUrl;
+  const code = searchParams.get('code');
+  const type = searchParams.get('type');
 
-  if (code) {
-    // If we have a code, redirect to auth/callback to handle it
+  // Only intercept codes at the root URL to prevent infinite loops
+  // Don't intercept if already going to auth/callback or reset-password
+  if (code && pathname === '/') {
     const redirectUrl = new URL('/auth/callback', request.url);
     redirectUrl.searchParams.set('code', code);
     if (type) {
       redirectUrl.searchParams.set('type', type);
     }
+    // For recovery codes, set next to reset-password
     if (type === 'recovery') {
       redirectUrl.searchParams.set('next', '/reset-password');
     }
+    console.log('Middleware: Redirecting code from root to auth/callback');
     return NextResponse.redirect(redirectUrl);
   }
 
