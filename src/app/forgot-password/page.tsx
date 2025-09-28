@@ -27,15 +27,30 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      console.log('Attempting password reset for:', email);
+      console.log('Redirect URL:', `${window.location.origin}/reset-password`);
+
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
-      if (error) throw error;
+      console.log('Supabase response:', { data, error });
 
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          fullError: error
+        });
+        throw error;
+      }
+
+      console.log('Password reset email sent successfully');
       setIsSuccess(true);
       toast.success('Password reset email sent! Check your inbox.');
     } catch (err: any) {
+      console.error('Caught error:', err);
       setError(err.message || 'Failed to send reset email');
       toast.error(err.message || 'Failed to send reset email');
     } finally {
