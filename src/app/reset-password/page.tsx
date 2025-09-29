@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Lock, AlertCircle, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -13,10 +13,40 @@ export default function ResetPasswordPage() {
   const supabase = createClient();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      // Check if user has a valid recovery session
+      const { data: { user }, error } = await supabase.auth.getUser();
+
+      if (error || !user) {
+        console.error('No valid recovery session found:', error);
+        toast.error('Invalid or expired reset link. Please request a new one.');
+        router.push('/forgot-password');
+        return;
+      }
+
+      // Valid session exists
+      setIsAuthenticated(true);
+      console.log('Recovery session valid for user:', user.email);
+    } catch (err) {
+      console.error('Error checking auth status:', err);
+      toast.error('Unable to verify reset link. Please try again.');
+      router.push('/forgot-password');
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +103,38 @@ export default function ResetPasswordPage() {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          <Loader2 className="w-10 h-10 text-cyan-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Verifying reset link...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Don't render form if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
+          <p className="text-gray-400">Redirecting...</p>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (
