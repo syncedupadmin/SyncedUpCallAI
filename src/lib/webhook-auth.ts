@@ -103,7 +103,10 @@ export async function authenticateWebhook(req: NextRequest): Promise<WebhookAuth
   if (webhookSecret && process.env.CONVOSO_WEBHOOK_SECRET) {
     if (webhookSecret === process.env.CONVOSO_WEBHOOK_SECRET) {
       // Valid legacy secret - use default agency if configured
-      const defaultAgencyId = process.env.DEFAULT_AGENCY_ID || 'default_agency';
+      // Use a proper UUID for default agency or null
+      const defaultAgencyId = process.env.DEFAULT_AGENCY_ID && process.env.DEFAULT_AGENCY_ID !== 'default_agency'
+        ? process.env.DEFAULT_AGENCY_ID
+        : '00000000-0000-0000-0000-000000000001'; // Default UUID
 
       console.warn('[WEBHOOK_AUTH] Using legacy webhook secret with default agency. Please migrate to token-based auth.');
 
@@ -132,7 +135,10 @@ export async function authenticateWebhook(req: NextRequest): Promise<WebhookAuth
                             req.url.includes('convoso');
 
     if (isLikelyConvoso || process.env.ALLOW_NO_AUTH_WEBHOOKS === 'true') {
-      const defaultAgencyId = process.env.DEFAULT_AGENCY_ID || 'default_agency';
+      // Use a proper UUID for default agency
+      const defaultAgencyId = process.env.DEFAULT_AGENCY_ID && process.env.DEFAULT_AGENCY_ID !== 'default_agency'
+        ? process.env.DEFAULT_AGENCY_ID
+        : '00000000-0000-0000-0000-000000000001'; // Default UUID
 
       console.warn('[WEBHOOK_AUTH] Accepting webhook without auth headers (Convoso compatibility mode)');
 
@@ -151,7 +157,10 @@ export async function authenticateWebhook(req: NextRequest): Promise<WebhookAuth
     // Authentication not required (testing/development mode)
     console.warn('[WEBHOOK_AUTH] Webhook authentication not required. This should ONLY be used in development!');
 
-    const defaultAgencyId = process.env.DEFAULT_AGENCY_ID || 'default_agency';
+    // Use a proper UUID for default agency
+    const defaultAgencyId = process.env.DEFAULT_AGENCY_ID && process.env.DEFAULT_AGENCY_ID !== 'default_agency'
+      ? process.env.DEFAULT_AGENCY_ID
+      : '00000000-0000-0000-0000-000000000001'; // Default UUID
 
     return {
       success: true,
