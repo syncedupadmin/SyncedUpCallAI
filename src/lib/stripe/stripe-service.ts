@@ -6,8 +6,9 @@ import Stripe from 'stripe';
 import { sbAdmin } from '@/lib/supabase-admin';
 import { PLANS, STRIPE_CONFIG, type PlanId } from './config';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Initialize Stripe (with fallback for build time)
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_for_build';
+const stripe = new Stripe(stripeKey, {
   apiVersion: STRIPE_CONFIG.apiVersion,
   typescript: true
 });
