@@ -1,23 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@vercel/firewall';
 
+// This is a pass-through wrapper since rate limiting is now handled in middleware
+// We keep this to avoid breaking existing code that imports it
 export function withRateLimit(
   handler: (req: NextRequest) => Promise<NextResponse>,
   options?: { endpoint?: string }
 ) {
-  return async (req: NextRequest): Promise<NextResponse> => {
-    // Use the endpoint name or default to 'api-request'
-    const ruleName = options?.endpoint || 'api-request';
-
-    const { rateLimited } = await checkRateLimit(ruleName, { request: req });
-
-    if (rateLimited) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      );
-    }
-
-    return handler(req);
-  };
+  // Rate limiting is handled by middleware.ts
+  // This function now just passes through to the handler
+  return handler;
 }

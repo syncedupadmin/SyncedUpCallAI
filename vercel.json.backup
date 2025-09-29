@@ -1,0 +1,77 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-recordings-v3",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/process-transcription-queue",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/queue-bulk-recordings",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/jobs/batch",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/jobs/backfill",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/rollup",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/convoso-auto",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/kpi-daily",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/kpi-weekly",
+      "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/process-transcriptions",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/queue-bulk-tests",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://syncedupcallai.vercel.app" }
+      ]
+    }
+  ],
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/retention/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/backfill/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/process-transcriptions/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/queue-bulk-tests/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

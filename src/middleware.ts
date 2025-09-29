@@ -1,8 +1,87 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { ipAddress } from '@vercel/edge';
+
+// Simple in-memory rate limiter for edge runtime
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+// Rate limit configurations
+const rateLimitConfigs = {
+  '/api/jobs/transcribe': { maxRequests: 10, windowMs: 60000 },
+  '/api/jobs/analyze': { maxRequests: 20, windowMs: 60000 },
+  '/api/webhooks': { maxRequests: 100, windowMs: 60000 },
+  'default': { maxRequests: 30, windowMs: 60000 }
+};
+
+function getRateLimitConfig(pathname: string) {
+  // Check for exact match first
+  if (rateLimitConfigs[pathname as keyof typeof rateLimitConfigs]) {
+    return rateLimitConfigs[pathname as keyof typeof rateLimitConfigs];
+  }
+
+  // Check for prefix match
+  for (const [path, config] of Object.entries(rateLimitConfigs)) {
+    if (pathname.startsWith(path)) {
+      return config;
+    }
+  }
+
+  return rateLimitConfigs.default;
+}
+
+async function handleRateLimit(request: NextRequest): Promise<NextResponse | null> {
+  const pathname = request.nextUrl.pathname;
+
+  // Only apply rate limiting to API routes
+  if (!pathname.startsWith('/api/')) {
+    return null;
+  }
+
+  // Skip rate limiting for internal cron jobs
+  if (pathname.startsWith('/api/cron/') && request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`) {
+    return null;
+  }
+
+  // Get client IP
+  const ip = ipAddress(request) || 'unknown';
+  const config = getRateLimitConfig(pathname);
+  const key = `${ip}:${pathname}`;
+
+  const now = Date.now();
+  const clientData = rateLimitMap.get(key);
+
+  if (!clientData || clientData.resetTime < now) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + config.windowMs });
+  } else {
+    clientData.count++;
+
+    if (clientData.count > config.maxRequests) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(config.maxRequests),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': new Date(clientData.resetTime).toISOString(),
+            'Retry-After': String(Math.ceil((clientData.resetTime - now) / 1000))
+          }
+        }
+      );
+    }
+  }
+
+  return null;
+}
 
 export async function middleware(request: NextRequest) {
+  // Apply rate limiting first
+  const rateLimitResponse = await handleRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   // Skip middleware for auth routes - they handle their own logic
   if (request.nextUrl.pathname.startsWith('/auth/')) {
     return NextResponse.next();
@@ -192,6 +271,21 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/superadmin', request.url));
     } else {
       return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // Add rate limit headers to successful responses for API routes
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    const pathname = request.nextUrl.pathname;
+    const ip = ipAddress(request) || 'unknown';
+    const config = getRateLimitConfig(pathname);
+    const key = `${ip}:${pathname}`;
+    const data = rateLimitMap.get(key);
+
+    if (data) {
+      response.headers.set('X-RateLimit-Limit', String(config.maxRequests));
+      response.headers.set('X-RateLimit-Remaining', String(Math.max(0, config.maxRequests - data.count)));
+      response.headers.set('X-RateLimit-Reset', new Date(data.resetTime).toISOString());
     }
   }
 
