@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
       console.error('Profile creation error:', profileError);
     }
 
-    // Return success with onboarding URL
+    // Return success with dashboard URL
+    // Middleware will redirect to discovery on first login
     return NextResponse.json({
       success: true,
       agency: {
@@ -149,7 +150,7 @@ export async function POST(req: NextRequest) {
         url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://aicall.syncedupsolutions.com'}/api/webhooks/convoso-calls`,
         header: 'X-Agency-Token'
       },
-      onboarding_url: `/onboarding?agency=${agency.id}`,
+      onboarding_url: `/dashboard`,
       message: 'Agency created successfully. Check your email to verify your account.'
     });
 

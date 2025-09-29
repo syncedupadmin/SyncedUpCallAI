@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   TrendingUp,
   Monitor,
-  ShieldCheck
+  ShieldCheck,
+  CreditCard
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -64,6 +65,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/agencies',
       icon: Building2,
       description: 'Agency management'
+    },
+    {
+      name: 'Billing',
+      href: '/superadmin/billing',
+      icon: CreditCard,
+      description: 'Billing & subscriptions'
     },
     {
       name: 'Users',

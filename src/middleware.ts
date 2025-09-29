@@ -267,6 +267,96 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
+  // Check subscription status for authenticated users on protected paths
+  if (isProtectedPath && user) {
+    // Routes that don't require active subscription or discovery check
+    const subscriptionExemptPaths = [
+      '/dashboard/billing',
+      '/dashboard/settings',
+      '/dashboard/support',
+      '/dashboard/discovery' // Allow access to discovery pages
+    ];
+
+    const isExemptPath = subscriptionExemptPaths.some(path =>
+      request.nextUrl.pathname.startsWith(path)
+    );
+
+    // Skip subscription check for exempt paths
+    if (!isExemptPath) {
+      // Get user's agency, subscription status, and discovery status
+      const { data: membership } = await supabase
+        .from('user_agencies')
+        .select(`
+          agency_id,
+          role,
+          agencies!inner (
+            id,
+            name,
+            discovery_status,
+            agency_subscriptions (
+              status,
+              trial_end,
+              current_period_end,
+              cancel_at_period_end
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .single();
+
+      if (!membership) {
+        // User has no agency - redirect to onboarding
+        return NextResponse.redirect(new URL('/onboarding', request.url));
+      }
+
+      const agency = (membership as any).agencies;
+
+      // Check if discovery needs to be completed
+      if (agency?.discovery_status === 'pending' && !request.nextUrl.pathname.startsWith('/dashboard/discovery')) {
+        console.log(`[Middleware] Redirecting to discovery for agency ${agency.id}`);
+        return NextResponse.redirect(new URL('/dashboard/discovery', request.url));
+      }
+
+      // If discovery is in progress, only allow discovery pages
+      if (agency?.discovery_status === 'in_progress' && !request.nextUrl.pathname.startsWith('/dashboard/discovery')) {
+        console.log(`[Middleware] Discovery in progress, redirecting to results`);
+        return NextResponse.redirect(new URL('/dashboard/discovery/results', request.url));
+      }
+
+      const subscription = (membership as any).agencies?.agency_subscriptions?.[0];
+
+      // Check if subscription exists and is active
+      const hasActiveSubscription = subscription &&
+        (subscription.status === 'active' || subscription.status === 'trialing');
+
+      // Check if trial has expired
+      const trialExpired = subscription?.status === 'trialing' &&
+        subscription.trial_end &&
+        new Date(subscription.trial_end) < new Date();
+
+      // Check if subscription is past due or canceled
+      const subscriptionInactive = subscription &&
+        ['past_due', 'canceled', 'unpaid', 'incomplete_expired'].includes(subscription.status);
+
+      // Redirect to billing if subscription is not active
+      if (!hasActiveSubscription || trialExpired || subscriptionInactive) {
+        // Add query params to show appropriate message
+        const params = new URLSearchParams();
+        if (trialExpired) {
+          params.set('message', 'trial_expired');
+        } else if (subscriptionInactive) {
+          params.set('message', 'subscription_inactive');
+        } else if (!subscription) {
+          params.set('message', 'no_subscription');
+        }
+
+        return NextResponse.redirect(
+          new URL(`/dashboard/billing?${params.toString()}`, request.url)
+        );
+      }
+    }
+  }
+
   // Redirect logged-in users from public pages to their appropriate portal
   if ((request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') && user) {
     // Check if user is super admin
