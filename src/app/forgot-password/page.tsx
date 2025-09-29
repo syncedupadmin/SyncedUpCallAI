@@ -30,8 +30,14 @@ export default function ForgotPasswordPage() {
       console.log('Attempting password reset for:', email);
       console.log('Redirect URL:', `${window.location.origin}/reset-password`);
 
+      // Use the site URL for redirect (from env variable or current origin)
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const redirectUrl = `${siteUrl}/auth/callback?type=recovery`;
+
+      console.log('Using redirect URL:', redirectUrl);
+
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+        redirectTo: redirectUrl,
       });
 
       console.log('Supabase response:', { data, error });
