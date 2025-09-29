@@ -76,10 +76,15 @@ async function handleRateLimit(request: NextRequest): Promise<NextResponse | nul
 }
 
 export async function middleware(request: NextRequest) {
-  // Apply rate limiting first
-  const rateLimitResponse = await handleRateLimit(request);
-  if (rateLimitResponse) {
-    return rateLimitResponse;
+  // CRITICAL: Skip all API routes immediately
+  // This prevents auth middleware from interfering with webhooks
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    // Apply rate limiting for API routes
+    const rateLimitResponse = await handleRateLimit(request);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+    return NextResponse.next();
   }
 
   // Skip middleware for auth routes - they handle their own logic
@@ -294,6 +299,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
