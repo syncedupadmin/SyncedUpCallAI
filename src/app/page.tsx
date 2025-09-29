@@ -114,10 +114,10 @@ export default function Home() {
                   Login
                 </a>
                 <a
-                  href="/signup"
+                  href="/register"
                   className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-full font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition duration-300"
                 >
-                  Get Started
+                  Start Free Trial
                 </a>
               </>
             )}
