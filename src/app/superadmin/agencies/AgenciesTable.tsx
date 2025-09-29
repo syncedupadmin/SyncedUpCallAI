@@ -83,23 +83,38 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('agencies')
-        .delete()
-        .eq('id', id)
+      // Use the new RPC function for safer deletion
+      const { data, error } = await supabase.rpc('delete_agency_with_confirmation', {
+        p_agency_id: id,
+        p_confirm_name: null // Not requiring name confirmation in UI for now
+      })
 
       if (error) {
+        console.error('Delete error:', error)
         if (error.code === '42501' || error.code === '403') {
           toast.error('You do not have permission to delete this agency')
         } else {
-          toast.error(error.message)
+          toast.error(error.message || 'Failed to delete agency')
         }
         return
       }
 
+      if (data && !data.success) {
+        toast.error(data.error || 'Failed to delete agency')
+        return
+      }
+
+      // Update local state
       setAgencies((prev) => prev.filter((agency) => agency.id !== id))
       setTotalCount((prev) => prev - 1)
-      toast.success('The agency has been successfully deleted')
+
+      // Show success with details if available
+      if (data?.deleted) {
+        const { agency_name, members_removed, calls_removed } = data.deleted
+        toast.success(`Successfully deleted ${agency_name}. Removed ${members_removed} members and ${calls_removed} calls.`)
+      } else {
+        toast.success('The agency has been successfully deleted')
+      }
     } catch (error) {
       console.error('Error deleting agency:', error)
       toast.error('Failed to delete agency')
