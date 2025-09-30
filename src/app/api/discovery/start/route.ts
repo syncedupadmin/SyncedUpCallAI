@@ -21,12 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { convoso_api_key, convoso_auth_token } = await req.json();
+    const { convoso_auth_token } = await req.json();
 
     // Validation
-    if (!convoso_api_key?.trim() || !convoso_auth_token?.trim()) {
+    if (!convoso_auth_token?.trim()) {
       return NextResponse.json(
-        { error: 'Both API Key and Auth Token are required' },
+        { error: 'Auth Token is required' },
         { status: 400 }
       );
     }
@@ -63,13 +63,12 @@ export async function POST(req: NextRequest) {
 
     const apiBase = 'https://api.convoso.com/v1';
 
-    // Validate Convoso credentials with a test request
-    console.log(`[Discovery] Validating credentials for agency ${agencyId}`);
+    // Validate Convoso auth token with a test request
+    console.log(`[Discovery] Validating auth token for agency ${agencyId}`);
 
     try {
       const testResponse = await fetch(`${apiBase}/calls?limit=1&auth_token=${convoso_auth_token}`, {
         headers: {
-          'Authorization': `Bearer ${convoso_api_key}`,
           'Accept': 'application/json'
         }
       });
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
         const errorText = await testResponse.text();
         console.error('[Discovery] Convoso validation failed:', errorText);
         return NextResponse.json(
-          { error: 'Invalid Convoso credentials. Please check your API key and auth token.' },
+          { error: 'Invalid Convoso auth token. Please check your token and try again.' },
           { status: 401 }
         );
       }
@@ -92,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     // Check data availability
     const credentials: ConvosoCredentials = {
-      api_key: convoso_api_key,
+      api_key: '', // Not used anymore
       auth_token: convoso_auth_token,
       api_base: apiBase
     };
@@ -140,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     // Encrypt and store credentials
     const encryptedCredentials = encryptConvosoCredentials(
-      convoso_api_key,
+      '', // API key not used
       convoso_auth_token,
       apiBase
     );

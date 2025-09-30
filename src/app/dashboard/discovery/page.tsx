@@ -10,20 +10,11 @@ function DiscoverySetupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
   const [agencyName, setAgencyName] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [error, setError] = useState('');
   const isRetry = searchParams.get('retry') === 'true';
-
-  const [credentials, setCredentials] = useState({
-    api_key: '',
-    auth_token: ''
-  });
-
-  const [errors, setErrors] = useState({
-    api_key: '',
-    auth_token: ''
-  });
 
   useEffect(() => {
     // Get agency name for personalization
@@ -48,17 +39,12 @@ function DiscoverySetupContent() {
   }, []);
 
   const validateForm = () => {
-    const newErrors = { api_key: '', auth_token: '' };
-
-    if (!credentials.api_key.trim()) {
-      newErrors.api_key = 'API Key is required';
+    if (!authToken.trim()) {
+      setError('Auth Token is required');
+      return false;
     }
-    if (!credentials.auth_token.trim()) {
-      newErrors.auth_token = 'Auth Token is required';
-    }
-
-    setErrors(newErrors);
-    return !newErrors.api_key && !newErrors.auth_token;
+    setError('');
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,8 +59,7 @@ function DiscoverySetupContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          convoso_api_key: credentials.api_key.trim(),
-          convoso_auth_token: credentials.auth_token.trim()
+          convoso_auth_token: authToken.trim()
         })
       });
 
@@ -150,18 +135,18 @@ function DiscoverySetupContent() {
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
               <Key className="w-6 h-6 text-blue-500" />
-              Enter Your Convoso Credentials
+              Enter Your Convoso Auth Token
             </h2>
             <p className="text-gray-400">
-              We'll use these credentials to securely access and analyze your last 2,500 calls
+              We'll use this to securely access and analyze your last 2,500 calls
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* API Key Field */}
+            {/* Auth Token Field */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Convoso API Key
+                Convoso Auth Token
                 <button
                   type="button"
                   className="ml-2 text-gray-500 hover:text-gray-300"
@@ -172,45 +157,11 @@ function DiscoverySetupContent() {
               </label>
               <div className="relative">
                 <input
-                  type={showApiKey ? "text" : "password"}
-                  value={credentials.api_key}
-                  onChange={(e) => setCredentials({ ...credentials, api_key: e.target.value })}
-                  className={`w-full bg-gray-800 border ${errors.api_key ? 'border-red-500' : 'border-gray-700'} rounded-lg px-4 py-3 pr-12 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
-                  placeholder="sk_live_..."
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-200"
-                >
-                  {showApiKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.api_key && (
-                <p className="mt-1 text-sm text-red-400">{errors.api_key}</p>
-              )}
-            </div>
-
-            {/* Auth Token Field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Convoso Auth Token
-                <button
-                  type="button"
-                  className="ml-2 text-gray-500 hover:text-gray-300"
-                  title="Find this in Convoso Admin → Settings → Authentication"
-                >
-                  <HelpCircle className="w-4 h-4 inline" />
-                </button>
-              </label>
-              <div className="relative">
-                <input
                   type={showAuthToken ? "text" : "password"}
-                  value={credentials.auth_token}
-                  onChange={(e) => setCredentials({ ...credentials, auth_token: e.target.value })}
-                  className={`w-full bg-gray-800 border ${errors.auth_token ? 'border-red-500' : 'border-gray-700'} rounded-lg px-4 py-3 pr-12 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
-                  placeholder="auth_..."
+                  value={authToken}
+                  onChange={(e) => setAuthToken(e.target.value)}
+                  className={`w-full bg-gray-800 border ${error ? 'border-red-500' : 'border-gray-700'} rounded-lg px-4 py-3 pr-12 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
+                  placeholder="Enter your Convoso auth token"
                   disabled={loading}
                 />
                 <button
@@ -221,8 +172,8 @@ function DiscoverySetupContent() {
                   {showAuthToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.auth_token && (
-                <p className="mt-1 text-sm text-red-400">{errors.auth_token}</p>
+              {error && (
+                <p className="mt-1 text-sm text-red-400">{error}</p>
               )}
             </div>
 
@@ -230,7 +181,7 @@ function DiscoverySetupContent() {
             <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
               <h3 className="text-blue-200 font-medium mb-2">What happens next?</h3>
               <ul className="text-blue-300/80 text-sm space-y-1">
-                <li>• We'll validate your credentials with Convoso</li>
+                <li>• We'll validate your auth token with Convoso</li>
                 <li>• Fetch your last 2,500 calls (takes 5-10 minutes)</li>
                 <li>• Analyze call patterns, performance, and opportunities</li>
                 <li>• Generate actionable insights and coaching recommendations</li>
@@ -260,7 +211,7 @@ function DiscoverySetupContent() {
           {/* Help Section */}
           <div className="mt-8 pt-6 border-t border-gray-800">
             <p className="text-center text-gray-400 text-sm">
-              Need help finding your credentials?{' '}
+              Need help finding your auth token?{' '}
               <a
                 href="https://help.convoso.com/api"
                 target="_blank"
