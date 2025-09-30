@@ -106,13 +106,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Step 1: Create the user account
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Step 1: Create the user account using signUp (sends confirmation email automatically)
+    // Note: We use a temporary Supabase client (not admin) for signUp to trigger email
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: admin_email,
       password: admin_password,
-      email_confirm: false, // Require email confirmation
-      user_metadata: {
-        name: admin_name || company_name
+      options: {
+        data: {
+          name: admin_name || company_name
+        },
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`
       }
     });
 
@@ -136,6 +139,13 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         { error: 'Unable to create account. Please try again or contact support.' },
+        { status: 500 }
+      );
+    }
+
+    if (!authData.user) {
+      return NextResponse.json(
+        { error: 'Failed to create user account' },
         { status: 500 }
       );
     }
