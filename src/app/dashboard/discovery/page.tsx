@@ -222,7 +222,7 @@ function DiscoverySetupContent() {
               </a>
               {' or '}
               <a
-                href="/support"
+                href="mailto:support@syncedupsolutions.com"
                 className="text-blue-400 hover:text-blue-300 underline"
               >
                 contact support
