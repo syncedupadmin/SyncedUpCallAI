@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Discovery] Validating auth token for agency ${agencyId}`);
 
     try {
-      const testResponse = await fetch(`${apiBase}/calls?limit=1&auth_token=${convoso_auth_token}`, {
+      const testResponse = await fetch(`${apiBase}/call?limit=1&auth_token=${convoso_auth_token}`, {
         headers: {
           'Accept': 'application/json'
         }
