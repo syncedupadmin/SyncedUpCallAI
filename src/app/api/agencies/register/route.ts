@@ -16,7 +16,24 @@ export async function POST(req: NextRequest) {
     // Validate required fields
     if (!company_name || !admin_email || !admin_password) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Please fill in all required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(admin_email)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid email address' },
+        { status: 400 }
+      );
+    }
+
+    // Validate password strength
+    if (admin_password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters long' },
         { status: 400 }
       );
     }
@@ -24,16 +41,13 @@ export async function POST(req: NextRequest) {
     // Use admin client to bypass RLS
     const supabase = sbAdmin;
 
-    // Check if email already exists
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', admin_email)
-      .single();
+    // Check if email already exists in auth
+    const { data: existingAuthUsers } = await supabase.auth.admin.listUsers();
+    const emailExists = existingAuthUsers.users.some(u => u.email === admin_email);
 
-    if (existingUser) {
+    if (emailExists) {
       return NextResponse.json(
-        { error: 'Email already registered' },
+        { error: 'This email is already registered. Please use a different email or try logging in.' },
         { status: 400 }
       );
     }
@@ -50,8 +64,24 @@ export async function POST(req: NextRequest) {
 
     if (authError) {
       console.error('Auth creation error:', authError);
+
+      // Handle specific auth errors
+      if (authError.message?.includes('email')) {
+        return NextResponse.json(
+          { error: 'This email is already in use. Please use a different email address.' },
+          { status: 400 }
+        );
+      }
+
+      if (authError.message?.includes('password')) {
+        return NextResponse.json(
+          { error: 'Password does not meet security requirements. Please use a stronger password.' },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
-        { error: 'Failed to create user account' },
+        { error: 'Unable to create account. Please try again or contact support.' },
         { status: 500 }
       );
     }
@@ -79,10 +109,20 @@ export async function POST(req: NextRequest) {
 
     if (agencyError) {
       console.error('Agency creation error:', agencyError);
+
       // Clean up user if agency creation fails
       await supabase.auth.admin.deleteUser(userId);
+
+      // Handle specific agency errors
+      if (agencyError.code === '23505' && agencyError.message?.includes('slug')) {
+        return NextResponse.json(
+          { error: 'A company with this name already exists. Please use a different company name.' },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
-        { error: 'Failed to create agency' },
+        { error: 'Unable to create agency. Please try again or contact support.' },
         { status: 500 }
       );
     }
@@ -98,6 +138,7 @@ export async function POST(req: NextRequest) {
 
     if (memberError) {
       console.error('Member creation error:', memberError);
+      // Non-critical, continue
     }
 
     // Step 4: Create user profile
@@ -112,6 +153,16 @@ export async function POST(req: NextRequest) {
 
     if (profileError) {
       console.error('Profile creation error:', profileError);
+
+      // If profile already exists, clean up and return specific error
+      if (profileError.code === '23505') {
+        await supabase.auth.admin.deleteUser(userId);
+        await supabase.from('agencies').delete().eq('id', agency.id);
+        return NextResponse.json(
+          { error: 'Account setup error. Please try again or contact support if the problem persists.' },
+          { status: 500 }
+        );
+      }
     }
 
     // Return success - user must verify email before logging in
