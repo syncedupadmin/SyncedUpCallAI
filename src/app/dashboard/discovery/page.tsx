@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Key, AlertCircle, ChevronRight, Loader2, HelpCircle, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 
-export default function DiscoverySetupPage() {
+function DiscoverySetupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -33,11 +33,14 @@ export default function DiscoverySetupPage() {
       if (user) {
         const { data } = await supabase
           .from('user_agencies')
-          .select('agencies(name)')
+          .select('agencies!inner(name)')
           .eq('user_id', user.id)
           .single();
-        if (data?.agencies?.name) {
-          setAgencyName((data.agencies as any).name);
+        if (data) {
+          const agencies = (data as any).agencies;
+          if (agencies?.name) {
+            setAgencyName(agencies.name);
+          }
         }
       }
     };
@@ -278,5 +281,17 @@ export default function DiscoverySetupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DiscoverySetupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    }>
+      <DiscoverySetupContent />
+    </Suspense>
   );
 }
