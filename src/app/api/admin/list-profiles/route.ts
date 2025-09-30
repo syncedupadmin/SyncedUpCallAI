@@ -34,9 +34,31 @@ export async function GET(req: NextRequest) {
 
 /**
  * Delete orphaned profiles (where user doesn't exist in auth.users)
+ * Or delete by specific email if provided in body
  */
 export async function DELETE(req: NextRequest) {
   try {
+    const body = await req.json().catch(() => ({}));
+    const { email } = body;
+
+    // If email provided, delete that specific profile
+    if (email) {
+      const { error: deleteError } = await sbAdmin
+        .from('profiles')
+        .delete()
+        .eq('email', email);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete profile: ${deleteError.message}`);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Deleted profile for ${email}`
+      });
+    }
+
+    // Otherwise, delete all orphaned profiles
     // Get all profiles
     const { data: profiles, error: profilesError } = await sbAdmin
       .from('profiles')
