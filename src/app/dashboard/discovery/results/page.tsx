@@ -36,7 +36,8 @@ function DiscoveryResultsContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || sessionId === 'undefined') {
+      toast.error('Invalid discovery session');
       router.push('/dashboard/discovery');
       return;
     }

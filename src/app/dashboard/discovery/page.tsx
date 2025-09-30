@@ -69,6 +69,14 @@ function DiscoverySetupContent() {
         throw new Error(data.error || 'Failed to start discovery');
       }
 
+      // Handle skipped discovery (insufficient data)
+      if (data.skipped) {
+        toast.error(data.reason || 'Not enough data to run discovery');
+        setLoading(false);
+        router.push(data.redirectTo || '/dashboard');
+        return;
+      }
+
       toast.success('Discovery started! Analyzing your calls...');
       router.push(`/dashboard/discovery/results?session=${data.sessionId}`);
     } catch (error: any) {
