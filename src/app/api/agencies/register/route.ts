@@ -38,6 +38,60 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!/[A-Z]/.test(admin_password)) {
+      return NextResponse.json(
+        { error: 'Password must contain at least one uppercase letter' },
+        { status: 400 }
+      );
+    }
+
+    if (!/[a-z]/.test(admin_password)) {
+      return NextResponse.json(
+        { error: 'Password must contain at least one lowercase letter' },
+        { status: 400 }
+      );
+    }
+
+    if (!/[0-9]/.test(admin_password)) {
+      return NextResponse.json(
+        { error: 'Password must contain at least one number' },
+        { status: 400 }
+      );
+    }
+
+    // Validate admin name (must have first and last name)
+    if (admin_name) {
+      const nameParts = admin_name.trim().split(/\s+/);
+      if (nameParts.length < 2) {
+        return NextResponse.json(
+          { error: 'Please provide both first and last name' },
+          { status: 400 }
+        );
+      }
+
+      if (!/^[a-zA-Z\s'-]+$/.test(admin_name)) {
+        return NextResponse.json(
+          { error: 'Name can only contain letters, spaces, hyphens, and apostrophes' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate company name
+    if (company_name.length < 2) {
+      return NextResponse.json(
+        { error: 'Company name must be at least 2 characters' },
+        { status: 400 }
+      );
+    }
+
+    if (company_name.length > 100) {
+      return NextResponse.json(
+        { error: 'Company name is too long (maximum 100 characters)' },
+        { status: 400 }
+      );
+    }
+
     // Use admin client to bypass RLS
     const supabase = sbAdmin;
 

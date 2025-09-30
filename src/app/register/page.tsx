@@ -26,12 +26,27 @@ export default function RegisterAgencyPage() {
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
 
+    // Company name validation
     if (!formData.company_name) {
       newErrors.company_name = 'Company name is required';
+    } else if (formData.company_name.length < 2) {
+      newErrors.company_name = 'Company name must be at least 2 characters';
+    } else if (formData.company_name.length > 100) {
+      newErrors.company_name = 'Company name is too long (max 100 characters)';
     }
 
+    // Admin name validation (must have first and last name)
     if (!formData.admin_name) {
       newErrors.admin_name = 'Your name is required';
+    } else {
+      const nameParts = formData.admin_name.trim().split(/\s+/);
+      if (nameParts.length < 2) {
+        newErrors.admin_name = 'Please enter both first and last name';
+      } else if (formData.admin_name.length < 3) {
+        newErrors.admin_name = 'Name must be at least 3 characters';
+      } else if (!/^[a-zA-Z\s'-]+$/.test(formData.admin_name)) {
+        newErrors.admin_name = 'Name can only contain letters, spaces, hyphens, and apostrophes';
+      }
     }
 
     setErrors(newErrors);
@@ -41,19 +56,35 @@ export default function RegisterAgencyPage() {
   const validateStep2 = () => {
     const newErrors: Record<string, string> = {};
 
+    // Email validation
     if (!formData.admin_email) {
       newErrors.admin_email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.admin_email)) {
-      newErrors.admin_email = 'Invalid email format';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.admin_email)) {
+        newErrors.admin_email = 'Please enter a valid email address';
+      } else if (formData.admin_email.length > 100) {
+        newErrors.admin_email = 'Email is too long';
+      }
     }
 
+    // Password validation with strength requirements
     if (!formData.admin_password) {
       newErrors.admin_password = 'Password is required';
     } else if (formData.admin_password.length < 8) {
       newErrors.admin_password = 'Password must be at least 8 characters';
+    } else if (!/[A-Z]/.test(formData.admin_password)) {
+      newErrors.admin_password = 'Password must contain at least one uppercase letter';
+    } else if (!/[a-z]/.test(formData.admin_password)) {
+      newErrors.admin_password = 'Password must contain at least one lowercase letter';
+    } else if (!/[0-9]/.test(formData.admin_password)) {
+      newErrors.admin_password = 'Password must contain at least one number';
     }
 
-    if (formData.admin_password !== formData.confirm_password) {
+    // Confirm password
+    if (!formData.confirm_password) {
+      newErrors.confirm_password = 'Please confirm your password';
+    } else if (formData.admin_password !== formData.confirm_password) {
       newErrors.confirm_password = 'Passwords do not match';
     }
 
@@ -67,6 +98,26 @@ export default function RegisterAgencyPage() {
     }
   };
 
+  // Helper function to capitalize names properly
+  const capitalizeName = (name: string): string => {
+    return name
+      .trim()
+      .split(/\s+/)
+      .map(word => {
+        // Handle special cases like O'Brien, McDonald
+        if (word.includes("'")) {
+          return word.split("'").map(part =>
+            part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+          ).join("'");
+        }
+        if (word.toLowerCase().startsWith('mc') && word.length > 2) {
+          return 'Mc' + word.charAt(2).toUpperCase() + word.slice(3).toLowerCase();
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -77,12 +128,22 @@ export default function RegisterAgencyPage() {
     setIsLoading(true);
 
     try {
+      // Format data before sending
+      const formattedData = {
+        ...formData,
+        company_name: formData.company_name.trim(),
+        admin_name: capitalizeName(formData.admin_name),
+        admin_email: formData.admin_email.trim().toLowerCase(),
+        company_phone: formData.company_phone?.trim(),
+        company_website: formData.company_website?.trim()
+      };
+
       const response = await fetch('/api/agencies/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formattedData)
       });
 
       const data = await response.json();
