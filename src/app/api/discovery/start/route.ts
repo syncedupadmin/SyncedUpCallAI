@@ -21,11 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { convoso_api_key, convoso_auth_token, convoso_api_base } = await req.json();
+    const { convoso_api_key, convoso_auth_token } = await req.json();
 
-    if (!convoso_api_key || !convoso_auth_token) {
+    // Validation
+    if (!convoso_api_key?.trim() || !convoso_auth_token?.trim()) {
       return NextResponse.json(
-        { error: 'Missing Convoso credentials' },
+        { error: 'Both API Key and Auth Token are required' },
         { status: 400 }
       );
     }
@@ -60,16 +61,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiBase = convoso_api_base || 'https://api.convoso.com/v1';
+    const apiBase = 'https://api.convoso.com/v1';
 
-    // Validate Convoso credentials and check data availability
+    // Validate Convoso credentials with a test request
+    console.log(`[Discovery] Validating credentials for agency ${agencyId}`);
+
+    try {
+      const testResponse = await fetch(`${apiBase}/calls?limit=1&auth_token=${convoso_auth_token}`, {
+        headers: {
+          'Authorization': `Bearer ${convoso_api_key}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!testResponse.ok) {
+        const errorText = await testResponse.text();
+        console.error('[Discovery] Convoso validation failed:', errorText);
+        return NextResponse.json(
+          { error: 'Invalid Convoso credentials. Please check your API key and auth token.' },
+          { status: 401 }
+        );
+      }
+    } catch (error: any) {
+      console.error('[Discovery] Convoso connection error:', error);
+      return NextResponse.json(
+        { error: 'Failed to connect to Convoso. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    // Check data availability
     const credentials: ConvosoCredentials = {
       api_key: convoso_api_key,
       auth_token: convoso_auth_token,
       api_base: apiBase
     };
-
-    console.log(`[Discovery] Validating credentials for agency ${agencyId}`);
 
     const availability = await checkConvosoDataAvailability(credentials);
 
@@ -137,6 +163,12 @@ export async function POST(req: NextRequest) {
       trackRebuttals: true
     }).catch(error => {
       console.error(`[Discovery] Background processing error:`, error);
+      // Update status to failed on error
+      sbAdmin.from('agencies').update({
+        discovery_status: 'failed'
+      }).eq('id', agencyId).then(() => {
+        console.log(`[Discovery] Marked agency ${agencyId} as failed`);
+      });
     });
 
     return NextResponse.json({

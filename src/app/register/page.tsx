@@ -21,7 +21,7 @@ export default function RegisterAgencyPage() {
     confirm_password: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [registrationResult, setRegistrationResult] = useState<any>(null);
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
@@ -91,13 +91,8 @@ export default function RegisterAgencyPage() {
         throw new Error(data.error || 'Registration failed');
       }
 
-      setRegistrationResult(data);
-      toast.success('Agency registered successfully!');
-
-      // Redirect to onboarding after 3 seconds
-      setTimeout(() => {
-        router.push(data.onboarding_url || '/dashboard');
-      }, 3000);
+      setRegistrationSuccess(true);
+      toast.success('Registration successful! Check your email.');
 
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -106,52 +101,44 @@ export default function RegisterAgencyPage() {
     }
   };
 
-  if (registrationResult) {
+  if (registrationSuccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800 p-8 max-w-2xl w-full"
+          className="bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800 p-8 max-w-md w-full"
         >
           <div className="text-center">
             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-10 h-10 text-green-500" />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">Welcome to SyncedUp AI!</h2>
-            <p className="text-gray-400 mb-8">Your agency has been created successfully.</p>
+            <h2 className="text-3xl font-bold text-white mb-4">Registration Successful!</h2>
 
-            <div className="bg-gray-800/50 rounded-lg p-6 text-left mb-8">
-              <h3 className="text-lg font-semibold text-white mb-4">Your Webhook Configuration:</h3>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">Webhook URL:</p>
-                  <code className="text-xs text-cyan-400 bg-gray-900 px-2 py-1 rounded block mt-1 break-all">
-                    {registrationResult.webhook?.url}
-                  </code>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Header Name:</p>
-                  <code className="text-xs text-cyan-400 bg-gray-900 px-2 py-1 rounded">
-                    {registrationResult.webhook?.header}
-                  </code>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Token Value:</p>
-                  <code className="text-xs text-cyan-400 bg-gray-900 px-2 py-1 rounded block mt-1 break-all">
-                    {registrationResult.webhook?.token}
-                  </code>
-                </div>
-              </div>
-              <p className="text-xs text-yellow-500 mt-4">
-                ⚠️ Save this token securely - you won't be able to see it again!
-              </p>
+            <p className="text-gray-400 mb-6">
+              We've sent a confirmation email to <span className="text-white font-medium">{formData.admin_email}</span>
+            </p>
+
+            <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Next Steps:</h3>
+              <ol className="text-sm text-gray-400 space-y-2">
+                <li>1. Check your email and click the confirmation link</li>
+                <li>2. Log in to your account</li>
+                <li>3. Connect your Convoso account</li>
+                <li>4. We'll analyze your calls and show insights</li>
+              </ol>
             </div>
 
-            <p className="text-sm text-gray-400 mb-4">
-              Redirecting to onboarding in 3 seconds...
+            <p className="text-xs text-gray-500 mb-4">
+              Didn't receive the email? Check your spam folder or contact support.
             </p>
-            <Loader2 className="w-6 h-6 animate-spin text-cyan-500 mx-auto" />
+
+            <button
+              onClick={() => router.push('/login')}
+              className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition"
+            >
+              Go to Login
+            </button>
           </div>
         </motion.div>
       </div>

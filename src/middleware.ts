@@ -311,16 +311,33 @@ export async function middleware(request: NextRequest) {
 
       const agency = (membership as any).agencies;
 
-      // Check if discovery needs to be completed
-      if (agency?.discovery_status === 'pending' && !request.nextUrl.pathname.startsWith('/dashboard/discovery')) {
-        console.log(`[Middleware] Redirecting to discovery for agency ${agency.id}`);
-        return NextResponse.redirect(new URL('/dashboard/discovery', request.url));
+      // Handle discovery flow based on status
+      const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard');
+      const isDiscoveryRoute = request.nextUrl.pathname.startsWith('/dashboard/discovery');
+
+      // If user hasn't completed discovery yet
+      if (agency?.discovery_status === 'pending' && isDashboardRoute) {
+        // Allow discovery routes but redirect others to discovery setup
+        if (!isDiscoveryRoute) {
+          console.log(`[Middleware] Redirecting new user to discovery setup`);
+          return NextResponse.redirect(new URL('/dashboard/discovery', request.url));
+        }
       }
 
-      // If discovery is in progress, only allow discovery pages
-      if (agency?.discovery_status === 'in_progress' && !request.nextUrl.pathname.startsWith('/dashboard/discovery')) {
-        console.log(`[Middleware] Discovery in progress, redirecting to results`);
-        return NextResponse.redirect(new URL('/dashboard/discovery/results', request.url));
+      // If discovery is running, keep them on the results page
+      if (agency?.discovery_status === 'in_progress' && isDashboardRoute) {
+        if (request.nextUrl.pathname !== '/dashboard/discovery/results') {
+          console.log(`[Middleware] Discovery in progress, showing results`);
+          return NextResponse.redirect(new URL('/dashboard/discovery/results', request.url));
+        }
+      }
+
+      // If discovery failed, redirect back to setup with retry flag
+      if (agency?.discovery_status === 'failed' && isDashboardRoute) {
+        if (!isDiscoveryRoute) {
+          console.log(`[Middleware] Discovery failed, redirecting to setup`);
+          return NextResponse.redirect(new URL('/dashboard/discovery?retry=true', request.url));
+        }
       }
 
       const subscription = (membership as any).agencies?.agency_subscriptions?.[0];

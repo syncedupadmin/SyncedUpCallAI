@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sbAdmin } from '@/lib/supabase-admin';
-import crypto from 'crypto';
-
-// Generate a secure webhook token
-function generateWebhookToken(): string {
-  return `agt_${crypto.randomBytes(32).toString('hex')}`;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,7 +42,7 @@ export async function POST(req: NextRequest) {
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: admin_email,
       password: admin_password,
-      email_confirm: true, // Auto-confirm for now, change to false for production
+      email_confirm: false, // Require email confirmation
       user_metadata: {
         name: admin_name || company_name
       }
@@ -71,6 +65,7 @@ export async function POST(req: NextRequest) {
         name: company_name,
         slug: company_name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         owner_user_id: userId,
+        discovery_status: 'pending',
         settings: {
           phone: company_phone,
           website: company_website,
@@ -105,24 +100,7 @@ export async function POST(req: NextRequest) {
       console.error('Member creation error:', memberError);
     }
 
-    // Step 4: Create initial webhook token
-    const webhookToken = generateWebhookToken();
-    const { error: tokenError } = await supabase
-      .from('webhook_tokens')
-      .insert({
-        agency_id: agency.id,
-        token: webhookToken,
-        name: 'Primary Webhook',
-        description: 'Auto-generated during registration',
-        created_by: userId,
-        is_active: true
-      });
-
-    if (tokenError) {
-      console.error('Token creation error:', tokenError);
-    }
-
-    // Step 5: Create user profile
+    // Step 4: Create user profile
     const { error: profileError } = await supabase
       .from('profiles')
       .insert({
@@ -136,8 +114,7 @@ export async function POST(req: NextRequest) {
       console.error('Profile creation error:', profileError);
     }
 
-    // Return success with dashboard URL
-    // Middleware will redirect to discovery on first login
+    // Return success - user must verify email before logging in
     return NextResponse.json({
       success: true,
       agency: {
@@ -145,13 +122,8 @@ export async function POST(req: NextRequest) {
         name: agency.name,
         slug: agency.slug
       },
-      webhook: {
-        token: webhookToken,
-        url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://aicall.syncedupsolutions.com'}/api/webhooks/convoso-calls`,
-        header: 'X-Agency-Token'
-      },
-      onboarding_url: `/dashboard`,
-      message: 'Agency created successfully. Check your email to verify your account.'
+      message: 'Registration successful! Please check your email to confirm your account.',
+      next_step: 'email_confirmation'
     });
 
   } catch (error) {
