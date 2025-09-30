@@ -195,29 +195,7 @@ export async function POST(req: NextRequest) {
       // Non-critical, continue
     }
 
-    // Step 4: Create user profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: userId,
-        email: admin_email,
-        full_name: admin_name || company_name,
-        role: 'agency_owner'
-      });
-
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-
-      // If profile already exists, clean up and return specific error
-      if (profileError.code === '23505') {
-        await supabase.auth.admin.deleteUser(userId);
-        await supabase.from('agencies').delete().eq('id', agency.id);
-        return NextResponse.json(
-          { error: 'Account setup error. Please try again or contact support if the problem persists.' },
-          { status: 500 }
-        );
-      }
-    }
+    // Note: Profile is automatically created by database trigger on_auth_user_created
 
     // Return success - user must verify email before logging in
     return NextResponse.json({
