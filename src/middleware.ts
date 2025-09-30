@@ -305,8 +305,17 @@ export async function middleware(request: NextRequest) {
         .single();
 
       if (!membership) {
-        // User has no agency - redirect to onboarding
-        return NextResponse.redirect(new URL('/onboarding', request.url));
+        // User has no agency - this should not happen for new registrations
+        // Check if they just signed up (coming from auth callback)
+        const referer = request.headers.get('referer');
+        if (referer?.includes('/auth/callback')) {
+          // New user just confirmed email but agency not found - might be timing issue
+          // Let them through, the dashboard will handle it
+          console.warn('[Middleware] New user with no agency found, allowing through');
+        } else {
+          // Existing user with no agency - redirect to onboarding
+          return NextResponse.redirect(new URL('/onboarding', request.url));
+        }
       }
 
       const agency = (membership as any).agencies;
