@@ -124,32 +124,7 @@ export async function authenticateWebhook(req: NextRequest): Promise<WebhookAuth
     };
   }
 
-  // PRIORITY 3: Check if Convoso is calling without any auth headers
-  // This is a temporary fix for the production issue
-  if (process.env.CONVOSO_WEBHOOK_SECRET) {
-    // If CONVOSO_WEBHOOK_SECRET is configured but no auth provided,
-    // assume it's Convoso calling (they might not send headers)
-    const userAgent = req.headers.get('user-agent') || '';
-    const isLikelyConvoso = userAgent.toLowerCase().includes('convoso') ||
-                            req.headers.get('x-convoso-webhook') ||
-                            req.url.includes('convoso');
-
-    if (isLikelyConvoso || process.env.ALLOW_NO_AUTH_WEBHOOKS === 'true') {
-      // Use a proper UUID for default agency
-      const defaultAgencyId = process.env.DEFAULT_AGENCY_ID && process.env.DEFAULT_AGENCY_ID !== 'default_agency'
-        ? process.env.DEFAULT_AGENCY_ID
-        : '00000000-0000-0000-0000-000000000001'; // Default UUID
-
-      console.warn('[WEBHOOK_AUTH] Accepting webhook without auth headers (Convoso compatibility mode)');
-
-      return {
-        success: true,
-        agencyId: defaultAgencyId,
-      };
-    }
-  }
-
-  // PRIORITY 4: No authentication provided
+  // PRIORITY 3: No authentication provided
   // Check if authentication is required
   const requireAuth = process.env.REQUIRE_WEBHOOK_AUTH !== 'false';
 
