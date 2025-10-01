@@ -27,7 +27,17 @@ function DiscoverySetupContent() {
   const [error, setError] = useState('');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [loadingStage, setLoadingStage] = useState(0);
   const isRetry = searchParams.get('retry') === 'true';
+
+  const loadingStages = [
+    'Connecting to Convoso API',
+    'Authenticating credentials',
+    'Scanning last 30 days of data',
+    'Filtering calls (10+ seconds only)',
+    'Extracting agent information',
+    'Finalizing agent profiles'
+  ];
 
   useEffect(() => {
     // Get agency name for personalization
@@ -67,15 +77,22 @@ function DiscoverySetupContent() {
 
     setLoading(true);
     setError('');
+    setLoadingStage(0);
 
     try {
-      // Step 1: Store credentials
+      // Stage 0: Connecting to Convoso API
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setLoadingStage(1);
+
+      // Stage 1: Authenticating credentials
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const storeResponse = await fetch('/api/discovery/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           convoso_auth_token: authToken.trim(),
-          validate_only: true // Just validate and store, don't start discovery yet
+          validate_only: true
         })
       });
 
@@ -85,7 +102,6 @@ function DiscoverySetupContent() {
         throw new Error(storeData.error || 'Failed to validate credentials');
       }
 
-      // Handle skipped discovery (insufficient data)
       if (storeData.skipped) {
         toast.error(storeData.reason || 'Not enough data to run discovery');
         setLoading(false);
@@ -93,7 +109,17 @@ function DiscoverySetupContent() {
         return;
       }
 
-      // Step 2: Fetch agents
+      // Stage 2: Scanning last 30 days
+      setLoadingStage(2);
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Stage 3: Filtering calls
+      setLoadingStage(3);
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Stage 4: Extracting agent information
+      setLoadingStage(4);
+
       const agentsResponse = await fetch('/api/discovery/get-agents');
       const agentsData = await agentsResponse.json();
 
@@ -106,6 +132,10 @@ function DiscoverySetupContent() {
         setLoading(false);
         return;
       }
+
+      // Stage 5: Finalizing
+      setLoadingStage(5);
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       setAgents(agentsData.agents);
 
@@ -121,6 +151,7 @@ function DiscoverySetupContent() {
     } catch (error: any) {
       toast.error(error.message);
       setLoading(false);
+      setLoadingStage(0);
     }
   };
 
@@ -287,15 +318,75 @@ function DiscoverySetupContent() {
                   )}
                 </div>
 
-                <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
-                  <h3 className="text-blue-200 font-medium mb-2">What happens next?</h3>
-                  <ul className="text-blue-300/80 text-sm space-y-1">
-                    <li>• We'll validate your auth token with Convoso</li>
-                    <li>• Fetch your agents with calls from the last 30 days</li>
-                    <li>• You can select which agents to include in analysis</li>
-                    <li>• Only calls 10+ seconds will be analyzed</li>
-                  </ul>
-                </div>
+                {!loading ? (
+                  <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
+                    <h3 className="text-blue-200 font-medium mb-2">What happens next?</h3>
+                    <ul className="text-blue-300/80 text-sm space-y-1">
+                      <li>• We'll validate your auth token with Convoso</li>
+                      <li>• Fetch your agents with calls from the last 30 days</li>
+                      <li>• You can select which agents to include in analysis</li>
+                      <li>• Only calls 10+ seconds will be analyzed</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="bg-gray-900/80 border border-gray-700 rounded-lg p-6 backdrop-blur-sm">
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-gray-300 font-medium text-sm tracking-wide uppercase">Processing</span>
+                        <span className="text-blue-400 font-bold text-sm">{Math.round((loadingStage / loadingStages.length) * 100)}%</span>
+                      </div>
+                      <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 h-full transition-all duration-500 ease-out"
+                          style={{ width: `${(loadingStage / loadingStages.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {loadingStages.map((stage, index) => {
+                        const isComplete = index < loadingStage;
+                        const isCurrent = index === loadingStage;
+                        const isPending = index > loadingStage;
+
+                        return (
+                          <div
+                            key={index}
+                            className={`flex items-center gap-3 transition-all duration-300 ${
+                              isCurrent ? 'scale-105' : 'scale-100'
+                            }`}
+                          >
+                            <div className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                              isComplete
+                                ? 'bg-green-500 border-green-500'
+                                : isCurrent
+                                  ? 'bg-blue-500 border-blue-500 animate-pulse'
+                                  : 'bg-gray-800 border-gray-600'
+                            }`}>
+                              {isComplete && (
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              {isCurrent && (
+                                <div className="w-2 h-2 bg-white rounded-full" />
+                              )}
+                            </div>
+                            <span className={`text-sm transition-all duration-300 ${
+                              isComplete
+                                ? 'text-green-400 font-medium'
+                                : isCurrent
+                                  ? 'text-white font-semibold'
+                                  : 'text-gray-500'
+                            }`}>
+                              {stage}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit"
@@ -305,7 +396,7 @@ function DiscoverySetupContent() {
                   {loading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Fetching Agents...
+                      {loadingStages[loadingStage]}
                     </>
                   ) : (
                     <>
