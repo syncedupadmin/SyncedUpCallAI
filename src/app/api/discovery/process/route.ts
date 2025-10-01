@@ -11,10 +11,15 @@ export const maxDuration = 300; // 5 minutes
  * Called immediately after session creation to process in background
  */
 export async function POST(req: NextRequest) {
+  console.log(`[Discovery Process] POST request received`);
+
   try {
     // Verify this is an internal call
     const authHeader = req.headers.get('authorization');
     const internalSecret = process.env.JOBS_SECRET || process.env.CRON_SECRET;
+
+    console.log(`[Discovery Process] Auth header present: ${!!authHeader}`);
+    console.log(`[Discovery Process] Internal secret present: ${!!internalSecret}`);
 
     // Allow calls without auth header for testing, but log it
     if (authHeader && authHeader !== `Bearer ${internalSecret}`) {
@@ -22,9 +27,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { sessionId } = await req.json();
+    const body = await req.json();
+    console.log(`[Discovery Process] Request body:`, JSON.stringify(body));
+
+    const { sessionId } = body;
 
     if (!sessionId) {
+      console.error('[Discovery Process] Missing sessionId in request');
       return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
     }
 

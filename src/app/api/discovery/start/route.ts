@@ -174,6 +174,9 @@ export async function POST(req: NextRequest) {
       const processorUrl = `${process.env.APP_URL || 'https://aicall.syncedupsolutions.com'}/api/discovery/process`;
       const secret = process.env.JOBS_SECRET || process.env.CRON_SECRET;
 
+      console.log(`[Discovery] Processor URL: ${processorUrl}`);
+      console.log(`[Discovery] Has secret: ${!!secret}`);
+
       // Fire and forget - don't await
       fetch(processorUrl, {
         method: 'POST',
@@ -182,9 +185,17 @@ export async function POST(req: NextRequest) {
           'Authorization': `Bearer ${secret}`
         },
         body: JSON.stringify({ sessionId })
-      }).catch(error => {
-        console.error(`[Discovery] Failed to trigger processor:`, error);
-      });
+      })
+        .then(res => {
+          console.log(`[Discovery] Processor triggered - status: ${res.status}`);
+          return res.text();
+        })
+        .then(text => {
+          console.log(`[Discovery] Processor response: ${text}`);
+        })
+        .catch(error => {
+          console.error(`[Discovery] Failed to trigger processor:`, error);
+        });
 
       return NextResponse.json({
         success: true,
