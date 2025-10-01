@@ -14,10 +14,23 @@ export async function GET(req: NextRequest) {
   try {
     // Verify super admin access
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!user || user.email !== process.env.ADMIN_EMAIL) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authError) {
+      console.error('[Super Admin] Auth error:', authError);
+      return NextResponse.json({ error: 'Authentication failed', details: authError.message }, { status: 401 });
+    }
+
+    if (!user) {
+      console.error('[Super Admin] No user found');
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    console.log('[Super Admin] Checking access:', { userEmail: user.email, adminEmail, match: user.email === adminEmail });
+
+    if (user.email !== adminEmail) {
+      return NextResponse.json({ error: 'Unauthorized - not super admin' }, { status: 401 });
     }
 
     // Get all sessions with agency names and durations
@@ -140,8 +153,20 @@ export async function GET(req: NextRequest) {
 
   } catch (error: any) {
     console.error('[Super Admin] Discovery sessions error:', error);
+    console.error('[Super Admin] Error stack:', error.stack);
+    console.error('[Super Admin] Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch discovery sessions' },
+      {
+        error: error.message || 'Failed to fetch discovery sessions',
+        details: error.details,
+        code: error.code,
+        hint: error.hint
+      },
       { status: 500 }
     );
   }
