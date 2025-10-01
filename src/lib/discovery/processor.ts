@@ -109,19 +109,20 @@ async function fetchCallsInChunks(
       const randomOffset = Math.floor(Math.random() * 20);
 
       try {
+        // Use log/retrieve instead of users/recordings since it works reliably with user_id
         const params = new URLSearchParams({
           auth_token: credentials.auth_token,
-          user: String(userId), // Convert to string in case it's numeric or email
-          start_time: chunkStart,
-          end_time: chunkEnd,
+          user_id: String(userId),
+          start: chunkStart.split(' ')[0], // YYYY-MM-DD format
+          end: chunkEnd.split(' ')[0],
           limit: String(callsPerChunk * 3), // Fetch extra for 10+ sec filtering
           offset: String(randomOffset)
         });
 
-        console.log(`[Discovery] Fetching from /users/recordings: user=${userId} (type: ${typeof userId}), dates=${chunkStart} to ${chunkEnd}`);
+        console.log(`[Discovery] Fetching from /log/retrieve: user_id=${userId}, dates=${chunkStart} to ${chunkEnd}`);
 
         const response = await fetch(
-          `${credentials.api_base}/users/recordings?${params.toString()}`,
+          `${credentials.api_base}/log/retrieve?${params.toString()}`,
           { headers: { 'Accept': 'application/json' } }
         );
 
@@ -133,22 +134,23 @@ async function fetchCallsInChunks(
 
         const data = await response.json();
         console.log(`[Discovery] API response structure:`, {
+          success: data.success,
           hasData: !!data.data,
-          hasEntries: !!data.data?.entries,
-          entriesLength: data.data?.entries?.length || 0,
-          keys: Object.keys(data).join(',')
+          hasResults: !!data.data?.results,
+          resultsLength: data.data?.results?.length || 0,
+          totalFound: data.data?.total_found || 0
         });
 
-        const recordings = data.data?.entries || [];
+        const recordings = data.data?.results || [];
         console.log(`[Discovery] Raw recordings count: ${recordings.length}`);
 
         if (recordings.length > 0) {
           console.log(`[Discovery] First recording sample:`, JSON.stringify(recordings[0]).substring(0, 300));
         }
 
-        // CRITICAL: Filter to 10+ seconds ONLY using 'seconds' field
+        // CRITICAL: Filter to 10+ seconds ONLY using 'call_length' field from log/retrieve
         const validCalls = recordings.filter((call: any) => {
-          const duration = call.seconds || 0;
+          const duration = call.call_length ? parseInt(call.call_length) : 0;
           return duration >= 10;
         });
 
@@ -217,18 +219,22 @@ async function analyzeBatch(calls: any[], config: DiscoveryConfig): Promise<Part
   let openingsAnalyzed = 0;
 
   for (const call of calls) {
+    // Get duration - log/retrieve uses call_length (string), not duration_sec
+    const duration = call.call_length ? parseInt(call.call_length) : (call.duration_sec || 0);
+
     // Count pitches (calls >= 30 seconds)
-    if (call.duration_sec >= 30) {
+    if (duration >= 30) {
       results.pitchesDelivered! += 1;
     }
 
-    // Count closes
-    if (['SALE', 'APPOINTMENT_SET', 'INTERESTED'].includes(call.disposition)) {
+    // Count closes - log/retrieve uses 'status' field
+    const disposition = call.disposition || call.status || '';
+    if (['SALE', 'APPOINTMENT_SET', 'INTERESTED'].includes(disposition)) {
       results.successfulCloses! += 1;
     }
 
     // Early hangups (<= 15 seconds)
-    if (call.duration_sec <= 15) {
+    if (duration <= 15) {
       results.earlyHangups! += 1;
     }
 
@@ -236,7 +242,7 @@ async function analyzeBatch(calls: any[], config: DiscoveryConfig): Promise<Part
     if (call.transcript) {
       // Opening analysis
       if (config.analyzeOpenings !== false) {
-        const openingAnalysis = analyzeOpening(call.transcript, call.duration_sec);
+        const openingAnalysis = analyzeOpening(call.transcript, duration);
         totalOpeningScore += openingAnalysis.score;
         openingsAnalyzed += 1;
       }
