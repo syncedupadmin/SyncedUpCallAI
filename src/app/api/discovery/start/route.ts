@@ -198,6 +198,30 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Discovery] Fetched ${calls.length} calls, inserting into queue...`);
 
+      // Check if discovery_calls table exists
+      console.log(`[Discovery] Verifying discovery_calls table exists...`);
+      const { error: tableCheck } = await sbAdmin
+        .from('discovery_calls')
+        .select('id')
+        .limit(1);
+
+      if (tableCheck) {
+        console.error('[Discovery] Table check error:', tableCheck);
+        if (tableCheck.code === '42P01' || tableCheck.message?.includes('does not exist')) {
+          await sbAdmin.from('discovery_sessions').update({
+            status: 'error',
+            error_message: 'Database not configured - discovery_calls table missing. Contact support.'
+          }).eq('id', sessionId);
+
+          return NextResponse.json({
+            error: 'System not configured for queue-based discovery. The discovery_calls table does not exist. Please run the database migrations.',
+            hint: 'Admin: Run supabase/migrations/add-discovery-queue-system-safe.sql'
+          }, { status: 500 });
+        }
+      }
+
+      console.log(`[Discovery] Table verified, preparing ${calls.length} call records...`);
+
       // Insert into discovery_calls table
       const callRecords = calls.map(call => ({
         session_id: sessionId,
@@ -214,16 +238,35 @@ export async function POST(req: NextRequest) {
       }));
 
       // Batch insert (Supabase handles up to 1000 rows per insert)
+      const totalBatches = Math.ceil(callRecords.length / 1000);
       for (let i = 0; i < callRecords.length; i += 1000) {
         const batch = callRecords.slice(i, Math.min(i + 1000, callRecords.length));
+        const batchNum = Math.floor(i / 1000) + 1;
+
+        console.log(`[Discovery] Inserting batch ${batchNum}/${totalBatches} (${batch.length} calls)...`);
+
         const { error: insertError } = await sbAdmin
           .from('discovery_calls')
           .insert(batch);
 
         if (insertError) {
-          console.error(`[Discovery] Failed to insert batch ${i / 1000 + 1}:`, insertError);
-          throw new Error(`Failed to queue calls: ${insertError.message}`);
+          console.error(`[Discovery] Failed to insert batch ${batchNum}:`, insertError);
+          console.error(`[Discovery] Error details:`, {
+            code: insertError.code,
+            message: insertError.message,
+            details: insertError.details,
+            hint: insertError.hint
+          });
+
+          await sbAdmin.from('discovery_sessions').update({
+            status: 'error',
+            error_message: `Failed to queue calls: ${insertError.message}`
+          }).eq('id', sessionId);
+
+          throw new Error(`Failed to queue calls batch ${batchNum}: ${insertError.message}`);
         }
+
+        console.log(`[Discovery] Batch ${batchNum}/${totalBatches} inserted successfully`);
       }
 
       // Update session to queued
