@@ -167,28 +167,23 @@ export async function POST(req: NextRequest) {
         discovery_session_id: sessionId
       }).eq('id', agencyId);
 
-      console.log(`[Discovery] Starting background processing for session ${sessionId}`);
+      console.log(`[Discovery] Triggering processor endpoint for session ${sessionId}`);
 
-      // Decrypt credentials for processing
-      const credentials = decryptConvosoCredentials(agency.convoso_credentials);
+      // Trigger the processor endpoint to handle the actual discovery
+      // This endpoint has proper timeout handling and can run for up to 5 minutes
+      const processorUrl = `${process.env.APP_URL || 'https://aicall.syncedupsolutions.com'}/api/discovery/process`;
+      const secret = process.env.JOBS_SECRET || process.env.CRON_SECRET;
 
-      // Start background processing (don't await)
-      processDiscoveryForAgency(sessionId, agencyId, credentials, {
-        callCount: targetCallCount,
-        selectedAgents: selected_agent_ids,
-        agentSelection: 'custom',
-        includeShortCalls: false, // CRITICAL: Only 10+ second calls
-        detectLying: true,
-        analyzeOpenings: true,
-        trackRebuttals: true
+      // Fire and forget - don't await
+      fetch(processorUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${secret}`
+        },
+        body: JSON.stringify({ sessionId })
       }).catch(error => {
-        console.error(`[Discovery] Background processing error:`, error);
-        // Update status to failed on error
-        sbAdmin.from('agencies').update({
-          discovery_status: 'failed'
-        }).eq('id', agencyId).then(() => {
-          console.log(`[Discovery] Marked agency ${agencyId} as failed`);
-        });
+        console.error(`[Discovery] Failed to trigger processor:`, error);
       });
 
       return NextResponse.json({
