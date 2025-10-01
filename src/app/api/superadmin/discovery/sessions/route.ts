@@ -34,11 +34,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Get all sessions with agency names and durations
+    // Use explicit relationship name to avoid ambiguity (discovery_sessions.agency_id -> agencies.id)
     const { data: sessions, error: sessionsError } = await sbAdmin
       .from('discovery_sessions')
       .select(`
         *,
-        agencies (
+        agencies!discovery_sessions_agency_id_fkey (
           name
         )
       `)
