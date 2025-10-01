@@ -40,13 +40,19 @@ export async function GET(req: NextRequest) {
     // For each session, get queue stats
     const sessionsWithStats = await Promise.all(
       (sessions || []).map(async (session) => {
-        // Count calls by status
-        const { data: queueCounts } = await sbAdmin
+        // Count calls by status (handle case where table doesn't exist yet)
+        const { data: queueCounts, error: queueError } = await sbAdmin
           .from('discovery_calls')
           .select('processing_status')
           .eq('session_id', session.id);
 
-        const queueStats = {
+        // If table doesn't exist, use fallback stats
+        const queueStats = queueError ? {
+          pending: 0,
+          processing: 0,
+          completed: 0,
+          failed: 0
+        } : {
           pending: queueCounts?.filter(c => c.processing_status === 'pending').length || 0,
           processing: queueCounts?.filter(c => c.processing_status === 'processing').length || 0,
           completed: queueCounts?.filter(c => c.processing_status === 'completed').length || 0,
@@ -100,13 +106,14 @@ export async function GET(req: NextRequest) {
     ).length;
 
     // Get total pending/processing/completed calls across all sessions
-    const { data: allCalls } = await sbAdmin
+    const { data: allCalls, error: allCallsError } = await sbAdmin
       .from('discovery_calls')
       .select('processing_status');
 
-    const totalPending = allCalls?.filter(c => c.processing_status === 'pending').length || 0;
-    const totalProcessing = allCalls?.filter(c => c.processing_status === 'processing').length || 0;
-    const totalCompleted = allCalls?.filter(c => c.processing_status === 'completed').length || 0;
+    // Handle case where table doesn't exist yet
+    const totalPending = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'pending').length || 0);
+    const totalProcessing = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'processing').length || 0);
+    const totalCompleted = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'completed').length || 0);
 
     // Calculate average duration for completed sessions
     const completedSessions = sessionsWithStats.filter(s => s.status === 'complete' && s.duration_seconds);
@@ -173,11 +180,17 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', session_id);
 
-        await sbAdmin
+        // Try to update discovery_calls if table exists
+        const { error: callsUpdateError } = await sbAdmin
           .from('discovery_calls')
           .update({ processing_status: 'failed', error_message: 'Session cancelled' })
           .eq('session_id', session_id)
           .in('processing_status', ['pending', 'processing']);
+
+        // Ignore error if table doesn't exist yet
+        if (callsUpdateError && !callsUpdateError.message?.includes('does not exist')) {
+          console.error('[Super Admin] Error updating calls:', callsUpdateError);
+        }
 
         return NextResponse.json({
           success: true,
@@ -223,8 +236,8 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', session_id);
 
-        // Reset all calls to pending
-        await sbAdmin
+        // Reset all calls to pending (if table exists)
+        const { error: restartCallsError } = await sbAdmin
           .from('discovery_calls')
           .update({
             processing_status: 'pending',
@@ -236,6 +249,11 @@ export async function POST(req: NextRequest) {
             processed_at: null
           })
           .eq('session_id', session_id);
+
+        // Ignore error if table doesn't exist yet
+        if (restartCallsError && !restartCallsError.message?.includes('does not exist')) {
+          console.error('[Super Admin] Error restarting calls:', restartCallsError);
+        }
 
         return NextResponse.json({
           success: true,

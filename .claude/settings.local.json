@@ -29,7 +29,8 @@
       "WebSearch",
       "Bash(npx tsc:*)",
       "Bash(openssl rand:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "WebFetch(domain:supabase.com)"
     ]
   },
   "outputStyle": "default"
