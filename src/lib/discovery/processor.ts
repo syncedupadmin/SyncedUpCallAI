@@ -177,14 +177,17 @@ async function fetchCallsInChunks(
 
   console.log(`[Discovery] Strategy: ${callsPerAgent} calls/agent, ${callsPerChunk} calls/chunk, ${daysPerChunk} days/chunk`);
 
-  // Step 3: Fetch recordings for each agent across date chunks
-  let totalFetched = 0;
-
-  console.log(`[Discovery] Starting fetch loop for ${agentUserIds.length} agents, ${dateChunks} chunks each`);
+  // Step 3: Build all fetch tasks (agent × chunk combinations)
+  const fetchTasks: Array<{
+    userId: string;
+    chunkIndex: number;
+    chunkStart: string;
+    chunkEnd: string;
+    limit: number;
+    offset: number;
+  }> = [];
 
   for (const userId of agentUserIds) {
-    console.log(`[Discovery] Processing agent: ${userId}`);
-
     for (let chunkIndex = 0; chunkIndex < dateChunks; chunkIndex++) {
       const chunkStartDate = new Date(startDate);
       chunkStartDate.setDate(chunkStartDate.getDate() + (chunkIndex * daysPerChunk));
@@ -192,29 +195,50 @@ async function fetchCallsInChunks(
       const chunkEndDate = new Date(chunkStartDate);
       chunkEndDate.setDate(chunkEndDate.getDate() + daysPerChunk - 1);
 
-      // Don't exceed the end date
       if (chunkEndDate > endDate) {
         chunkEndDate.setTime(endDate.getTime());
       }
 
-      const chunkStart = chunkStartDate.toISOString().split('T')[0] + ' 00:00:00';
-      const chunkEnd = chunkEndDate.toISOString().split('T')[0] + ' 23:59:59';
-
-      // Add random offset for variety
+      const chunkStart = chunkStartDate.toISOString().split('T')[0];
+      const chunkEnd = chunkEndDate.toISOString().split('T')[0];
       const randomOffset = Math.floor(Math.random() * 20);
 
+      fetchTasks.push({
+        userId,
+        chunkIndex,
+        chunkStart,
+        chunkEnd,
+        limit: callsPerChunk * 3,
+        offset: randomOffset
+      });
+    }
+  }
+
+  console.log(`[Discovery] Created ${fetchTasks.length} fetch tasks (${agentUserIds.length} agents × ${dateChunks} chunks)`);
+  console.log(`[Discovery] Will process in parallel batches of 50...`);
+
+  // Step 4: Process all fetch tasks in parallel batches of 50
+  const METADATA_BATCH_SIZE = 50;
+  let totalFetched = 0;
+  const totalBatches = Math.ceil(fetchTasks.length / METADATA_BATCH_SIZE);
+
+  for (let i = 0; i < fetchTasks.length; i += METADATA_BATCH_SIZE) {
+    const batch = fetchTasks.slice(i, Math.min(i + METADATA_BATCH_SIZE, fetchTasks.length));
+    const batchNum = Math.floor(i / METADATA_BATCH_SIZE) + 1;
+
+    console.log(`[Discovery] Processing metadata batch ${batchNum}/${totalBatches} (${batch.length} API calls)...`);
+
+    // Execute all tasks in this batch in parallel
+    const promises = batch.map(async (task) => {
       try {
-        // Use log/retrieve instead of users/recordings since it works reliably with user_id
         const params = new URLSearchParams({
           auth_token: credentials.auth_token,
-          user_id: String(userId),
-          start: chunkStart.split(' ')[0], // YYYY-MM-DD format
-          end: chunkEnd.split(' ')[0],
-          limit: String(callsPerChunk * 3), // Fetch extra for 10+ sec filtering
-          offset: String(randomOffset)
+          user_id: String(task.userId),
+          start: task.chunkStart,
+          end: task.chunkEnd,
+          limit: String(task.limit),
+          offset: String(task.offset)
         });
-
-        console.log(`[Discovery] Fetching from /log/retrieve: user_id=${userId}, dates=${chunkStart} to ${chunkEnd}`);
 
         const response = await fetch(
           `${credentials.api_base}/log/retrieve?${params.toString()}`,
@@ -222,67 +246,55 @@ async function fetchCallsInChunks(
         );
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[Discovery] API error for agent ${userId}: ${response.status} - ${errorText}`);
-          continue;
+          console.error(`[Discovery] API error for agent ${task.userId} chunk ${task.chunkIndex}: ${response.status}`);
+          return [];
         }
 
         const data = await response.json();
-        console.log(`[Discovery] API response structure:`, {
-          success: data.success,
-          hasData: !!data.data,
-          hasResults: !!data.data?.results,
-          resultsLength: data.data?.results?.length || 0,
-          totalFound: data.data?.total_found || 0
-        });
-
         const recordings = data.data?.results || [];
-        console.log(`[Discovery] Raw recordings count: ${recordings.length}`);
 
-        if (recordings.length > 0) {
-          console.log(`[Discovery] First recording sample:`, JSON.stringify(recordings[0]).substring(0, 300));
-        }
-
-        // CRITICAL: Filter to 10+ seconds ONLY using 'call_length' field from log/retrieve
+        // Filter to 10+ seconds using 'call_length' field
         const validCalls = recordings.filter((call: any) => {
           const duration = call.call_length ? parseInt(call.call_length) : 0;
           return duration >= 10;
         });
 
-        console.log(`[Discovery] Filtered to ${validCalls.length} calls with 10+ seconds`);
+        console.log(`[Discovery] Agent ${task.userId} chunk ${task.chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec) from ${recordings.length} total`);
 
-        allCalls.push(...validCalls);
-        totalFetched += validCalls.length;
-
-        console.log(`[Discovery] Agent ${userId} chunk ${chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec) from ${recordings.length} total`);
-        console.log(`[Discovery] Running total: ${totalFetched} calls`);
-
-        // Update progress
-        const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
-        await sbAdmin.from('discovery_sessions').update({
-          status: 'pulling',
-          progress,
-          processed: totalFetched
-        }).eq('id', sessionId);
-
-        // Rate limit protection
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Stop if we have enough
-        if (totalFetched >= targetCallCount * 1.2) {
-          break;
-        }
+        return validCalls;
       } catch (error: any) {
-        console.error(`[Discovery] Error fetching chunk ${chunkIndex} for agent ${userId}:`, error.message, error.stack);
+        console.error(`[Discovery] Error fetching chunk ${task.chunkIndex} for agent ${task.userId}:`, error.message);
+        return [];
       }
+    });
+
+    // Wait for all tasks in this batch to complete
+    const batchResults = await Promise.all(promises);
+
+    // Flatten and add to allCalls
+    for (const result of batchResults) {
+      allCalls.push(...result);
+      totalFetched += result.length;
     }
 
+    console.log(`[Discovery] Batch ${batchNum} complete: ${totalFetched} total calls collected`);
+
+    // Update progress
+    const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
+    await sbAdmin.from('discovery_sessions').update({
+      status: 'pulling',
+      progress,
+      processed: totalFetched
+    }).eq('id', sessionId);
+
+    // Stop early if we have enough
     if (totalFetched >= targetCallCount * 1.2) {
+      console.log(`[Discovery] Target reached (${totalFetched} >= ${targetCallCount * 1.2}), stopping early`);
       break;
     }
   }
 
-  // Step 4: Randomize and select final set
+  // Step 5: Randomize and select final set
   console.log(`[Discovery] Fetch complete - total calls collected: ${allCalls.length}`);
   console.log(`[Discovery] Target was: ${targetCallCount}`);
 
@@ -296,18 +308,18 @@ async function fetchCallsInChunks(
 
   console.log(`[Discovery] Selected ${selectedCalls.length} calls, now fetching recordings and transcribing...`);
 
-  // Step 5: Fetch recordings and transcribe
+  // Step 6: Fetch recordings and transcribe with high concurrency
   const callsWithTranscripts: any[] = [];
-  const BATCH_SIZE = 20; // Process 20 at a time for parallel efficiency
-  const totalBatches = Math.ceil(selectedCalls.length / BATCH_SIZE);
+  const TRANSCRIPTION_BATCH_SIZE = 50; // Process 50 at a time (Deepgram limit is 100 concurrent)
+  const totalTranscriptionBatches = Math.ceil(selectedCalls.length / TRANSCRIPTION_BATCH_SIZE);
 
-  for (let i = 0; i < selectedCalls.length; i += BATCH_SIZE) {
-    const batch = selectedCalls.slice(i, Math.min(i + BATCH_SIZE, selectedCalls.length));
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+  for (let i = 0; i < selectedCalls.length; i += TRANSCRIPTION_BATCH_SIZE) {
+    const batch = selectedCalls.slice(i, Math.min(i + TRANSCRIPTION_BATCH_SIZE, selectedCalls.length));
+    const batchNum = Math.floor(i / TRANSCRIPTION_BATCH_SIZE) + 1;
 
-    console.log(`[Discovery] Processing batch ${batchNum}/${totalBatches} (${batch.length} calls)...`);
+    console.log(`[Discovery] Transcribing batch ${batchNum}/${totalTranscriptionBatches} (${batch.length} calls in parallel)...`);
 
-    // Process batch in parallel
+    // Process entire batch in parallel (no sequential delays!)
     const promises = batch.map(async (call) => {
       try {
         // Fetch recording URL
@@ -351,12 +363,9 @@ async function fetchCallsInChunks(
       processed: callsWithTranscripts.length
     }).eq('id', sessionId);
 
-    console.log(`[Discovery] Batch ${batchNum}: ${successful.length}/${batch.length} successful (total: ${callsWithTranscripts.length})`);
+    console.log(`[Discovery] Batch ${batchNum}: ${successful.length}/${batch.length} successful (total: ${callsWithTranscripts.length}/${selectedCalls.length})`);
 
-    // Small delay between batches for rate limiting
-    if (i + BATCH_SIZE < selectedCalls.length) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    // NO DELAYS - Fire next batch immediately!
   }
 
   console.log(`[Discovery] Transcription complete: ${callsWithTranscripts.length}/${selectedCalls.length} calls ready for analysis`);
