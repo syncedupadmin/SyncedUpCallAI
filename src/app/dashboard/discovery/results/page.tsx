@@ -142,8 +142,9 @@ function DiscoveryResultsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white p-8">
+      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
+      <div className="relative max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold mb-2">
