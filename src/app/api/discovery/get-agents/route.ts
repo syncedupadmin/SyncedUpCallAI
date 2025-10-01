@@ -41,20 +41,19 @@ export async function GET(req: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
 
-    const startTime = startDate.toISOString().split('T')[0] + ' 00:00:00';
-    const endTime = endDate.toISOString().split('T')[0] + ' 23:59:59';
+    const dateStart = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateEnd = endDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    console.log(`[Get Agents] Fetching calls from ${startTime} to ${endTime}`);
+    console.log(`[Get Agents] Fetching agent performance from ${dateStart} to ${dateEnd}`);
 
-    // Fetch calls from Convoso using log/retrieve
+    // Use agent-performance/search to get all agents with call metrics
     const params = new URLSearchParams({
       auth_token: credentials.auth_token,
-      start_time: startTime,
-      end_time: endTime,
-      limit: '10000' // Fetch enough to find all agents
+      date_start: dateStart,
+      date_end: dateEnd
     });
 
-    const response = await fetch(`${apiBase}/log/retrieve?${params.toString()}`, {
+    const response = await fetch(`${apiBase}/agent-performance/search?${params.toString()}`, {
       headers: { 'Accept': 'application/json' }
     });
 
@@ -62,66 +61,43 @@ export async function GET(req: NextRequest) {
       const errorText = await response.text();
       console.error('[Get Agents] Convoso API error:', errorText);
       return NextResponse.json(
-        { error: 'Failed to fetch calls from Convoso' },
+        { error: 'Failed to fetch agents from Convoso' },
         { status: 500 }
       );
     }
 
-    const data = await response.json();
-    const calls = data.data?.results || [];
+    const result = await response.json();
 
-    console.log(`[Get Agents] Retrieved ${calls.length} calls from Convoso`);
+    if (!result.success || !result.data) {
+      console.error('[Get Agents] Invalid API response:', result);
+      return NextResponse.json(
+        { error: 'Invalid response from Convoso API' },
+        { status: 500 }
+      );
+    }
 
-    // Extract unique agents from calls (only 10+ second calls)
-    const agentsMap = new Map<string, {
-      user_id: string;
-      name: string;
-      email?: string;
-      callCount: number;
-      totalDuration: number;
-    }>();
+    console.log(`[Get Agents] Retrieved ${result.total} agents from Convoso`);
 
-    calls.forEach((call: any) => {
-      const duration = call.duration_sec || call.duration || 0;
+    // Convert agent performance data to agent list
+    const agentData = Object.values(result.data) as any[];
 
-      // CRITICAL: Only count calls 10 seconds or longer
-      if (duration >= 10) {
-        const userId = call.user_id;
-        const userName = call.user || call.user_name;
-        const userEmail = call.user_email || call.agent_email;
-
-        if (userId && userName && userName !== 'System User') {
-          const existing = agentsMap.get(userId);
-
-          if (existing) {
-            existing.callCount++;
-            existing.totalDuration += duration;
-          } else {
-            agentsMap.set(userId, {
-              user_id: userId,
-              name: userName,
-              email: userEmail,
-              callCount: 1,
-              totalDuration: duration
-            });
-          }
-        }
-      }
-    });
-
-    // Convert to array and format
-    const agents = Array.from(agentsMap.values())
+    const agents = agentData
+      .filter(agent => {
+        // Filter out system users and agents with too few calls
+        return agent.human_answered >= 5 &&
+               agent.name !== 'System User' &&
+               agent.user_id;
+      })
       .map(agent => ({
         user_id: agent.user_id,
         name: agent.name,
-        email: agent.email,
-        callCount: agent.callCount,
-        avgDuration: Math.round(agent.totalDuration / agent.callCount)
+        email: null, // Not provided by agent-performance endpoint
+        callCount: agent.human_answered, // Use human_answered as call count
+        avgDuration: 0 // Not needed for agent selection
       }))
-      .filter(agent => agent.callCount >= 5) // Only show agents with at least 5 calls
       .sort((a, b) => b.callCount - a.callCount); // Sort by call count descending
 
-    console.log(`[Get Agents] Found ${agents.length} agents with 10+ second calls`);
+    console.log(`[Get Agents] Found ${agents.length} agents with 5+ human-answered calls`);
 
     return NextResponse.json({
       success: true,
