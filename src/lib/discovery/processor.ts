@@ -301,75 +301,8 @@ export async function fetchCallsInChunks(
   const shuffled = allCalls.sort(() => Math.random() - 0.5);
   const selectedCalls = shuffled.slice(0, targetCallCount);
 
-  console.log(`[Discovery] Selected ${selectedCalls.length} calls, now fetching recordings and transcribing...`);
-
-  // Step 6: Fetch recordings and transcribe with high concurrency
-  const callsWithTranscripts: any[] = [];
-  const TRANSCRIPTION_BATCH_SIZE = 50; // Process 50 at a time (Deepgram limit is 100 concurrent)
-  const totalTranscriptionBatches = Math.ceil(selectedCalls.length / TRANSCRIPTION_BATCH_SIZE);
-
-  for (let i = 0; i < selectedCalls.length; i += TRANSCRIPTION_BATCH_SIZE) {
-    const batch = selectedCalls.slice(i, Math.min(i + TRANSCRIPTION_BATCH_SIZE, selectedCalls.length));
-    const batchNum = Math.floor(i / TRANSCRIPTION_BATCH_SIZE) + 1;
-
-    console.log(`[Discovery] Transcribing batch ${batchNum}/${totalTranscriptionBatches} (${batch.length} calls in parallel)...`);
-
-    // Process entire batch in parallel (no sequential delays!)
-    const promises = batch.map(async (call) => {
-      try {
-        // Fetch recording URL
-        const recordingUrl = await fetchRecordingUrl(
-          call.id,
-          call.lead_id,
-          credentials
-        );
-
-        if (!recordingUrl) {
-          console.warn(`[Discovery] No recording URL for call ${call.id}`);
-          return null;
-        }
-
-        // Transcribe with Deepgram/AssemblyAI
-        const asrResult = await transcribe(recordingUrl);
-
-        // Attach transcript and normalize fields
-        return {
-          ...call,
-          recording_url: recordingUrl,
-          transcript: asrResult.translated_text || asrResult.text,
-          duration_sec: call.call_length ? parseInt(call.call_length) : 0,
-          disposition: call.status // Map status to disposition for analysis
-        };
-      } catch (error: any) {
-        console.error(`[Discovery] Failed to process call ${call.id}:`, error.message);
-        return null;
-      }
-    });
-
-    const results = await Promise.all(promises);
-    const successful = results.filter(r => r !== null);
-    callsWithTranscripts.push(...successful);
-
-    // Update progress (30-70% range for transcription phase)
-    const transcriptionProgress = 30 + Math.floor((callsWithTranscripts.length / targetCallCount) * 40);
-    await sbAdmin.from('discovery_sessions').update({
-      status: 'transcribing',
-      progress: transcriptionProgress,
-      processed: callsWithTranscripts.length
-    }).eq('id', sessionId);
-
-    console.log(`[Discovery] Batch ${batchNum}: ${successful.length}/${batch.length} successful (total: ${callsWithTranscripts.length}/${selectedCalls.length})`);
-
-    // NO DELAYS - Fire next batch immediately!
-  }
-
-  console.log(`[Discovery] Transcription complete: ${callsWithTranscripts.length}/${selectedCalls.length} calls ready for analysis`);
-
-  if (callsWithTranscripts.length < 100) {
-    throw new Error(`Insufficient transcribed calls: only ${callsWithTranscripts.length} out of ${selectedCalls.length} succeeded`);
-  }
-
-  return callsWithTranscripts;
+  console.log(`[Discovery] Selected ${selectedCalls.length} calls for queueing`);
+  return selectedCalls;
 }
 
 /**
