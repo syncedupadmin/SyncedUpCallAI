@@ -58,10 +58,11 @@ async function fetchCallsInChunks(
 
   const agentCount = selectedAgentIds.length;
   console.log(`[Discovery] Fetching ${targetCallCount} calls evenly across ${agentCount} agents`);
+  console.log(`[Discovery] Selected agent IDs:`, selectedAgentIds);
+  console.log(`[Discovery] Auth token present: ${!!credentials.auth_token}`);
+  console.log(`[Discovery] API base: ${credentials.api_base}`);
 
   // Step 1: Get agent user IDs - we'll use them directly for the recordings API
-  console.log(`[Discovery] Selected agent IDs: ${selectedAgentIds.join(', ')}`);
-
   const agentUserIds = selectedAgentIds; // Use the IDs directly
 
   if (agentUserIds.length === 0) {
@@ -84,7 +85,11 @@ async function fetchCallsInChunks(
   // Step 3: Fetch recordings for each agent across date chunks
   let totalFetched = 0;
 
+  console.log(`[Discovery] Starting fetch loop for ${agentUserIds.length} agents, ${dateChunks} chunks each`);
+
   for (const userId of agentUserIds) {
+    console.log(`[Discovery] Processing agent: ${userId}`);
+
     for (let chunkIndex = 0; chunkIndex < dateChunks; chunkIndex++) {
       const chunkStartDate = new Date(startDate);
       chunkStartDate.setDate(chunkStartDate.getDate() + (chunkIndex * daysPerChunk));
@@ -127,9 +132,19 @@ async function fetchCallsInChunks(
         }
 
         const data = await response.json();
-        console.log(`[Discovery] API response for agent ${userId}:`, JSON.stringify(data).substring(0, 200));
+        console.log(`[Discovery] API response structure:`, {
+          hasData: !!data.data,
+          hasEntries: !!data.data?.entries,
+          entriesLength: data.data?.entries?.length || 0,
+          keys: Object.keys(data).join(',')
+        });
 
         const recordings = data.data?.entries || [];
+        console.log(`[Discovery] Raw recordings count: ${recordings.length}`);
+
+        if (recordings.length > 0) {
+          console.log(`[Discovery] First recording sample:`, JSON.stringify(recordings[0]).substring(0, 300));
+        }
 
         // CRITICAL: Filter to 10+ seconds ONLY using 'seconds' field
         const validCalls = recordings.filter((call: any) => {
@@ -137,10 +152,13 @@ async function fetchCallsInChunks(
           return duration >= 10;
         });
 
+        console.log(`[Discovery] Filtered to ${validCalls.length} calls with 10+ seconds`);
+
         allCalls.push(...validCalls);
         totalFetched += validCalls.length;
 
         console.log(`[Discovery] Agent ${userId} chunk ${chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec) from ${recordings.length} total`);
+        console.log(`[Discovery] Running total: ${totalFetched} calls`);
 
         // Update progress
         const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
@@ -168,6 +186,14 @@ async function fetchCallsInChunks(
   }
 
   // Step 4: Randomize and select final set
+  console.log(`[Discovery] Fetch complete - total calls collected: ${allCalls.length}`);
+  console.log(`[Discovery] Target was: ${targetCallCount}`);
+
+  if (allCalls.length === 0) {
+    console.error('[Discovery] ERROR: No calls were fetched! Check API responses above.');
+    return [];
+  }
+
   const shuffled = allCalls.sort(() => Math.random() - 0.5);
 
   console.log(`[Discovery] Fetched ${shuffled.length} total calls, selecting ${targetCallCount}`);
