@@ -98,12 +98,17 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Update settings
+    // Update settings - only include valid database columns
     const { error } = await supabase
       .from('convoso_control_settings')
       .upsert({
         id: 1,
-        ...body,
+        system_enabled: body.system_enabled,
+        active_campaigns: body.active_campaigns || [],
+        active_lists: body.active_lists || [],
+        active_dispositions: body.active_dispositions || [],
+        active_agents: body.active_agents || [],
+        filter_mode: body.filter_mode,
         updated_at: new Date().toISOString()
       });
 
