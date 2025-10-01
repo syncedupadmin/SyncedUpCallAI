@@ -11,6 +11,7 @@ import {
 } from '@/lib/discovery-engine';
 import { decryptConvosoCredentials } from '@/lib/crypto';
 import { transcribe } from '@/server/asr';
+import { ANALYSIS_SYSTEM, userPrompt } from '@/server/lib/prompts';
 
 export interface ConvosoCredentials {
   api_key: string;
@@ -75,6 +76,61 @@ async function fetchRecordingUrl(
     return null;
   } catch (error: any) {
     console.error(`[Discovery] Failed to fetch recording for call ${callId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Analyze call with OpenAI 2-pass analysis (same as normal operations)
+ */
+async function analyzeCallWithOpenAI(call: any): Promise<any> {
+  try {
+    const meta = {
+      agent_id: call.user_id || 'Unknown',
+      agent_name: call.user || 'Unknown',
+      campaign: call.campaign || 'N/A',
+      duration_sec: call.duration_sec || 0,
+      disposition: call.disposition || call.status || 'Unknown',
+      direction: call.call_type || 'outbound',
+      tz: 'America/New_York',
+      customer_state: 'Unknown',
+      expected_script: 'greeting -> discovery -> benefits -> close -> compliance',
+      products: 'Health Insurance',
+      callback_hours: 'Mon–Sat 09:00–20:00',
+      compliance: 'Honor DNC; disclose license; avoid misleading claims'
+    };
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY!}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: ANALYSIS_SYSTEM },
+          { role: 'user', content: userPrompt(meta, call.transcript) }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`[Discovery] OpenAI analysis failed for call ${call.id}: ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+    const analysis = JSON.parse(result.choices[0].message.content);
+
+    return {
+      ...analysis,
+      tokens_used: result.usage?.total_tokens || 0
+    };
+  } catch (error: any) {
+    console.error(`[Discovery] Error analyzing call ${call.id}:`, error.message);
     return null;
   }
 }
@@ -313,7 +369,7 @@ async function fetchCallsInChunks(
 }
 
 /**
- * Analyze a batch of calls
+ * Analyze a batch of calls with OpenAI 2-pass analysis
  */
 async function analyzeBatch(calls: any[], config: DiscoveryConfig): Promise<Partial<DiscoveryMetrics>> {
   const results: Partial<DiscoveryMetrics> = {
@@ -326,57 +382,91 @@ async function analyzeBatch(calls: any[], config: DiscoveryConfig): Promise<Part
   };
 
   let totalOpeningScore = 0;
-  let openingsAnalyzed = 0;
+  let totalQAScore = 0;
+  let openAIAnalyzedCount = 0;
 
-  for (const call of calls) {
-    // Get duration - log/retrieve uses call_length (string), not duration_sec
-    const duration = call.call_length ? parseInt(call.call_length) : (call.duration_sec || 0);
+  // Process OpenAI analysis in parallel batches of 50
+  const OPENAI_BATCH_SIZE = 50;
+  const totalBatches = Math.ceil(calls.length / OPENAI_BATCH_SIZE);
 
-    // Count pitches (calls >= 30 seconds)
-    if (duration >= 30) {
-      results.pitchesDelivered! += 1;
-    }
+  for (let i = 0; i < calls.length; i += OPENAI_BATCH_SIZE) {
+    const batch = calls.slice(i, Math.min(i + OPENAI_BATCH_SIZE, calls.length));
+    const batchNum = Math.floor(i / OPENAI_BATCH_SIZE) + 1;
 
-    // Count closes - log/retrieve uses 'status' field
-    const disposition = call.disposition || call.status || '';
-    if (['SALE', 'APPOINTMENT_SET', 'INTERESTED'].includes(disposition)) {
-      results.successfulCloses! += 1;
-    }
+    console.log(`[Discovery] Analyzing batch ${batchNum}/${totalBatches} with OpenAI (${batch.length} calls)...`);
 
-    // Early hangups (<= 15 seconds)
-    if (duration <= 15) {
-      results.earlyHangups! += 1;
-    }
+    // Run OpenAI analysis in parallel for this batch
+    const analysisPromises = batch.map(call => analyzeCallWithOpenAI(call));
+    const analyses = await Promise.all(analysisPromises);
 
-    // Analyze transcript if available
-    if (call.transcript) {
-      // Opening analysis
-      if (config.analyzeOpenings !== false) {
-        const openingAnalysis = analyzeOpening(call.transcript, duration);
-        totalOpeningScore += openingAnalysis.score;
-        openingsAnalyzed += 1;
+    // Process results
+    for (let j = 0; j < batch.length; j++) {
+      const call = batch[j];
+      const analysis = analyses[j];
+      const duration = call.duration_sec || 0;
+
+      // Count pitches (calls >= 30 seconds)
+      if (duration >= 30) {
+        results.pitchesDelivered! += 1;
       }
 
-      // Rebuttal analysis
-      if (config.trackRebuttals !== false) {
-        const rebuttalAnalysis = analyzeRebuttals(call.transcript);
-        results.rebuttalFailures! += rebuttalAnalysis.gave_up_count;
+      // Early hangups (<= 15 seconds)
+      if (duration <= 15) {
+        results.earlyHangups! += 1;
       }
 
-      // Lying detection
-      if (config.detectLying !== false) {
-        const lyingDetected = detectLyingInTranscript(call.transcript);
-        if (lyingDetected) {
+      // Use OpenAI analysis if available
+      if (analysis) {
+        openAIAnalyzedCount++;
+
+        // Count closes from OpenAI analysis
+        const outcome = analysis.analysis?.outcome || analysis.outcome;
+        if (outcome === 'sale' || outcome === 'callback') {
+          results.successfulCloses! += 1;
+        }
+
+        // Use QA score as opening score proxy
+        const qaScore = analysis.qa_score || 0;
+        totalQAScore += qaScore;
+        totalOpeningScore += qaScore; // Use QA score as proxy for opening quality
+
+        // Check for red flags (lying detection)
+        const redFlags = analysis.red_flags || analysis.risk_flags || [];
+        if (redFlags.includes('misrepresentation_risk') || redFlags.includes('confused')) {
           results.lyingDetected! += 1;
+        }
+
+        // Attach analysis to call for later use
+        call.openai_analysis = analysis;
+      } else {
+        // Fallback to simple pattern matching if OpenAI failed
+        const disposition = call.disposition || call.status || '';
+        if (['SALE', 'APPOINTMENT_SET', 'INTERESTED'].includes(disposition)) {
+          results.successfulCloses! += 1;
+        }
+
+        // Pattern-based lying detection
+        if (call.transcript && config.detectLying !== false) {
+          const lyingDetected = detectLyingInTranscript(call.transcript);
+          if (lyingDetected) {
+            results.lyingDetected! += 1;
+          }
         }
       }
     }
+
+    // Small delay between batches to avoid overwhelming OpenAI
+    if (i + OPENAI_BATCH_SIZE < calls.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   }
 
-  // Calculate average opening score
-  if (openingsAnalyzed > 0) {
-    results.openingScore = Math.round(totalOpeningScore / openingsAnalyzed);
+  // Calculate average scores
+  if (openAIAnalyzedCount > 0) {
+    results.openingScore = Math.round(totalOpeningScore / openAIAnalyzedCount);
   }
+
+  console.log(`[Discovery] OpenAI analysis complete: ${openAIAnalyzedCount}/${calls.length} calls analyzed`);
 
   return results;
 }
