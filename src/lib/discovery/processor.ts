@@ -111,14 +111,14 @@ async function fetchCallsInChunks(
       try {
         const params = new URLSearchParams({
           auth_token: credentials.auth_token,
-          user: userId, // Use user_id directly
+          user: String(userId), // Convert to string in case it's numeric or email
           start_time: chunkStart,
           end_time: chunkEnd,
           limit: String(callsPerChunk * 3), // Fetch extra for 10+ sec filtering
           offset: String(randomOffset)
         });
 
-        console.log(`[Discovery] Fetching from /users/recordings: user=${userId}, dates=${chunkStart} to ${chunkEnd}`);
+        console.log(`[Discovery] Fetching from /users/recordings: user=${userId} (type: ${typeof userId}), dates=${chunkStart} to ${chunkEnd}`);
 
         const response = await fetch(
           `${credentials.api_base}/users/recordings?${params.toString()}`,

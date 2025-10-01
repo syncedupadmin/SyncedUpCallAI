@@ -81,6 +81,12 @@ export async function GET(req: NextRequest) {
     // Convert agent performance data to agent list
     const agentData = Object.values(result.data) as any[];
 
+    // Log first agent to see all available fields
+    if (agentData.length > 0) {
+      console.log(`[Get Agents] First agent fields:`, Object.keys(agentData[0]));
+      console.log(`[Get Agents] First agent sample:`, JSON.stringify(agentData[0]).substring(0, 500));
+    }
+
     const agents = agentData
       .filter(agent => {
         // Filter out system users and agents with too few calls
@@ -90,14 +96,16 @@ export async function GET(req: NextRequest) {
       })
       .map(agent => ({
         user_id: agent.user_id,
+        username: agent.username || agent.email || agent.user_id, // Try multiple fields
         name: agent.name,
-        email: null, // Not provided by agent-performance endpoint
-        callCount: agent.human_answered, // Use human_answered as call count
-        avgDuration: 0 // Not needed for agent selection
+        email: agent.email || null,
+        callCount: agent.human_answered,
+        avgDuration: 0
       }))
-      .sort((a, b) => b.callCount - a.callCount); // Sort by call count descending
+      .sort((a, b) => b.callCount - a.callCount);
 
     console.log(`[Get Agents] Found ${agents.length} agents with 5+ human-answered calls`);
+    console.log(`[Get Agents] Sample agent:`, agents[0]);
 
     return NextResponse.json({
       success: true,

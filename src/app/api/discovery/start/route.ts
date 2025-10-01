@@ -123,6 +123,8 @@ export async function POST(req: NextRequest) {
     // MODE 2: Start discovery with selected agents
     if (selected_agent_ids && Array.isArray(selected_agent_ids)) {
       console.log(`[Discovery] Starting discovery for agency ${agencyId} with ${selected_agent_ids.length} agents`);
+      console.log(`[Discovery] Selected agent IDs:`, selected_agent_ids);
+      console.log(`[Discovery] First agent ID type:`, typeof selected_agent_ids[0], selected_agent_ids[0]);
 
       // Check if discovery already completed
       if (agency.discovery_status === 'completed') {
