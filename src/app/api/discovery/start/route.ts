@@ -222,20 +222,32 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Discovery] Table verified, preparing ${calls.length} call records...`);
 
-      // Insert into discovery_calls table
-      const callRecords = calls.map(call => ({
-        session_id: sessionId,
-        call_id: call.id,
-        lead_id: call.lead_id,
-        user_id: call.user_id,
-        user_name: call.user,
-        campaign: call.campaign,
-        status: call.status,
-        call_length: parseInt(call.call_length) || 0,
-        call_type: call.call_type || 'outbound',
-        started_at: call.started_at,
-        processing_status: 'pending'
-      }));
+      // Deduplicate calls before inserting (safety check)
+      const seenCallIds = new Set();
+      const callRecords = calls
+        .filter(call => {
+          if (seenCallIds.has(call.id)) {
+            console.warn(`[Discovery] Skipping duplicate call_id in batch: ${call.id}`);
+            return false;
+          }
+          seenCallIds.add(call.id);
+          return true;
+        })
+        .map(call => ({
+          session_id: sessionId,
+          call_id: call.id,
+          lead_id: call.lead_id,
+          user_id: call.user_id,
+          user_name: call.user,
+          campaign: call.campaign,
+          status: call.status,
+          call_length: parseInt(call.call_length) || 0,
+          call_type: call.call_type || 'outbound',
+          started_at: call.started_at,
+          processing_status: 'pending'
+        }));
+
+      console.log(`[Discovery] Deduplicated to ${callRecords.length} unique calls for insert`);
 
       // Batch insert (Supabase handles up to 1000 rows per insert)
       const totalBatches = Math.ceil(callRecords.length / 1000);
@@ -243,14 +255,17 @@ export async function POST(req: NextRequest) {
         const batch = callRecords.slice(i, Math.min(i + 1000, callRecords.length));
         const batchNum = Math.floor(i / 1000) + 1;
 
-        console.log(`[Discovery] Inserting batch ${batchNum}/${totalBatches} (${batch.length} calls)...`);
+        console.log(`[Discovery] Upserting batch ${batchNum}/${totalBatches} (${batch.length} calls)...`);
 
         const { error: insertError } = await sbAdmin
           .from('discovery_calls')
-          .insert(batch);
+          .upsert(batch, {
+            onConflict: 'session_id,call_id',
+            ignoreDuplicates: true
+          });
 
         if (insertError) {
-          console.error(`[Discovery] Failed to insert batch ${batchNum}:`, insertError);
+          console.error(`[Discovery] Failed to upsert batch ${batchNum}:`, insertError);
           console.error(`[Discovery] Error details:`, {
             code: insertError.code,
             message: insertError.message,
@@ -258,15 +273,12 @@ export async function POST(req: NextRequest) {
             hint: insertError.hint
           });
 
-          await sbAdmin.from('discovery_sessions').update({
-            status: 'error',
-            error_message: `Failed to queue calls: ${insertError.message}`
-          }).eq('id', sessionId);
-
-          throw new Error(`Failed to queue calls batch ${batchNum}: ${insertError.message}`);
+          // Continue with next batch instead of throwing
+          console.warn(`[Discovery] Continuing with remaining batches despite error in batch ${batchNum}`);
+          continue;
         }
 
-        console.log(`[Discovery] Batch ${batchNum}/${totalBatches} inserted successfully`);
+        console.log(`[Discovery] Batch ${batchNum}/${totalBatches} upserted successfully`);
       }
 
       // Update session to queued

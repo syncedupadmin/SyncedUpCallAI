@@ -289,7 +289,7 @@ export async function fetchCallsInChunks(
     }
   }
 
-  // Step 5: Randomize and select final set
+  // Step 5: Deduplicate by call_id
   console.log(`[Discovery] Fetch complete - total calls collected: ${allCalls.length}`);
   console.log(`[Discovery] Target was: ${targetCallCount}`);
 
@@ -298,7 +298,20 @@ export async function fetchCallsInChunks(
     return [];
   }
 
-  const shuffled = allCalls.sort(() => Math.random() - 0.5);
+  // Deduplicate by call_id (same call can appear across multiple date chunks)
+  const uniqueCallsMap = new Map();
+  for (const call of allCalls) {
+    const callId = call.id;
+    if (!uniqueCallsMap.has(callId)) {
+      uniqueCallsMap.set(callId, call);
+    }
+  }
+
+  const uniqueCalls = Array.from(uniqueCallsMap.values());
+  console.log(`[Discovery] Deduplicated ${allCalls.length} calls to ${uniqueCalls.length} unique calls`);
+
+  // Step 6: Randomize and select final set
+  const shuffled = uniqueCalls.sort(() => Math.random() - 0.5);
   const selectedCalls = shuffled.slice(0, targetCallCount);
 
   console.log(`[Discovery] Selected ${selectedCalls.length} calls for queueing`);
