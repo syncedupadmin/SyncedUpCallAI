@@ -19,6 +19,7 @@ export interface ConvosoCredentials {
 
 export interface DiscoveryConfig {
   callCount: number;
+  selectedAgents?: string[]; // Array of agent user IDs
   agentSelection?: string;
   includeShortCalls?: boolean;
   detectLying?: boolean;
@@ -40,61 +41,101 @@ export interface DiscoveryMetrics {
 }
 
 /**
- * Fetch calls from Convoso API in chunks with retry logic
+ * Fetch calls from Convoso API using agent-based approach with 10+ second filter
  */
 async function fetchCallsInChunks(
   credentials: ConvosoCredentials,
   sessionId: string,
-  targetCallCount: number = 2500
+  targetCallCount: number = 2500,
+  selectedAgentIds?: string[]
 ): Promise<any[]> {
-  const CHUNK_SIZE = 100;
-  const chunks = Math.ceil(targetCallCount / CHUNK_SIZE);
   const allCalls: any[] = [];
-  const MAX_RETRIES = 3;
 
-  console.log(`[Discovery] Fetching ${targetCallCount} calls in ${chunks} chunks`);
+  console.log(`[Discovery] Fetching ${targetCallCount} calls for ${selectedAgentIds?.length || 'all'} agents`);
 
-  for (let i = 0; i < chunks; i++) {
-    const offset = i * CHUNK_SIZE;
-    let retryCount = 0;
-    let success = false;
+  // Step 1: Get agents from log/retrieve if not provided
+  let agentEmails: string[] = [];
 
-    while (retryCount < MAX_RETRIES && !success) {
-      try {
-        const params = new URLSearchParams({
-          auth_token: credentials.auth_token,
-          limit: String(Math.min(CHUNK_SIZE, targetCallCount - allCalls.length)),
-          offset: String(offset),
-          include_recording: 'true',
-          include_disposition: 'true',
-          date_from: '30_days_ago'
+  if (selectedAgentIds && selectedAgentIds.length > 0) {
+    // Get emails for selected agents from recent calls
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    const startTime = startDate.toISOString().split('T')[0] + ' 00:00:00';
+    const endTime = endDate.toISOString().split('T')[0] + ' 23:59:59';
+
+    const params = new URLSearchParams({
+      auth_token: credentials.auth_token,
+      start_time: startTime,
+      end_time: endTime,
+      limit: '5000'
+    });
+
+    try {
+      const response = await fetch(
+        `${credentials.api_base}/log/retrieve?${params.toString()}`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const calls = data.data?.results || [];
+
+        // Extract emails for selected agents
+        const agentsMap = new Map<string, string>();
+        calls.forEach((call: any) => {
+          const userId = call.user_id;
+          const userEmail = call.user_email || call.agent_email;
+
+          if (userId && userEmail && selectedAgentIds.includes(userId)) {
+            agentsMap.set(userId, userEmail);
+          }
         });
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        agentEmails = Array.from(agentsMap.values());
+        console.log(`[Discovery] Found ${agentEmails.length} agent emails for selected agents`);
+      }
+    } catch (error) {
+      console.error('[Discovery] Failed to fetch agent emails:', error);
+    }
+  }
 
+  // Step 2: Fetch recordings per agent using /users/get-recordings
+  if (agentEmails.length > 0) {
+    const callsPerAgent = Math.ceil(targetCallCount / agentEmails.length);
+
+    for (const email of agentEmails) {
+      try {
         const response = await fetch(
-          `${credentials.api_base}/calls?${params.toString()}`,
+          `${credentials.api_base}/users/get-recordings`,
           {
+            method: 'POST',
             headers: {
-              'Authorization': `Bearer ${credentials.api_key}`,
+              'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            signal: controller.signal
+            body: JSON.stringify({
+              auth_token: credentials.auth_token,
+              user: email,
+              limit: callsPerAgent * 2 // Fetch extra to account for filtering
+            })
           }
         );
 
-        clearTimeout(timeoutId);
+        if (response.ok) {
+          const data = await response.json();
+          const recordings = data.recordings || data.data || [];
 
-        if (!response.ok) {
-          throw new Error(`Convoso API error: ${response.status} ${response.statusText}`);
-        }
+          // CRITICAL: Filter to 10+ seconds ONLY
+          const validCalls = recordings.filter((call: any) => {
+            const duration = call.duration_sec || call.duration || 0;
+            return duration >= 10;
+          });
 
-        const data = await response.json();
+          allCalls.push(...validCalls);
 
-        if (data.success && data.data?.entries) {
-          allCalls.push(...data.data.entries);
-          success = true;
+          console.log(`[Discovery] Agent ${email}: ${validCalls.length} calls (10+ sec) out of ${recordings.length} total`);
 
           // Update progress
           const progress = Math.floor((allCalls.length / targetCallCount) * 30); // 0-30% for fetching
@@ -104,45 +145,28 @@ async function fetchCallsInChunks(
             processed: allCalls.length
           }).eq('id', sessionId);
 
-          console.log(`[Discovery] Fetched chunk ${i + 1}/${chunks}: ${allCalls.length}/${targetCallCount} calls`);
+          // Rate limit protection
+          await new Promise(resolve => setTimeout(resolve, 500));
 
-          // Rate limit protection - wait 500ms between requests
-          if (i < chunks - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          // If this chunk had no data, we've reached the end
-          if (data.data.entries.length === 0) {
-            console.log(`[Discovery] No more data available at offset ${offset}`);
+          // Stop if we have enough
+          if (allCalls.length >= targetCallCount) {
             break;
           }
-        } else {
-          throw new Error('Invalid response format from Convoso API');
         }
       } catch (error: any) {
-        retryCount++;
-        console.error(`[Discovery] Chunk ${i} attempt ${retryCount} failed:`, error.message);
-
-        if (retryCount < MAX_RETRIES) {
-          // Exponential backoff: 1s, 2s, 4s
-          const backoffMs = Math.pow(2, retryCount) * 1000;
-          console.log(`[Discovery] Retrying chunk ${i} after ${backoffMs}ms...`);
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
-        } else {
-          console.error(`[Discovery] Chunk ${i} failed after ${MAX_RETRIES} attempts, continuing with partial data`);
-          break; // Continue with what we have
-        }
+        console.error(`[Discovery] Error fetching for agent ${email}:`, error.message);
       }
-    }
-
-    // If we've reached the target or got no more data, stop
-    if (allCalls.length >= targetCallCount) {
-      break;
     }
   }
 
-  console.log(`[Discovery] Fetching complete: ${allCalls.length} calls retrieved`);
-  return allCalls.slice(0, targetCallCount); // Trim to exact target
+  // DOUBLE CHECK: Ensure all calls are 10+ seconds
+  const validCalls = allCalls.filter((call: any) => {
+    const duration = call.duration_sec || call.duration || 0;
+    return duration >= 10;
+  });
+
+  console.log(`[Discovery] Fetching complete: ${validCalls.length} calls (10+ sec) retrieved`);
+  return validCalls.slice(0, targetCallCount); // Trim to exact target
 }
 
 /**
@@ -267,8 +291,13 @@ export async function processDiscoveryForAgency(
       progress: 0
     }).eq('id', sessionId);
 
-    // Fetch calls from Convoso
-    const calls = await fetchCallsInChunks(credentials, sessionId, config.callCount);
+    // Fetch calls from Convoso (with selected agents if provided)
+    const calls = await fetchCallsInChunks(
+      credentials,
+      sessionId,
+      config.callCount,
+      config.selectedAgents
+    );
 
     if (!calls || calls.length === 0) {
       throw new Error('No calls retrieved from Convoso API');
@@ -399,11 +428,26 @@ export async function checkConvosoDataAvailability(
   credentials: ConvosoCredentials
 ): Promise<{ available: boolean; callCount: number; error?: string }> {
   try {
+    // Calculate date range (last 30 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    const startTime = startDate.toISOString().split('T')[0] + ' 00:00:00';
+    const endTime = endDate.toISOString().split('T')[0] + ' 23:59:59';
+
+    // Use log/retrieve to get calls from last 30 days
+    const params = new URLSearchParams({
+      auth_token: credentials.auth_token,
+      start_time: startTime,
+      end_time: endTime,
+      limit: '10000' // Fetch enough to count
+    });
+
     const response = await fetch(
-      `${credentials.api_base}/calls?limit=1&auth_token=${credentials.auth_token}`,
+      `${credentials.api_base}/log/retrieve?${params.toString()}`,
       {
         headers: {
-          'Authorization': `Bearer ${credentials.api_key}`,
           'Accept': 'application/json'
         }
       }
@@ -418,11 +462,19 @@ export async function checkConvosoDataAvailability(
     }
 
     const data = await response.json();
-    const totalCalls = data.total || data.data?.total || 0;
+    const calls = data.data?.results || [];
+
+    // CRITICAL: Only count calls 10 seconds or longer
+    const validCalls = calls.filter((call: any) => {
+      const duration = call.duration_sec || call.duration || 0;
+      return duration >= 10;
+    });
+
+    console.log(`[Discovery] Found ${validCalls.length} calls (10+ sec) out of ${calls.length} total`);
 
     return {
-      available: totalCalls >= 100, // Minimum 100 calls needed
-      callCount: totalCalls
+      available: validCalls.length >= 100, // Minimum 100 calls (10+ sec) needed
+      callCount: validCalls.length
     };
   } catch (error: any) {
     console.error('[Discovery] Error checking data availability:', error);
