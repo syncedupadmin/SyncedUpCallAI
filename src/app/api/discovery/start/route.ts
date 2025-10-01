@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sbAdmin } from '@/lib/supabase-admin';
 import { v4 as uuidv4 } from 'uuid';
-import { encryptConvosoCredentials } from '@/lib/crypto';
+import { encryptConvosoCredentials, decryptConvosoCredentials } from '@/lib/crypto';
 import {
   processDiscoveryForAgency,
   checkConvosoDataAvailability,
@@ -169,12 +169,8 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Discovery] Starting background processing for session ${sessionId}`);
 
-      // Get credentials for processing
-      const credentials: ConvosoCredentials = {
-        api_key: '',
-        auth_token: '', // Will be decrypted in processor
-        api_base: apiBase
-      };
+      // Decrypt credentials for processing
+      const credentials = decryptConvosoCredentials(agency.convoso_credentials);
 
       // Start background processing (don't await)
       processDiscoveryForAgency(sessionId, agencyId, credentials, {
