@@ -35,9 +35,24 @@ export async function GET(req: NextRequest) {
     }
 
     // Parse JSONB fields
-    const metrics = typeof session.metrics === 'string'
+    let metrics = typeof session.metrics === 'string'
       ? JSON.parse(session.metrics)
       : session.metrics;
+
+    // If session is still processing, calculate partial metrics from completed calls
+    if (session.status === 'processing' || session.status === 'queued') {
+      const { data: completedCalls } = await supabase
+        .from('discovery_calls')
+        .select('analysis, call_length')
+        .eq('session_id', sessionId)
+        .eq('processing_status', 'completed')
+        .limit(1000); // Limit to avoid overload
+
+      if (completedCalls && completedCalls.length > 0) {
+        // Calculate partial metrics (same logic as finalization in cron)
+        metrics = calculatePartialMetrics(completedCalls);
+      }
+    }
 
     const insights = typeof session.insights === 'string'
       ? JSON.parse(session.insights)
@@ -63,4 +78,55 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Calculate partial metrics from completed calls (for live progress updates)
+ */
+function calculatePartialMetrics(calls: any[]) {
+  let pitchesDelivered = 0;
+  let successfulCloses = 0;
+  let earlyHangups = 0;
+  let lyingDetected = 0;
+  let totalQAScore = 0;
+  let qaCount = 0;
+
+  for (const call of calls) {
+    const duration = call.call_length || 0;
+    const analysis = call.analysis || {};
+
+    if (duration >= 30) pitchesDelivered++;
+    if (duration <= 15) earlyHangups++;
+
+    const outcome = analysis.analysis?.outcome || analysis.outcome;
+    if (outcome === 'sale' || outcome === 'callback') {
+      successfulCloses++;
+    }
+
+    if (analysis.qa_score) {
+      totalQAScore += analysis.qa_score;
+      qaCount++;
+    }
+
+    const redFlags = analysis.red_flags || analysis.risk_flags || [];
+    if (
+      redFlags.includes('misrepresentation_risk') ||
+      redFlags.includes('confused') ||
+      redFlags.includes('misleading')
+    ) {
+      lyingDetected++;
+    }
+  }
+
+  return {
+    totalCallsProcessed: calls.length,
+    pitchesDelivered,
+    successfulCloses,
+    closeRate: pitchesDelivered > 0 ? Math.round((successfulCloses / pitchesDelivered) * 100) : 0,
+    openingScore: qaCount > 0 ? Math.round(totalQAScore / qaCount) : 0,
+    earlyHangups,
+    hangupRate: calls.length > 0 ? Math.round((earlyHangups / calls.length) * 100) : 0,
+    lyingDetected,
+    rebuttalFailures: 0
+  };
 }

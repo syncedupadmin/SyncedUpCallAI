@@ -44,8 +44,9 @@ export interface DiscoveryMetrics {
 
 /**
  * Fetch recording URL from Convoso API
+ * Exported for use in queue-based processing
  */
-async function fetchRecordingUrl(
+export async function fetchRecordingUrl(
   callId: string,
   leadId: string,
   credentials: ConvosoCredentials
@@ -82,8 +83,9 @@ async function fetchRecordingUrl(
 
 /**
  * Analyze call with OpenAI 2-pass analysis (same as normal operations)
+ * Exported for use in queue-based processing
  */
-async function analyzeCallWithOpenAI(call: any): Promise<any> {
+export async function analyzeCallWithOpenAI(call: any): Promise<any> {
   try {
     const meta = {
       agent_id: call.user_id || 'Unknown',
@@ -137,8 +139,9 @@ async function analyzeCallWithOpenAI(call: any): Promise<any> {
 
 /**
  * Fetch calls from Convoso API using agent-based approach with 10+ second filter
+ * Exported for use in discovery start endpoint
  */
-async function fetchCallsInChunks(
+export async function fetchCallsInChunks(
   credentials: ConvosoCredentials,
   sessionId: string,
   targetCallCount: number = 2500,

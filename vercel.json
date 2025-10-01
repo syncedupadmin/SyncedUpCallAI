@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/queue-bulk-tests",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/process-discovery-queue",
+      "schedule": "*/1 * * * *"
     }
   ],
   "headers": [
@@ -73,7 +77,7 @@
     "src/app/api/cron/queue-bulk-tests/route.ts": {
       "maxDuration": 60
     },
-    "src/app/api/discovery/process/route.ts": {
+    "src/app/api/cron/process-discovery-queue/route.ts": {
       "maxDuration": 300
     }
   }

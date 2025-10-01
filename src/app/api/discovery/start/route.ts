@@ -4,13 +4,13 @@ import { sbAdmin } from '@/lib/supabase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptConvosoCredentials, decryptConvosoCredentials } from '@/lib/crypto';
 import {
-  processDiscoveryForAgency,
+  fetchCallsInChunks,
   checkConvosoDataAvailability,
   type ConvosoCredentials
 } from '@/lib/discovery/processor';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes for discovery processing
+export const maxDuration = 60; // Only needs 60s for metadata queueing
 
 export async function POST(req: NextRequest) {
   try {
@@ -169,41 +169,77 @@ export async function POST(req: NextRequest) {
         discovery_session_id: sessionId
       }).eq('id', agencyId);
 
-      console.log(`[Discovery] Triggering processor endpoint for session ${sessionId}`);
+      console.log(`[Discovery] Queueing calls for session ${sessionId}`);
 
-      // Trigger the processor endpoint to handle the actual discovery
-      // This endpoint has proper timeout handling and can run for up to 5 minutes
-      const processorUrl = `${process.env.APP_URL || 'https://aicall.syncedupsolutions.com'}/api/discovery/process`;
-      const secret = process.env.JOBS_SECRET || process.env.CRON_SECRET;
+      // Decrypt credentials
+      const credentials: ConvosoCredentials = decryptConvosoCredentials(
+        agency.convoso_credentials
+      );
 
-      console.log(`[Discovery] Processor URL: ${processorUrl}`);
-      console.log(`[Discovery] Has secret: ${!!secret}`);
+      // Fetch metadata only (30-40s)
+      const calls = await fetchCallsInChunks(
+        credentials,
+        sessionId,
+        targetCallCount,
+        selected_agent_ids
+      );
 
-      // Fire and forget - don't await
-      fetch(processorUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${secret}`
-        },
-        body: JSON.stringify({ sessionId })
-      })
-        .then(res => {
-          console.log(`[Discovery] Processor triggered - status: ${res.status}`);
-          return res.text();
-        })
-        .then(text => {
-          console.log(`[Discovery] Processor response: ${text}`);
-        })
-        .catch(error => {
-          console.error(`[Discovery] Failed to trigger processor:`, error);
-        });
+      if (!calls || calls.length === 0) {
+        await sbAdmin.from('discovery_sessions').update({
+          status: 'error',
+          error_message: 'No calls found from Convoso'
+        }).eq('id', sessionId);
+
+        return NextResponse.json(
+          { error: 'No calls found from Convoso API' },
+          { status: 400 }
+        );
+      }
+
+      console.log(`[Discovery] Fetched ${calls.length} calls, inserting into queue...`);
+
+      // Insert into discovery_calls table
+      const callRecords = calls.map(call => ({
+        session_id: sessionId,
+        call_id: call.id,
+        lead_id: call.lead_id,
+        user_id: call.user_id,
+        user_name: call.user,
+        campaign: call.campaign,
+        status: call.status,
+        call_length: parseInt(call.call_length) || 0,
+        call_type: call.call_type || 'outbound',
+        started_at: call.started_at,
+        processing_status: 'pending'
+      }));
+
+      // Batch insert (Supabase handles up to 1000 rows per insert)
+      for (let i = 0; i < callRecords.length; i += 1000) {
+        const batch = callRecords.slice(i, Math.min(i + 1000, callRecords.length));
+        const { error: insertError } = await sbAdmin
+          .from('discovery_calls')
+          .insert(batch);
+
+        if (insertError) {
+          console.error(`[Discovery] Failed to insert batch ${i / 1000 + 1}:`, insertError);
+          throw new Error(`Failed to queue calls: ${insertError.message}`);
+        }
+      }
+
+      // Update session to queued
+      await sbAdmin.from('discovery_sessions').update({
+        status: 'queued',
+        total_calls: calls.length,
+        progress: 5  // Metadata pulled
+      }).eq('id', sessionId);
+
+      console.log(`[Discovery] Successfully queued ${calls.length} calls for background processing`);
 
       return NextResponse.json({
         success: true,
         sessionId,
-        callCount: targetCallCount,
-        message: `Discovery started - analyzing calls from ${selected_agent_ids.length} agents`
+        callCount: calls.length,
+        message: `Discovery queued - processing ${calls.length} calls from ${selected_agent_ids.length} agents in background`
       });
     }
 
