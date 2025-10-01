@@ -228,7 +228,9 @@ export async function POST(req: NextRequest) {
 
     if (subscriptionError) {
       console.error('Subscription creation error:', subscriptionError);
-      // Non-critical, continue - user can still proceed
+      // Important: User can still proceed through discovery with exemption
+      // After discovery completes, they may need to contact support for subscription setup
+      // This prevents registration failures due to database constraints
     }
 
     // Note: Profile is automatically created by database trigger on_auth_user_created
