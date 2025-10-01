@@ -59,51 +59,22 @@ async function fetchCallsInChunks(
   const agentCount = selectedAgentIds.length;
   console.log(`[Discovery] Fetching ${targetCallCount} calls evenly across ${agentCount} agents`);
 
-  // Step 1: Get agent emails using agent-performance endpoint
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
+  // Step 1: Get agent user IDs - we'll use them directly for the recordings API
+  console.log(`[Discovery] Selected agent IDs: ${selectedAgentIds.join(', ')}`);
 
-  const dateStart = startDate.toISOString().split('T')[0];
-  const dateEnd = endDate.toISOString().split('T')[0];
+  const agentUserIds = selectedAgentIds; // Use the IDs directly
 
-  const perfParams = new URLSearchParams({
-    auth_token: credentials.auth_token,
-    date_start: dateStart,
-    date_end: dateEnd,
-    user_ids: selectedAgentIds.join(',')
-  });
-
-  let agentEmailsMap = new Map<string, string>();
-
-  try {
-    const perfResponse = await fetch(
-      `${credentials.api_base}/agent-performance/search?${perfParams.toString()}`,
-      { headers: { 'Accept': 'application/json' } }
-    );
-
-    if (perfResponse.ok) {
-      const perfData = await perfResponse.json();
-      if (perfData.success && perfData.data) {
-        // Map user_id to name (we'll use user_id as the 'user' param for recordings)
-        Object.values(perfData.data).forEach((agent: any) => {
-          if (selectedAgentIds.includes(agent.user_id)) {
-            agentEmailsMap.set(agent.user_id, agent.user_id); // Use user_id directly
-          }
-        });
-      }
-    }
-  } catch (error) {
-    console.error('[Discovery] Failed to fetch agent performance:', error);
-  }
-
-  if (agentEmailsMap.size === 0) {
-    console.error('[Discovery] No agent emails found');
+  if (agentUserIds.length === 0) {
+    console.error('[Discovery] No agent IDs provided');
     return [];
   }
 
   // Step 2: Calculate distribution strategy
-  const callsPerAgent = Math.ceil(targetCallCount / agentEmailsMap.size);
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30);
+
+  const callsPerAgent = Math.ceil(targetCallCount / agentUserIds.length);
   const dateChunks = 6; // Divide 30 days into 6 chunks of 5 days each
   const callsPerChunk = Math.ceil(callsPerAgent / dateChunks);
   const daysPerChunk = Math.floor(30 / dateChunks);
@@ -113,7 +84,7 @@ async function fetchCallsInChunks(
   // Step 3: Fetch recordings for each agent across date chunks
   let totalFetched = 0;
 
-  for (const [userId, userIdent] of agentEmailsMap.entries()) {
+  for (const userId of agentUserIds) {
     for (let chunkIndex = 0; chunkIndex < dateChunks; chunkIndex++) {
       const chunkStartDate = new Date(startDate);
       chunkStartDate.setDate(chunkStartDate.getDate() + (chunkIndex * daysPerChunk));
@@ -135,41 +106,49 @@ async function fetchCallsInChunks(
       try {
         const params = new URLSearchParams({
           auth_token: credentials.auth_token,
-          user: userIdent,
+          user: userId, // Use user_id directly
           start_time: chunkStart,
           end_time: chunkEnd,
           limit: String(callsPerChunk * 3), // Fetch extra for 10+ sec filtering
           offset: String(randomOffset)
         });
 
+        console.log(`[Discovery] Fetching from /users/recordings: user=${userId}, dates=${chunkStart} to ${chunkEnd}`);
+
         const response = await fetch(
           `${credentials.api_base}/users/recordings?${params.toString()}`,
           { headers: { 'Accept': 'application/json' } }
         );
 
-        if (response.ok) {
-          const data = await response.json();
-          const recordings = data.data?.entries || [];
-
-          // CRITICAL: Filter to 10+ seconds ONLY using 'seconds' field
-          const validCalls = recordings.filter((call: any) => {
-            const duration = call.seconds || 0;
-            return duration >= 10;
-          });
-
-          allCalls.push(...validCalls);
-          totalFetched += validCalls.length;
-
-          console.log(`[Discovery] Agent ${userId} chunk ${chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec)`);
-
-          // Update progress
-          const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
-          await sbAdmin.from('discovery_sessions').update({
-            status: 'pulling',
-            progress,
-            processed: totalFetched
-          }).eq('id', sessionId);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[Discovery] API error for agent ${userId}: ${response.status} - ${errorText}`);
+          continue;
         }
+
+        const data = await response.json();
+        console.log(`[Discovery] API response for agent ${userId}:`, JSON.stringify(data).substring(0, 200));
+
+        const recordings = data.data?.entries || [];
+
+        // CRITICAL: Filter to 10+ seconds ONLY using 'seconds' field
+        const validCalls = recordings.filter((call: any) => {
+          const duration = call.seconds || 0;
+          return duration >= 10;
+        });
+
+        allCalls.push(...validCalls);
+        totalFetched += validCalls.length;
+
+        console.log(`[Discovery] Agent ${userId} chunk ${chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec) from ${recordings.length} total`);
+
+        // Update progress
+        const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
+        await sbAdmin.from('discovery_sessions').update({
+          status: 'pulling',
+          progress,
+          processed: totalFetched
+        }).eq('id', sessionId);
 
         // Rate limit protection
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -179,7 +158,7 @@ async function fetchCallsInChunks(
           break;
         }
       } catch (error: any) {
-        console.error(`[Discovery] Error fetching chunk ${chunkIndex} for agent ${userId}:`, error.message);
+        console.error(`[Discovery] Error fetching chunk ${chunkIndex} for agent ${userId}:`, error.message, error.stack);
       }
     }
 
