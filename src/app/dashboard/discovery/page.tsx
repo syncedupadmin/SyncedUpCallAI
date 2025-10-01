@@ -28,6 +28,7 @@ function DiscoverySetupContent() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [loadingStage, setLoadingStage] = useState(0);
+  const [progress, setProgress] = useState(0);
   const isRetry = searchParams.get('retry') === 'true';
 
   const loadingStages = [
@@ -38,6 +39,36 @@ function DiscoverySetupContent() {
     'Extracting agent information',
     'Finalizing agent profiles'
   ];
+
+  // Smooth progress animation within each stage
+  useEffect(() => {
+    if (!loading) {
+      setProgress(0);
+      return;
+    }
+
+    const baseProgress = (loadingStage / loadingStages.length) * 100;
+    const targetProgress = ((loadingStage + 0.9) / loadingStages.length) * 100; // Fill to 90% of next stage
+
+    setProgress(baseProgress);
+
+    // Gradually fill to target over the duration of the stage
+    const duration = 500; // ms
+    const steps = 20;
+    const increment = (targetProgress - baseProgress) / steps;
+    let currentStep = 0;
+
+    const interval = setInterval(() => {
+      currentStep++;
+      if (currentStep >= steps) {
+        clearInterval(interval);
+      } else {
+        setProgress(prev => Math.min(prev + increment, targetProgress));
+      }
+    }, duration / steps);
+
+    return () => clearInterval(interval);
+  }, [loadingStage, loading]);
 
   useEffect(() => {
     // Get agency name for personalization
@@ -80,13 +111,15 @@ function DiscoverySetupContent() {
     setLoadingStage(0);
 
     try {
-      // Stage 0: Connecting to Convoso API
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Stage 0: Connecting to Convoso API (visible immediately)
+      await new Promise(resolve => setTimeout(resolve, 600));
       setLoadingStage(1);
 
       // Stage 1: Authenticating credentials
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setLoadingStage(2);
 
+      // Make API call during stage 2 transition
       const storeResponse = await fetch('/api/discovery/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,16 +143,14 @@ function DiscoverySetupContent() {
       }
 
       // Stage 2: Scanning last 30 days
-      setLoadingStage(2);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 700));
+      setLoadingStage(3);
 
       // Stage 3: Filtering calls
-      setLoadingStage(3);
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      // Stage 4: Extracting agent information
+      await new Promise(resolve => setTimeout(resolve, 600));
       setLoadingStage(4);
 
+      // Stage 4: Extracting agent information - fetch agents during this stage
       const agentsResponse = await fetch('/api/discovery/get-agents');
       const agentsData = await agentsResponse.json();
 
@@ -133,9 +164,12 @@ function DiscoverySetupContent() {
         return;
       }
 
-      // Stage 5: Finalizing
+      // Ensure we stay on stage 4 for at least a moment before finalizing
+      await new Promise(resolve => setTimeout(resolve, 400));
       setLoadingStage(5);
-      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Stage 5: Finalizing
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       setAgents(agentsData.agents);
 
@@ -334,12 +368,12 @@ function DiscoverySetupContent() {
                     <div className="mb-4">
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-gray-300 font-medium text-sm tracking-wide uppercase">Processing</span>
-                        <span className="text-blue-400 font-bold text-sm">{Math.round((loadingStage / loadingStages.length) * 100)}%</span>
+                        <span className="text-blue-400 font-bold text-sm">{Math.round(progress)}%</span>
                       </div>
                       <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
                         <div
-                          className="bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 h-full transition-all duration-500 ease-out"
-                          style={{ width: `${(loadingStage / loadingStages.length) * 100}%` }}
+                          className="bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 h-full transition-all duration-300 ease-out"
+                          style={{ width: `${progress}%` }}
                         />
                       </div>
                     </div>
