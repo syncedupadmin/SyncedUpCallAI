@@ -72,6 +72,9 @@
     },
     "src/app/api/cron/queue-bulk-tests/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/discovery/process/route.ts": {
+      "maxDuration": 300
     }
   }
 }
