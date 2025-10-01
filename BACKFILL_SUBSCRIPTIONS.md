@@ -3,8 +3,12 @@
 ## Problem
 Users who registered **before** the auto-subscription feature was deployed (commit 5124cfa) don't have trial subscriptions, causing them to be redirected to billing when trying to use discovery.
 
+Additionally, users who previously tried discovery but had insufficient data (< 100 calls) have their `discovery_status` set to 'skipped', which prevents them from accessing discovery even after backfilling subscriptions.
+
 ## Solution
-Run the backfill endpoint to create trial subscriptions for existing agencies.
+Run the backfill script to:
+1. Create trial subscriptions for agencies without one
+2. Reset `discovery_status` from 'skipped' to 'pending' for affected agencies
 
 ## Option 1: Via API Endpoint (Recommended - Once Deployed)
 
@@ -62,6 +66,17 @@ LEFT JOIN public.agency_subscriptions sub ON sub.agency_id = a.id
 WHERE sub.id IS NULL
   AND a.created_at > NOW() - INTERVAL '30 days'
 ON CONFLICT (agency_id) DO NOTHING;
+
+-- Reset discovery_status to 'pending' for agencies with 'skipped' status
+-- This allows them to retry discovery with their new trial subscription
+UPDATE public.agencies
+SET discovery_status = 'pending'
+WHERE discovery_status = 'skipped'
+  AND created_at > NOW() - INTERVAL '30 days'
+  AND id IN (
+    SELECT agency_id FROM public.agency_subscriptions
+    WHERE metadata->>'created_via' = 'manual_backfill'
+  );
 ```
 
 ## How to Access Supabase SQL Editor

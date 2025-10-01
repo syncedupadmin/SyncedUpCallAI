@@ -351,6 +351,17 @@ export async function middleware(request: NextRequest) {
 
       const subscription = (membership as any).agencies?.agency_subscriptions?.[0];
 
+      // Debug logging for subscription issues
+      if (isDiscoveryRoute) {
+        console.log('[Middleware] Discovery route access:', {
+          path: request.nextUrl.pathname,
+          discovery_status: agency?.discovery_status,
+          has_subscription: !!subscription,
+          subscription_status: subscription?.status,
+          subscription_array_length: (membership as any).agencies?.agency_subscriptions?.length
+        });
+      }
+
       // Exempt discovery flow for agencies still in onboarding
       const isInDiscoveryOnboarding = ['pending', 'in_progress', 'failed'].includes(agency?.discovery_status || '');
       const shouldExemptDiscoveryFlow = isDiscoveryRoute && isInDiscoveryOnboarding;

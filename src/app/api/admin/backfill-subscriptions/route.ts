@@ -76,6 +76,25 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Backfill] Successfully created ${createdSubscriptions?.length || 0} trial subscriptions`);
 
+    // Reset discovery_status to 'pending' for agencies with 'skipped' status
+    // This allows them to retry discovery with their new trial subscription
+    const agencyIds = createdSubscriptions?.map((s: any) => s.agency_id) || [];
+
+    if (agencyIds.length > 0) {
+      const { data: resetAgencies, error: resetError } = await sbAdmin
+        .from('agencies')
+        .update({ discovery_status: 'pending' })
+        .in('id', agencyIds)
+        .eq('discovery_status', 'skipped')
+        .select('id');
+
+      if (resetError) {
+        console.error('[Backfill] Error resetting discovery_status:', resetError);
+      } else {
+        console.log(`[Backfill] Reset discovery_status for ${resetAgencies?.length || 0} agencies from 'skipped' to 'pending'`);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: `Backfilled ${createdSubscriptions?.length || 0} trial subscriptions`,
