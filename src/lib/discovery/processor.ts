@@ -282,14 +282,6 @@ export async function fetchCallsInChunks(
 
     console.log(`[Discovery] Batch ${batchNum} complete: ${totalFetched} total calls collected`);
 
-    // Update progress
-    const progress = Math.min(30, Math.floor((totalFetched / targetCallCount) * 30));
-    await sbAdmin.from('discovery_sessions').update({
-      status: 'pulling',
-      progress,
-      processed: totalFetched
-    }).eq('id', sessionId);
-
     // Stop early if we have enough
     if (totalFetched >= targetCallCount * 1.2) {
       console.log(`[Discovery] Target reached (${totalFetched} >= ${targetCallCount * 1.2}), stopping early`);
