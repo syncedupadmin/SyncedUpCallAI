@@ -52,14 +52,19 @@ export default function DiscoveryManagementPage() {
   const fetchSessions = async () => {
     try {
       const res = await fetch('/api/superadmin/discovery/sessions');
-      if (!res.ok) throw new Error('Failed to fetch sessions');
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('API Error:', { status: res.status, statusText: res.statusText, error: errorData });
+        throw new Error(errorData.error || `Failed to fetch sessions: ${res.status}`);
+      }
 
       const data = await res.json();
       setSessions(data.sessions);
       setSystemStats(data.system_stats);
     } catch (error: any) {
       console.error('Error fetching sessions:', error);
-      toast.error('Failed to load sessions');
+      toast.error(error.message || 'Failed to load sessions');
     } finally {
       setLoading(false);
     }
