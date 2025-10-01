@@ -205,6 +205,32 @@ export async function POST(req: NextRequest) {
       // Non-critical, continue
     }
 
+    // Step 4: Create trial subscription (14-day trial)
+    const trialStart = new Date();
+    const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    const { error: subscriptionError } = await supabase
+      .from('agency_subscriptions')
+      .insert({
+        agency_id: agency.id,
+        status: 'trialing',
+        plan_tier: 'starter',
+        plan_name: '14-Day Free Trial',
+        trial_start: trialStart.toISOString(),
+        trial_end: trialEnd.toISOString(),
+        current_period_start: trialStart.toISOString(),
+        current_period_end: trialEnd.toISOString(),
+        metadata: {
+          created_via: 'self_registration',
+          auto_created: true
+        }
+      });
+
+    if (subscriptionError) {
+      console.error('Subscription creation error:', subscriptionError);
+      // Non-critical, continue - user can still proceed
+    }
+
     // Note: Profile is automatically created by database trigger on_auth_user_created
 
     // Return success - user must verify email before logging in

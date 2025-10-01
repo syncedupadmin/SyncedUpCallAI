@@ -351,34 +351,41 @@ export async function middleware(request: NextRequest) {
 
       const subscription = (membership as any).agencies?.agency_subscriptions?.[0];
 
-      // Check if subscription exists and is active
-      const hasActiveSubscription = subscription &&
-        (subscription.status === 'active' || subscription.status === 'trialing');
+      // Exempt discovery flow for agencies still in onboarding
+      const isInDiscoveryOnboarding = ['pending', 'in_progress', 'failed'].includes(agency?.discovery_status || '');
+      const shouldExemptDiscoveryFlow = isDiscoveryRoute && isInDiscoveryOnboarding;
 
-      // Check if trial has expired
-      const trialExpired = subscription?.status === 'trialing' &&
-        subscription.trial_end &&
-        new Date(subscription.trial_end) < new Date();
+      // Skip subscription check if user is completing initial discovery onboarding
+      if (!shouldExemptDiscoveryFlow) {
+        // Check if subscription exists and is active
+        const hasActiveSubscription = subscription &&
+          (subscription.status === 'active' || subscription.status === 'trialing');
 
-      // Check if subscription is past due or canceled
-      const subscriptionInactive = subscription &&
-        ['past_due', 'canceled', 'unpaid', 'incomplete_expired'].includes(subscription.status);
+        // Check if trial has expired
+        const trialExpired = subscription?.status === 'trialing' &&
+          subscription.trial_end &&
+          new Date(subscription.trial_end) < new Date();
 
-      // Redirect to billing if subscription is not active
-      if (!hasActiveSubscription || trialExpired || subscriptionInactive) {
-        // Add query params to show appropriate message
-        const params = new URLSearchParams();
-        if (trialExpired) {
-          params.set('message', 'trial_expired');
-        } else if (subscriptionInactive) {
-          params.set('message', 'subscription_inactive');
-        } else if (!subscription) {
-          params.set('message', 'no_subscription');
+        // Check if subscription is past due or canceled
+        const subscriptionInactive = subscription &&
+          ['past_due', 'canceled', 'unpaid', 'incomplete_expired'].includes(subscription.status);
+
+        // Redirect to billing if subscription is not active
+        if (!hasActiveSubscription || trialExpired || subscriptionInactive) {
+          // Add query params to show appropriate message
+          const params = new URLSearchParams();
+          if (trialExpired) {
+            params.set('message', 'trial_expired');
+          } else if (subscriptionInactive) {
+            params.set('message', 'subscription_inactive');
+          } else if (!subscription) {
+            params.set('message', 'no_subscription');
+          }
+
+          return NextResponse.redirect(
+            new URL(`/dashboard/billing?${params.toString()}`, request.url)
+          );
         }
-
-        return NextResponse.redirect(
-          new URL(`/dashboard/billing?${params.toString()}`, request.url)
-        );
       }
     }
   }
