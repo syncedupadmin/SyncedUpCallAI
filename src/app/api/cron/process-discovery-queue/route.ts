@@ -145,11 +145,9 @@ export async function GET(req: NextRequest) {
 
       } catch (error: any) {
         console.error(`[Discovery Queue] Error processing session ${session.id}:`, error);
-        logError({
+        logError('Discovery queue session error', error, {
           event_type: 'discovery_queue_session_error',
-          session_id: session.id,
-          error: error.message,
-          stack: error.stack
+          session_id: session.id
         });
       }
     }
@@ -170,10 +168,8 @@ export async function GET(req: NextRequest) {
 
   } catch (error: any) {
     console.error('[Discovery Queue] Fatal error:', error);
-    logError({
-      event_type: 'discovery_queue_fatal_error',
-      error: error.message,
-      stack: error.stack
+    logError('Discovery queue fatal error', error, {
+      event_type: 'discovery_queue_fatal_error'
     });
 
     return NextResponse.json({
@@ -347,10 +343,9 @@ async function finalizeDiscoverySession(sessionId: string) {
 
   } catch (error: any) {
     console.error(`[Discovery Queue] Error finalizing session ${sessionId}:`, error.message);
-    logError({
+    logError('Discovery finalization error', error, {
       event_type: 'discovery_finalization_error',
-      session_id: sessionId,
-      error: error.message
+      session_id: sessionId
     });
   }
 }
