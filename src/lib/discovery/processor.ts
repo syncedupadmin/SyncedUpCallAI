@@ -165,164 +165,102 @@ export async function fetchCallsInChunks(
 ): Promise<any[]> {
   const allCalls: any[] = [];
 
-  if (!selectedAgentIds || selectedAgentIds.length === 0) {
-    console.warn('[Discovery] No agents selected');
-    return [];
-  }
-
-  const agentCount = selectedAgentIds.length;
-  console.log(`[Discovery] Fetching ${targetCallCount} calls evenly across ${agentCount} agents`);
-  console.log(`[Discovery] Selected agent IDs:`, selectedAgentIds);
+  console.log(`[Discovery] Fetching ${targetCallCount} calls from last 30 days`);
+  console.log(`[Discovery] Selected agents for filtering:`, selectedAgentIds);
   console.log(`[Discovery] Auth token present: ${!!credentials.auth_token}`);
   console.log(`[Discovery] API base: ${credentials.api_base}`);
 
-  // Step 1: Get agent user IDs - we'll use them directly for the recordings API
-  const agentUserIds = selectedAgentIds; // Use the IDs directly
+  // CRITICAL FIX: Don't filter by user_id in API call - Convoso's user_id field
+  // in /agent-performance/search doesn't match user_id in /log/retrieve
+  // Instead, fetch ALL calls and filter by agent after
 
-  if (agentUserIds.length === 0) {
-    console.error('[Discovery] No agent IDs provided');
-    return [];
-  }
-
-  // Step 2: Calculate distribution strategy
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 30);
 
-  const callsPerAgent = Math.ceil(targetCallCount / agentUserIds.length);
-  const dateChunks = 6; // Divide 30 days into 6 chunks of 5 days each
-  const callsPerChunk = Math.ceil(callsPerAgent / dateChunks);
-  const daysPerChunk = Math.floor(30 / dateChunks);
+  const dateStart = startDate.toISOString().split('T')[0];
+  const dateEnd = endDate.toISOString().split('T')[0];
 
-  console.log(`[Discovery] Strategy: ${callsPerAgent} calls/agent, ${callsPerChunk} calls/chunk, ${daysPerChunk} days/chunk`);
+  console.log(`[Discovery] Fetching calls from ${dateStart} to ${dateEnd}`);
 
-  // Step 3: Build all fetch tasks (agent × chunk combinations)
-  const fetchTasks: Array<{
-    userId: string;
-    chunkIndex: number;
-    chunkStart: string;
-    chunkEnd: string;
-    limit: number;
-    offset: number;
-  }> = [];
+  // Fetch in batches of 1000 (API max) with pagination
+  let offset = 0;
+  const limit = 1000;
+  let hasMore = true;
 
-  for (const userId of agentUserIds) {
-    for (let chunkIndex = 0; chunkIndex < dateChunks; chunkIndex++) {
-      const chunkStartDate = new Date(startDate);
-      chunkStartDate.setDate(chunkStartDate.getDate() + (chunkIndex * daysPerChunk));
-
-      const chunkEndDate = new Date(chunkStartDate);
-      chunkEndDate.setDate(chunkEndDate.getDate() + daysPerChunk - 1);
-
-      if (chunkEndDate > endDate) {
-        chunkEndDate.setTime(endDate.getTime());
-      }
-
-      const chunkStart = chunkStartDate.toISOString().split('T')[0];
-      const chunkEnd = chunkEndDate.toISOString().split('T')[0];
-      const randomOffset = Math.floor(Math.random() * 20);
-
-      fetchTasks.push({
-        userId,
-        chunkIndex,
-        chunkStart,
-        chunkEnd,
-        limit: callsPerChunk * 3,
-        offset: randomOffset
+  while (hasMore && allCalls.length < targetCallCount * 3) { // Fetch 3x to account for filtering
+    try {
+      const params = new URLSearchParams({
+        auth_token: credentials.auth_token,
+        start: dateStart,
+        end: dateEnd,
+        limit: String(limit),
+        offset: String(offset),
+        include_recordings: '1'  // CRITICAL: Include recording URLs
       });
-    }
-  }
 
-  console.log(`[Discovery] Created ${fetchTasks.length} fetch tasks (${agentUserIds.length} agents × ${dateChunks} chunks)`);
-  console.log(`[Discovery] Will process in parallel batches of 50...`);
+      console.log(`[Discovery] Fetching batch at offset ${offset}...`);
 
-  // Step 4: Process all fetch tasks in parallel batches of 50
-  const METADATA_BATCH_SIZE = 50;
-  let totalFetched = 0;
-  const totalBatches = Math.ceil(fetchTasks.length / METADATA_BATCH_SIZE);
+      const response = await fetch(
+        `${credentials.api_base}/log/retrieve?${params.toString()}`,
+        { headers: { 'Accept': 'application/json' } }
+      );
 
-  for (let i = 0; i < fetchTasks.length; i += METADATA_BATCH_SIZE) {
-    const batch = fetchTasks.slice(i, Math.min(i + METADATA_BATCH_SIZE, fetchTasks.length));
-    const batchNum = Math.floor(i / METADATA_BATCH_SIZE) + 1;
-
-    console.log(`[Discovery] Processing metadata batch ${batchNum}/${totalBatches} (${batch.length} API calls)...`);
-
-    // Execute all tasks in this batch in parallel
-    const promises = batch.map(async (task) => {
-      try {
-        const params = new URLSearchParams({
-          auth_token: credentials.auth_token,
-          user_id: String(task.userId),
-          start: task.chunkStart,
-          end: task.chunkEnd,
-          limit: String(task.limit),
-          offset: String(task.offset),
-          include_recordings: '1'  // CRITICAL: Include recording URLs in response
-        });
-
-        const response = await fetch(
-          `${credentials.api_base}/log/retrieve?${params.toString()}`,
-          { headers: { 'Accept': 'application/json' } }
-        );
-
-        if (!response.ok) {
-          console.error(`[Discovery] API error for agent ${task.userId} chunk ${task.chunkIndex}: ${response.status}`);
-          return [];
-        }
-
-        const data = await response.json();
-        const recordings = data.data?.results || [];
-
-        // Filter to 10+ seconds and extract recording URL
-        const validCalls = recordings
-          .filter((call: any) => {
-            const duration = call.call_length ? parseInt(call.call_length) : 0;
-            return duration >= 10;
-          })
-          .map((call: any) => ({
-            ...call,
-            // Extract recording URL from response (matches convoso-service.ts pattern)
-            recording_url: call.recording?.[0]?.public_url || call.recording?.[0]?.src || null
-          }));
-
-        const withRecordings = validCalls.filter((c: any) => c.recording_url).length;
-        console.log(`[Discovery] Agent ${task.userId} chunk ${task.chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec), ${withRecordings} with recordings`);
-
-        return validCalls;
-      } catch (error: any) {
-        console.error(`[Discovery] Error fetching chunk ${task.chunkIndex} for agent ${task.userId}:`, error.message);
-        return [];
+      if (!response.ok) {
+        console.error(`[Discovery] API error at offset ${offset}: ${response.status}`);
+        break; // Stop on error
       }
-    });
 
-    // Wait for all tasks in this batch to complete
-    const batchResults = await Promise.all(promises);
+      const data = await response.json();
+      const recordings = data.data?.results || [];
 
-    // Flatten and add to allCalls
-    for (const result of batchResults) {
-      allCalls.push(...result);
-      totalFetched += result.length;
-    }
+      console.log(`[Discovery] Received ${recordings.length} calls at offset ${offset}`);
 
-    console.log(`[Discovery] Batch ${batchNum} complete: ${totalFetched} total calls collected`);
+      if (recordings.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-    // Stop early if we have enough
-    if (totalFetched >= targetCallCount * 1.2) {
-      console.log(`[Discovery] Target reached (${totalFetched} >= ${targetCallCount * 1.2}), stopping early`);
-      break;
+      // Filter to 10+ seconds and extract recording URL
+      const validCalls = recordings
+        .filter((call: any) => {
+          const duration = call.call_length ? parseInt(call.call_length) : 0;
+          return duration >= 10;
+        })
+        .map((call: any) => ({
+          ...call,
+          // Extract recording URL from response (matches convoso-service.ts pattern)
+          recording_url: call.recording?.[0]?.public_url || call.recording?.[0]?.src || null
+        }));
+
+      const withRecordings = validCalls.filter((c: any) => c.recording_url).length;
+      console.log(`[Discovery] Filtered to ${validCalls.length} calls (10+ sec), ${withRecordings} with recordings`);
+
+      allCalls.push(...validCalls);
+
+      // Check if we got less than limit - means we've reached the end
+      if (recordings.length < limit) {
+        hasMore = false;
+        console.log(`[Discovery] Received less than limit (${recordings.length} < ${limit}), stopping pagination`);
+      }
+
+      // Move to next page
+      offset += limit;
+
+    } catch (error: any) {
+      console.error(`[Discovery] Error fetching at offset ${offset}:`, error.message);
+      break; // Stop on error
     }
   }
 
-  // Step 5: Deduplicate by call_id
   console.log(`[Discovery] Fetch complete - total calls collected: ${allCalls.length}`);
-  console.log(`[Discovery] Target was: ${targetCallCount}`);
 
   if (allCalls.length === 0) {
     console.error('[Discovery] ERROR: No calls were fetched! Check API responses above.');
     return [];
   }
 
-  // Deduplicate by call_id (same call can appear across multiple date chunks)
+  // Deduplicate by call_id
   const uniqueCallsMap = new Map();
   for (const call of allCalls) {
     const callId = call.id;
@@ -334,8 +272,20 @@ export async function fetchCallsInChunks(
   const uniqueCalls = Array.from(uniqueCallsMap.values());
   console.log(`[Discovery] Deduplicated ${allCalls.length} calls to ${uniqueCalls.length} unique calls`);
 
-  // Step 6: Randomize and select final set
-  const shuffled = uniqueCalls.sort(() => Math.random() - 0.5);
+  // Filter by selected agents if provided
+  let filteredCalls = uniqueCalls;
+  if (selectedAgentIds && selectedAgentIds.length > 0) {
+    console.log(`[Discovery] Filtering by ${selectedAgentIds.length} selected agents...`);
+    filteredCalls = uniqueCalls.filter((call: any) => {
+      // Check both user_id (string) and user field (name)
+      const userId = String(call.user_id);
+      return selectedAgentIds.includes(userId);
+    });
+    console.log(`[Discovery] After agent filter: ${filteredCalls.length} calls remain`);
+  }
+
+  // Randomize and select final set
+  const shuffled = filteredCalls.sort(() => Math.random() - 0.5);
   const selectedCalls = shuffled.slice(0, targetCallCount);
 
   console.log(`[Discovery] Selected ${selectedCalls.length} calls for queueing`);
