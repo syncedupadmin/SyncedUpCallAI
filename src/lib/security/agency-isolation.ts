@@ -41,24 +41,39 @@ export async function getAgencyContext(): Promise<AgencyContext> {
     throw new Error('UNAUTHORIZED: Authentication required');
   }
 
+  // Check if superadmin first
+  const { data: superAdminCheck } = await supabase.rpc('is_super_admin');
+  const isSuperAdmin = superAdminCheck === true;
+
   const { data: agencies, error: agencyError } = await supabase
     .from('user_agencies')
     .select('agency_id, role')
     .eq('user_id', user.id);
 
-  if (!agencies?.length || agencyError) {
+  // Superadmins can proceed even without agency membership
+  if ((!agencies?.length || agencyError) && !isSuperAdmin) {
     console.error('[SECURITY] No agency access for user:', user.id);
     throw new Error('FORBIDDEN: No agency access');
   }
 
-  const { data: superAdminCheck } = await supabase.rpc('is_super_admin');
+  // For superadmins without agencies, use placeholder values
+  if (isSuperAdmin && !agencies?.length) {
+    console.log('[SECURITY] Superadmin access granted without agency:', user.id);
+    return {
+      userId: user.id,
+      agencyId: 'superadmin', // Placeholder for queries that need filtering
+      agencyIds: [],
+      role: 'admin' as const,
+      isSuperAdmin: true
+    };
+  }
 
   return {
     userId: user.id,
-    agencyId: agencies[0].agency_id,
-    agencyIds: agencies.map(a => a.agency_id),
-    role: agencies[0].role,
-    isSuperAdmin: superAdminCheck === true
+    agencyId: agencies![0].agency_id,
+    agencyIds: agencies!.map(a => a.agency_id),
+    role: agencies![0].role,
+    isSuperAdmin
   };
 }
 

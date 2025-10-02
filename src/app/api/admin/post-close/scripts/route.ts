@@ -8,28 +8,49 @@ export const dynamic = 'force-dynamic';
 // GET all scripts
 export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    const scripts = await db.manyOrNone(`
-      SELECT
-        id,
-        script_name,
-        script_version,
-        product_type,
-        state,
-        script_text,
-        required_phrases,
-        optional_phrases,
-        active,
-        status,
-        min_word_match_percentage,
-        strict_mode,
-        agency_id,
-        created_at,
-        updated_at,
-        activated_at
-      FROM post_close_scripts
-      WHERE agency_id = $1
-      ORDER BY active DESC, created_at DESC
-    `, [context.agencyId]);
+    // Superadmins see all scripts, regular users see only their agency's
+    const query = context.isSuperAdmin
+      ? `SELECT
+          id,
+          script_name,
+          script_version,
+          product_type,
+          state,
+          script_text,
+          required_phrases,
+          optional_phrases,
+          active,
+          status,
+          min_word_match_percentage,
+          strict_mode,
+          agency_id,
+          created_at,
+          updated_at,
+          activated_at
+        FROM post_close_scripts
+        ORDER BY active DESC, created_at DESC`
+      : `SELECT
+          id,
+          script_name,
+          script_version,
+          product_type,
+          state,
+          script_text,
+          required_phrases,
+          optional_phrases,
+          active,
+          status,
+          min_word_match_percentage,
+          strict_mode,
+          agency_id,
+          created_at,
+          updated_at,
+          activated_at
+        FROM post_close_scripts
+        WHERE agency_id = $1
+        ORDER BY active DESC, created_at DESC`;
+
+    const scripts = await db.manyOrNone(query, context.isSuperAdmin ? [] : [context.agencyId]);
 
     return NextResponse.json({
       success: true,
@@ -52,17 +73,25 @@ export const POST = withStrictAgencyIsolation(async (req, context) => {
 
     // Check if this is an activation request
     if (body.action === 'activate' && body.script_id) {
-      // Verify script belongs to user's agency before activating
-      const script = await db.oneOrNone(`
-        SELECT id FROM post_close_scripts
-        WHERE id = $1 AND agency_id = $2
-      `, [body.script_id, context.agencyId]);
+      // Verify script access - superadmins can access any, regular users need agency match
+      if (!context.isSuperAdmin) {
+        const script = await db.oneOrNone(`
+          SELECT id, agency_id FROM post_close_scripts
+          WHERE id = $1 AND agency_id = $2
+        `, [body.script_id, context.agencyId]);
 
-      if (!script) {
-        return NextResponse.json({ error: 'Script not found or access denied' }, { status: 404 });
+        if (!script) {
+          return NextResponse.json({ error: 'Script not found or access denied' }, { status: 404 });
+        }
       }
 
-      await activateScript(body.script_id, context.agencyId);
+      // Get the script's agency_id for activation
+      const script = await db.oneOrNone(`SELECT agency_id FROM post_close_scripts WHERE id = $1`, [body.script_id]);
+      if (!script) {
+        return NextResponse.json({ error: 'Script not found' }, { status: 404 });
+      }
+
+      await activateScript(body.script_id, script.agency_id);
       return NextResponse.json({
         success: true,
         message: 'Script activated successfully'
@@ -71,12 +100,16 @@ export const POST = withStrictAgencyIsolation(async (req, context) => {
 
     // Check if this is a strict mode toggle request
     if (body.action === 'toggle_strict_mode' && body.script_id) {
-      // Verify script belongs to user's agency before toggling
-      await db.none(`
-        UPDATE post_close_scripts
-        SET strict_mode = $1, updated_at = NOW()
-        WHERE id = $2 AND agency_id = $3
-      `, [body.strict_mode, body.script_id, context.agencyId]);
+      // Verify script access - superadmins can toggle any, regular users need agency match
+      const updateQuery = context.isSuperAdmin
+        ? `UPDATE post_close_scripts SET strict_mode = $1, updated_at = NOW() WHERE id = $2`
+        : `UPDATE post_close_scripts SET strict_mode = $1, updated_at = NOW() WHERE id = $2 AND agency_id = $3`;
+
+      const params = context.isSuperAdmin
+        ? [body.strict_mode, body.script_id]
+        : [body.strict_mode, body.script_id, context.agencyId];
+
+      await db.none(updateQuery, params);
 
       return NextResponse.json({
         success: true,
@@ -120,11 +153,15 @@ export const DELETE = withStrictAgencyIsolation(async (req, context) => {
       return NextResponse.json({ error: 'Script ID required' }, { status: 400 });
     }
 
-    // Check if script belongs to user's agency and if it's active
-    const script = await db.oneOrNone(`
-      SELECT active FROM post_close_scripts
-      WHERE id = $1 AND agency_id = $2
-    `, [scriptId, context.agencyId]);
+    // Check if script exists and if it's active - superadmins can access any
+    const scriptQuery = context.isSuperAdmin
+      ? `SELECT active FROM post_close_scripts WHERE id = $1`
+      : `SELECT active FROM post_close_scripts WHERE id = $1 AND agency_id = $2`;
+
+    const script = await db.oneOrNone(
+      scriptQuery,
+      context.isSuperAdmin ? [scriptId] : [scriptId, context.agencyId]
+    );
 
     if (!script) {
       return NextResponse.json({ error: 'Script not found or access denied' }, { status: 404 });
@@ -137,10 +174,14 @@ export const DELETE = withStrictAgencyIsolation(async (req, context) => {
       );
     }
 
-    await db.none(`
-      DELETE FROM post_close_scripts
-      WHERE id = $1 AND agency_id = $2
-    `, [scriptId, context.agencyId]);
+    const deleteQuery = context.isSuperAdmin
+      ? `DELETE FROM post_close_scripts WHERE id = $1`
+      : `DELETE FROM post_close_scripts WHERE id = $1 AND agency_id = $2`;
+
+    await db.none(
+      deleteQuery,
+      context.isSuperAdmin ? [scriptId] : [scriptId, context.agencyId]
+    );
 
     return NextResponse.json({
       success: true,

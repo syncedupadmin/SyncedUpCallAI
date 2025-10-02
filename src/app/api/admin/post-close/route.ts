@@ -10,40 +10,37 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
     const { searchParams } = new URL(req.url);
     const callId = searchParams.get('call_id');
 
-    // Get recent compliance results with segment details, filtered by agency
-    const query = callId
-      ? `SELECT
-          pc.*,
-          pcs.transcript,
-          COALESCE(pcs.agent_name, pc.agent_name) as agent_name,
-          pcs.created_at as segment_created_at,
-          ps.script_name,
-          c.campaign
-        FROM post_close_compliance pc
-        LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
-        LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
-        LEFT JOIN calls c ON c.id = pc.call_id
-        WHERE pc.call_id = $1 AND pc.agency_id = $2
-        ORDER BY pc.analyzed_at DESC
-        LIMIT 100`
-      : `SELECT
-          pc.*,
-          pcs.transcript,
-          COALESCE(pcs.agent_name, pc.agent_name) as agent_name,
-          pcs.created_at as segment_created_at,
-          ps.script_name,
-          c.campaign
-        FROM post_close_compliance pc
-        LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
-        LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
-        LEFT JOIN calls c ON c.id = pc.call_id
-        WHERE pc.agency_id = $1
-        ORDER BY pc.analyzed_at DESC
-        LIMIT 100`;
+    // Superadmins see all data, regular users see only their agency
+    const baseQuery = `SELECT
+      pc.*,
+      pcs.transcript,
+      COALESCE(pcs.agent_name, pc.agent_name) as agent_name,
+      pcs.created_at as segment_created_at,
+      ps.script_name,
+      c.campaign
+    FROM post_close_compliance pc
+    LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
+    LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
+    LEFT JOIN calls c ON c.id = pc.call_id`;
 
-    const results = callId
-      ? await db.manyOrNone(query, [callId, context.agencyId])
-      : await db.manyOrNone(query, [context.agencyId]);
+    let query: string;
+    let params: any[];
+
+    if (context.isSuperAdmin) {
+      // Superadmin: no agency filter
+      query = callId
+        ? `${baseQuery} WHERE pc.call_id = $1 ORDER BY pc.analyzed_at DESC LIMIT 100`
+        : `${baseQuery} ORDER BY pc.analyzed_at DESC LIMIT 100`;
+      params = callId ? [callId] : [];
+    } else {
+      // Regular user: filter by agency
+      query = callId
+        ? `${baseQuery} WHERE pc.call_id = $1 AND pc.agency_id = $2 ORDER BY pc.analyzed_at DESC LIMIT 100`
+        : `${baseQuery} WHERE pc.agency_id = $1 ORDER BY pc.analyzed_at DESC LIMIT 100`;
+      params = callId ? [callId, context.agencyId] : [context.agencyId];
+    }
+
+    const results = await db.manyOrNone(query, params);
 
     return NextResponse.json({
       success: true,

@@ -6,23 +6,38 @@ export const dynamic = 'force-dynamic';
 
 export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get agent performance stats, filtered by agency
-    const agents = await db.manyOrNone(`
-      SELECT
-        agent_name,
-        COUNT(*) as total_analyzed,
-        SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END) as total_passed,
-        SUM(CASE WHEN NOT compliance_passed THEN 1 ELSE 0 END) as total_failed,
-        AVG(overall_score) as avg_compliance_score,
-        AVG(word_match_percentage) as avg_word_match,
-        AVG(phrase_match_percentage) as avg_phrase_match,
-        SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as violations_count,
-        (SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT) * 100 as pass_rate
-      FROM post_close_compliance
-      WHERE agent_name IS NOT NULL AND agency_id = $1
-      GROUP BY agent_name
-      ORDER BY avg_compliance_score DESC
-    `, [context.agencyId]);
+    // Get agent performance stats - superadmins see all, regular users see their agency
+    const query = context.isSuperAdmin
+      ? `SELECT
+          agent_name,
+          COUNT(*) as total_analyzed,
+          SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END) as total_passed,
+          SUM(CASE WHEN NOT compliance_passed THEN 1 ELSE 0 END) as total_failed,
+          AVG(overall_score) as avg_compliance_score,
+          AVG(word_match_percentage) as avg_word_match,
+          AVG(phrase_match_percentage) as avg_phrase_match,
+          SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as violations_count,
+          (SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT) * 100 as pass_rate
+        FROM post_close_compliance
+        WHERE agent_name IS NOT NULL
+        GROUP BY agent_name
+        ORDER BY avg_compliance_score DESC`
+      : `SELECT
+          agent_name,
+          COUNT(*) as total_analyzed,
+          SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END) as total_passed,
+          SUM(CASE WHEN NOT compliance_passed THEN 1 ELSE 0 END) as total_failed,
+          AVG(overall_score) as avg_compliance_score,
+          AVG(word_match_percentage) as avg_word_match,
+          AVG(phrase_match_percentage) as avg_phrase_match,
+          SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as violations_count,
+          (SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT) * 100 as pass_rate
+        FROM post_close_compliance
+        WHERE agent_name IS NOT NULL AND agency_id = $1
+        GROUP BY agent_name
+        ORDER BY avg_compliance_score DESC`;
+
+    const agents = await db.manyOrNone(query, context.isSuperAdmin ? [] : [context.agencyId]);
 
     return NextResponse.json({
       success: true,

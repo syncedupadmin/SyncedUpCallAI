@@ -6,25 +6,34 @@ export const dynamic = 'force-dynamic';
 
 export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get overall stats, filtered by agency
-    const stats = await db.oneOrNone(`
-      SELECT
-        COUNT(*) as total_analyzed,
-        AVG(overall_score) as avg_compliance_score,
-        SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT as pass_rate,
-        SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as flagged_count,
-        AVG(word_match_percentage) as avg_word_match,
-        AVG(phrase_match_percentage) as avg_phrase_match
-      FROM post_close_compliance
-      WHERE agency_id = $1
-    `, [context.agencyId]);
+    // Get overall stats - superadmins see all, regular users see their agency
+    const statsQuery = context.isSuperAdmin
+      ? `SELECT
+          COUNT(*) as total_analyzed,
+          AVG(overall_score) as avg_compliance_score,
+          SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT as pass_rate,
+          SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as flagged_count,
+          AVG(word_match_percentage) as avg_word_match,
+          AVG(phrase_match_percentage) as avg_phrase_match
+        FROM post_close_compliance`
+      : `SELECT
+          COUNT(*) as total_analyzed,
+          AVG(overall_score) as avg_compliance_score,
+          SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT as pass_rate,
+          SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as flagged_count,
+          AVG(word_match_percentage) as avg_word_match,
+          AVG(phrase_match_percentage) as avg_phrase_match
+        FROM post_close_compliance
+        WHERE agency_id = $1`;
 
-    // Get script count for this agency
-    const scriptCount = await db.oneOrNone(`
-      SELECT COUNT(*) as script_count
-      FROM post_close_scripts
-      WHERE active = true AND agency_id = $1
-    `, [context.agencyId]);
+    const stats = await db.oneOrNone(statsQuery, context.isSuperAdmin ? [] : [context.agencyId]);
+
+    // Get script count
+    const scriptCountQuery = context.isSuperAdmin
+      ? `SELECT COUNT(*) as script_count FROM post_close_scripts WHERE active = true`
+      : `SELECT COUNT(*) as script_count FROM post_close_scripts WHERE active = true AND agency_id = $1`;
+
+    const scriptCount = await db.oneOrNone(scriptCountQuery, context.isSuperAdmin ? [] : [context.agencyId]);
 
     return NextResponse.json({
       success: true,
