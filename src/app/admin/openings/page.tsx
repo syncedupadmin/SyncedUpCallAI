@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Mic,
   TrendingUp,
@@ -11,7 +13,8 @@ import {
   BarChart3,
   Zap,
   Target,
-  Brain
+  Brain,
+  ArrowLeft
 } from 'lucide-react';
 
 interface OpeningSegment {
@@ -48,7 +51,11 @@ interface AgentPerformance {
   conversion_rate: number;
 }
 
-export default function OpeningsPage() {
+function OpeningsPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const callId = searchParams?.get('call_id');
+
   const [openings, setOpenings] = useState<OpeningSegment[]>([]);
   const [patterns, setPatterns] = useState<OpeningPattern[]>([]);
   const [agents, setAgents] = useState<AgentPerformance[]>([]);
@@ -63,11 +70,14 @@ export default function OpeningsPage() {
     loadPatterns();
     loadStats();
     loadAgents();
-  }, []);
+  }, [callId]);
 
   const loadOpenings = async () => {
     try {
-      const res = await fetch('/api/admin/openings');
+      const url = callId
+        ? `/api/admin/openings?call_id=${callId}`
+        : '/api/admin/openings';
+      const res = await fetch(url);
       const data = await res.json();
       if (data.openings) {
         setOpenings(data.openings);
@@ -169,13 +179,34 @@ export default function OpeningsPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Breadcrumb / Back Button */}
+        {callId && (
+          <div className="mb-6">
+            <Link
+              href={`/calls/${callId}`}
+              className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Call Details</span>
+            </Link>
+            <div className="mt-2 text-sm text-gray-400">
+              Viewing opening analysis for call: <span className="font-mono text-gray-300">{callId}</span>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
             <Mic className="w-10 h-10 text-blue-500" />
-            Opening Analysis System
+            {callId ? 'Call Opening Analysis' : 'Opening Analysis System'}
           </h1>
-          <p className="text-gray-400">Analyze and optimize call openings using AI trained on YOUR successful calls</p>
+          <p className="text-gray-400">
+            {callId
+              ? 'Detailed opening performance for this specific call'
+              : 'Analyze and optimize call openings using AI trained on YOUR successful calls'
+            }
+          </p>
         </div>
 
         {/* Hero Metrics */}
@@ -539,5 +570,13 @@ export default function OpeningsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OpeningsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <OpeningsPageContent />
+    </Suspense>
   );
 }

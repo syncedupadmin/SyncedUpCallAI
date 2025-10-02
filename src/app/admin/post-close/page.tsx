@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Shield,
   CheckCircle,
@@ -13,7 +15,8 @@ import {
   TrendingUp,
   Activity,
   Zap,
-  XCircle
+  XCircle,
+  ArrowLeft
 } from 'lucide-react';
 
 interface Script {
@@ -61,7 +64,11 @@ interface AgentPerformance {
   pass_rate: number;
 }
 
-export default function PostClosePage() {
+function PostClosePageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const callId = searchParams?.get('call_id');
+
   const [scripts, setScripts] = useState<Script[]>([]);
   const [results, setResults] = useState<ComplianceResult[]>([]);
   const [agents, setAgents] = useState<AgentPerformance[]>([]);
@@ -83,7 +90,7 @@ export default function PostClosePage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [callId]);
 
   const loadData = async () => {
     await Promise.all([
@@ -108,7 +115,10 @@ export default function PostClosePage() {
 
   const loadResults = async () => {
     try {
-      const res = await fetch('/api/admin/post-close');
+      const url = callId
+        ? `/api/admin/post-close?call_id=${callId}`
+        : '/api/admin/post-close';
+      const res = await fetch(url);
       const data = await res.json();
       if (data.results) {
         setResults(data.results);
@@ -303,13 +313,34 @@ export default function PostClosePage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Breadcrumb / Back Button */}
+        {callId && (
+          <div className="mb-6">
+            <Link
+              href={`/calls/${callId}`}
+              className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Call Details</span>
+            </Link>
+            <div className="mt-2 text-sm text-gray-400">
+              Viewing post-close compliance for call: <span className="font-mono text-gray-300">{callId}</span>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
             <Shield className="w-10 h-10 text-green-500" />
-            Post-Close Compliance System
+            {callId ? 'Call Compliance Analysis' : 'Post-Close Compliance System'}
           </h1>
-          <p className="text-gray-400">Verify agents read required terms & conditions scripts verbatim</p>
+          <p className="text-gray-400">
+            {callId
+              ? 'Detailed compliance verification for this specific call'
+              : 'Verify agents read required terms & conditions scripts verbatim'
+            }
+          </p>
         </div>
 
         {/* Hero Metrics */}
@@ -877,5 +908,13 @@ export default function PostClosePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PostClosePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <PostClosePageContent />
+    </Suspense>
   );
 }
