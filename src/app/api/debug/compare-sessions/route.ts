@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     const comparison = {
       total_sessions: sessionDetails.length,
       sessions: sessionDetails,
-      key_differences: []
+      key_differences: [] as Array<{metric: string; latest: any; previous: any; difference: any}>
     };
 
     // Identify key differences
