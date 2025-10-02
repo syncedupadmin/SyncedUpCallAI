@@ -88,35 +88,63 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. SAVE POST-CLOSE COMPLIANCE → post_close_compliance table
-    if (result.compliance_details) {
-      const { error: complianceError } = await supabase
-        .from('post_close_compliance')
+    // 2. SAVE POST-CLOSE COMPLIANCE → post_close_compliance + post_close_segments tables
+    if (result.compliance_details && result.pass1_extraction?.post_close_segment) {
+      const postCloseSegment = result.pass1_extraction.post_close_segment;
+
+      // First, create the post_close_segments entry
+      const { data: segmentData, error: segmentError } = await supabase
+        .from('post_close_segments')
         .insert({
           call_id,
-          script_id: result.compliance_details.script_id || null,
-          compliance_score: result.compliance_details.overall_score,
-          compliance_passed: result.compliance_details.compliance_passed,
-          word_match_percentage: result.compliance_details.word_match_percentage,
-          phrase_match_percentage: result.compliance_details.phrase_match_percentage,
-          sequence_score: result.compliance_details.sequence_score,
-          similarity_score: result.compliance_details.similarity_score,
-          levenshtein_distance: result.compliance_details.levenshtein_distance,
-          missing_phrases: result.compliance_details.missing_phrases || [],
-          extra_content: result.compliance_details.extra_content || [],
-          flagged_for_review: result.compliance_details.flagged_for_review,
-          flag_reasons: result.compliance_details.flag_reasons || [],
-          paraphrased_sections: result.compliance_details.paraphrased_sections || [],
-          sequence_errors: result.compliance_details.sequence_errors || [],
-          agent_id: meta?.agent_id || null,
+          start_ms: postCloseSegment.start_ms || 0,
+          end_ms: postCloseSegment.end_ms || 0,
+          duration_sec: Math.floor((postCloseSegment.end_ms - postCloseSegment.start_ms) / 1000) || 0,
+          transcript: postCloseSegment.text || result.compliance_details.transcript_segment || '',
           agent_name: meta?.agent_name || null,
-          created_at: new Date().toISOString()
-        });
+          campaign: meta?.campaign || null,
+          sale_confirmed: result.outcome === 'sale',
+          disposition: result.outcome,
+          extraction_method: 'auto'
+        })
+        .select()
+        .single();
 
-      if (complianceError) {
-        logError('post_close_compliance_save_error', complianceError, { call_id });
+      if (segmentError) {
+        logError('post_close_segment_save_error', segmentError, { call_id });
       } else {
-        logInfo({ event_type: 'post_close_compliance_saved', call_id });
+        logInfo({ event_type: 'post_close_segment_saved', call_id, segment_id: segmentData.id });
+
+        // Now create the compliance entry with the segment_id
+        const { error: complianceError } = await supabase
+          .from('post_close_compliance')
+          .insert({
+            segment_id: segmentData.id,
+            call_id,
+            script_id: result.compliance_details.script_id || null,
+            overall_score: result.compliance_details.overall_score,
+            compliance_passed: result.compliance_details.compliance_passed,
+            word_match_percentage: result.compliance_details.word_match_percentage,
+            phrase_match_percentage: result.compliance_details.phrase_match_percentage,
+            sequence_score: result.compliance_details.sequence_score,
+            similarity_score: result.compliance_details.similarity_score,
+            levenshtein_distance: result.compliance_details.levenshtein_distance,
+            missing_phrases: result.compliance_details.missing_phrases || [],
+            extra_content: result.compliance_details.extra_content || [],
+            flagged_for_review: result.compliance_details.flagged_for_review,
+            flag_reasons: result.compliance_details.flag_reasons || [],
+            paraphrased_sections: result.compliance_details.paraphrased_sections || [],
+            sequence_errors: result.compliance_details.sequence_errors || [],
+            agent_id: meta?.agent_id || null,
+            agent_name: meta?.agent_name || null,
+            analyzed_at: new Date().toISOString()
+          });
+
+        if (complianceError) {
+          logError('post_close_compliance_save_error', complianceError, { call_id });
+        } else {
+          logInfo({ event_type: 'post_close_compliance_saved', call_id, segment_id: segmentData.id });
+        }
       }
     }
 

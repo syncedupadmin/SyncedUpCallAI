@@ -12,22 +12,43 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Check for call_id filter
+    const { searchParams } = new URL(req.url);
+    const callId = searchParams.get('call_id');
+
     // Get recent compliance results with segment details
-    const results = await db.manyOrNone(`
-      SELECT
-        pc.*,
-        pcs.transcript,
-        pcs.agent_name,
-        pcs.created_at as segment_created_at,
-        ps.script_name,
-        c.campaign
-      FROM post_close_compliance pc
-      JOIN post_close_segments pcs ON pcs.id = pc.segment_id
-      LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
-      LEFT JOIN calls c ON c.id = pc.call_id
-      ORDER BY pc.analyzed_at DESC
-      LIMIT 100
-    `);
+    const query = callId
+      ? `SELECT
+          pc.*,
+          pcs.transcript,
+          COALESCE(pcs.agent_name, pc.agent_name) as agent_name,
+          pcs.created_at as segment_created_at,
+          ps.script_name,
+          c.campaign
+        FROM post_close_compliance pc
+        LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
+        LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
+        LEFT JOIN calls c ON c.id = pc.call_id
+        WHERE pc.call_id = $1
+        ORDER BY pc.analyzed_at DESC
+        LIMIT 100`
+      : `SELECT
+          pc.*,
+          pcs.transcript,
+          COALESCE(pcs.agent_name, pc.agent_name) as agent_name,
+          pcs.created_at as segment_created_at,
+          ps.script_name,
+          c.campaign
+        FROM post_close_compliance pc
+        LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
+        LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
+        LEFT JOIN calls c ON c.id = pc.call_id
+        ORDER BY pc.analyzed_at DESC
+        LIMIT 100`;
+
+    const results = callId
+      ? await db.manyOrNone(query, [callId])
+      : await db.manyOrNone(query);
 
     return NextResponse.json({
       success: true,

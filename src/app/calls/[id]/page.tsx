@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function CallDetailPage() {
   const params = useParams();
@@ -116,7 +117,7 @@ export default function CallDetailPage() {
     );
   }
 
-  const { call, transcript, analysis, events } = data;
+  const { call, transcript, analysis, events, opening_segment, post_close_compliance, v2_metadata } = data;
 
   // Parse diarized data if available
   let diarizedSegments = [];
@@ -309,6 +310,131 @@ export default function CallDetailPage() {
           )}
         </div>
       </div>
+
+      {/* V2 Analysis Summary & Navigation */}
+      {(opening_segment || post_close_compliance || v2_metadata) && (
+        <div className="glass-card" style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+            Advanced Analysis (v2)
+          </h3>
+
+          {/* Summary Badges */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            {opening_segment && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(0, 212, 255, 0.1)', borderRadius: 8, border: '1px solid rgba(0, 212, 255, 0.2)' }}>
+                <div style={{ fontSize: 12, color: '#00d4ff', fontWeight: 600 }}>OPENING QUALITY</div>
+                <div style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: opening_segment.success_score >= 90 ? '#10b981' :
+                         opening_segment.success_score >= 70 ? '#f59e0b' :
+                         opening_segment.success_score >= 50 ? '#f97316' : '#ef4444'
+                }}>
+                  {opening_segment.success_score || 0}/100
+                </div>
+                <span className="badge" style={{
+                  background: opening_segment.success_score >= 90 ? '#10b981' :
+                             opening_segment.success_score >= 70 ? '#f59e0b' :
+                             opening_segment.success_score >= 50 ? '#f97316' : '#ef4444',
+                  color: '#000',
+                  fontWeight: 600
+                }}>
+                  {opening_segment.success_score >= 90 ? 'EXCELLENT' :
+                   opening_segment.success_score >= 70 ? 'GOOD' :
+                   opening_segment.success_score >= 50 ? 'NEEDS WORK' : 'POOR'}
+                </span>
+              </div>
+            )}
+
+            {post_close_compliance && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(124, 58, 237, 0.1)', borderRadius: 8, border: '1px solid rgba(124, 58, 237, 0.2)' }}>
+                <div style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>COMPLIANCE</div>
+                <div style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: post_close_compliance.compliance_passed ? '#10b981' : '#ef4444'
+                }}>
+                  {Math.round(post_close_compliance.overall_score || 0)}%
+                </div>
+                <span className="badge" style={{
+                  background: post_close_compliance.compliance_passed ? '#10b981' : '#ef4444',
+                  color: '#000',
+                  fontWeight: 600
+                }}>
+                  {post_close_compliance.compliance_passed ? 'PASSED' : 'FAILED'}
+                </span>
+              </div>
+            )}
+
+            {v2_metadata && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(139, 92, 246, 0.1)', borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                <div style={{ fontSize: 12, color: '#8b5cf6', fontWeight: 600 }}>ANALYSIS VERSION</div>
+                <div style={{ fontSize: 14, color: '#e5e5e5' }}>
+                  3-Pass Sequential
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Navigation Buttons */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {opening_segment && (
+              <Link
+                href={`/admin/openings?call_id=${params.id}`}
+                className="btn"
+                style={{
+                  background: 'linear-gradient(135deg, #00d4ff 0%, #0084ff 100%)',
+                  color: '#000',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '12px 20px',
+                  borderRadius: 8,
+                  textDecoration: 'none'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" x2="12" y1="19" y2="22"/>
+                </svg>
+                View Opening Analysis
+              </Link>
+            )}
+
+            {post_close_compliance && (
+              <Link
+                href={`/admin/post-close?call_id=${params.id}`}
+                className="btn"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '12px 20px',
+                  borderRadius: 8,
+                  textDecoration: 'none'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="m9 12 2 2 4-4"/>
+                </svg>
+                View Post-Close Compliance
+              </Link>
+            )}
+
+            {!opening_segment && !post_close_compliance && (
+              <div style={{ padding: '12px 20px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, color: '#6b6b7c', fontSize: 14 }}>
+                No v2 analysis data available for this call. Run /api/calls/analyze-and-save-v2 to generate.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         {/* Left Column - Transcript */}

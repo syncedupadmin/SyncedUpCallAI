@@ -13,7 +13,9 @@ import {
   Settings,
   PlayCircle,
   FileAudio,
-  Sparkles
+  Sparkles,
+  ArrowRight,
+  Info
 } from 'lucide-react';
 
 export default function AnalyzeDemo() {
@@ -101,6 +103,32 @@ export default function AnalyzeDemo() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
       <SuperAdminNav />
+
+      {/* Deprecation Banner */}
+      <div className="bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20 border-b border-yellow-500/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Info className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+              <div>
+                <div className="text-sm font-medium text-yellow-100">
+                  V1 Legacy System - Upgrade Available
+                </div>
+                <div className="text-xs text-yellow-200/70">
+                  This is the legacy 2-pass analysis system. Try our new 3-pass sequential analysis for improved accuracy.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/analyze-demo-v2-10.2.25')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-medium transition-all shadow-lg hover:shadow-purple-500/25 whitespace-nowrap"
+            >
+              <span>Try V2 Analysis</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}

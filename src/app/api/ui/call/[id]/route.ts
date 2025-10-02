@@ -94,6 +94,25 @@ async function handler(
       embedding = null;
     }
 
+    // Fetch v2 analysis data
+    const { data: openingSegment } = await supabase
+      .from('opening_segments')
+      .select('*')
+      .eq('call_id', id)
+      .single();
+
+    const { data: postCloseCompliance } = await supabase
+      .from('post_close_compliance')
+      .select('*')
+      .eq('call_id', id)
+      .single();
+
+    // Extract v2 metadata from calls.metadata
+    let v2Metadata = null;
+    if (call.metadata && call.metadata.v2_analysis) {
+      v2Metadata = call.metadata.v2_analysis;
+    }
+
     const transformedCall = {
       ...call,
       customer_phone: call.contacts?.primary_phone || null,
@@ -110,7 +129,11 @@ async function handler(
       transcript,
       analysis,
       events,
-      has_embedding: !!embedding
+      has_embedding: !!embedding,
+      // v2 analysis data
+      opening_segment: openingSegment || null,
+      post_close_compliance: postCloseCompliance || null,
+      v2_metadata: v2Metadata
     });
   } catch (err: any) {
     console.error('[SECURITY] ui/call/[id] GET error', err);
