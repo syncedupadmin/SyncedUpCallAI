@@ -426,12 +426,12 @@ export default function AnalyzeDemoV2() {
                           <div className="text-white font-medium">{Math.round(data.compliance_details.similarity_score)}%</div>
                         </div>
                       </div>
-                      {data.compliance_details.missing_required_phrases && data.compliance_details.missing_required_phrases.length > 0 && (
+                      {data.compliance_details.missing_phrases && data.compliance_details.missing_phrases.length > 0 && (
                         <div>
-                          <div className="text-xs text-red-400 mb-1">Missing Required Phrases ({data.compliance_details.missing_required_phrases.length})</div>
+                          <div className="text-xs text-red-400 mb-1">Missing Required Phrases ({data.compliance_details.missing_phrases.length})</div>
                           <div className="max-h-32 overflow-y-auto">
                             <ul className="text-xs text-gray-300 space-y-1">
-                              {data.compliance_details.missing_required_phrases.map((phrase: string, i: number) => (
+                              {data.compliance_details.missing_phrases.map((phrase: string, i: number) => (
                                 <li key={i} className="text-red-300">• {phrase}</li>
                               ))}
                             </ul>
@@ -444,19 +444,16 @@ export default function AnalyzeDemoV2() {
                           <div className="max-h-32 overflow-y-auto">
                             <ul className="text-xs text-gray-300 space-y-1">
                               {data.compliance_details.paraphrased_sections.slice(0, 3).map((section: any, i: number) => (
-                                <li key={i} className="text-yellow-300">• {section.expected || section}</li>
+                                <li key={i} className="text-yellow-300">
+                                  • {section.original} → {section.actual}
+                                  {section.similarity && <span className="text-gray-500 ml-1">({Math.round(section.similarity * 100)}%)</span>}
+                                </li>
                               ))}
                               {data.compliance_details.paraphrased_sections.length > 3 && (
                                 <li className="text-gray-500">... and {data.compliance_details.paraphrased_sections.length - 3} more</li>
                               )}
                             </ul>
                           </div>
-                        </div>
-                      )}
-                      {data.compliance_details.script_name && (
-                        <div className="pt-2 border-t border-gray-700/50">
-                          <div className="text-xs text-gray-400">Script Used</div>
-                          <div className="text-xs text-white font-medium">{data.compliance_details.script_name}</div>
                         </div>
                       )}
                     </div>
