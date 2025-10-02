@@ -13,7 +13,7 @@ export async function getInitialAgencies() {
 
   const { data, error, count } = await supabase
     .from('agencies')
-    .select('id, name, slug, owner_user_id, created_at, updated_at', { count: 'exact' })
+    .select('id, name, slug, owner_user_id, created_at, updated_at, discovery_status', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(0, 24)
 
