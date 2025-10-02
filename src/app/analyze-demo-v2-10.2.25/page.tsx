@@ -80,6 +80,13 @@ export default function AnalyzeDemoV2() {
       console.log('Outcome:', j.data?.outcome);
       console.log('Duration (ms):', j.data?.duration_ms);
       console.log('Analysis Version:', j.data?.analysis_version);
+      console.log('Has Entities?:', !!j.data?.entities, 'Count:', j.data?.entities?.length);
+      console.log('Has Rebuttal Analysis?:', !!j.data?.rebuttal_analysis);
+      console.log('Has Pass1 Extraction?:', !!j.data?.pass1_extraction);
+      console.log('Has Transcript?:', !!j.data?.transcript);
+      console.log('Has Opening Analysis?:', !!j.data?.opening_analysis);
+      console.log('Has Timing?:', !!j.data?.timing);
+      console.log('Has Tokens?:', !!j.data?.tokens);
       console.log('Full Data:', j.data);
       console.log('===========================');
 
@@ -210,6 +217,34 @@ export default function AnalyzeDemoV2() {
             <div className="flex items-center gap-2 text-gray-400">
               <PlayCircle className="w-5 h-5 text-green-500" />
               <span className="text-sm">V2 Analysis Complete • {data.duration_ms}ms</span>
+            </div>
+
+            {/* Data Availability Debug */}
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs">
+              <div className="font-medium text-blue-300 mb-2">Data Availability Check:</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-gray-400">
+                <div>Entities: <span className={data.entities?.length > 0 ? 'text-green-400' : 'text-red-400'}>
+                  {data.entities?.length > 0 ? `✓ ${data.entities.length}` : '✗ None'}
+                </span></div>
+                <div>Rebuttal: <span className={data.rebuttal_analysis ? 'text-green-400' : 'text-red-400'}>
+                  {data.rebuttal_analysis ? '✓ Yes' : '✗ No'}
+                </span></div>
+                <div>Pass1: <span className={data.pass1_extraction ? 'text-green-400' : 'text-red-400'}>
+                  {data.pass1_extraction ? '✓ Yes' : '✗ No'}
+                </span></div>
+                <div>Transcript: <span className={data.transcript ? 'text-green-400' : 'text-red-400'}>
+                  {data.transcript ? '✓ Yes' : '✗ No'}
+                </span></div>
+                <div>Opening: <span className={data.opening_analysis ? 'text-green-400' : 'text-red-400'}>
+                  {data.opening_analysis ? '✓ Yes' : '✗ No'}
+                </span></div>
+                <div>Timing: <span className={data.timing ? 'text-green-400' : 'text-red-400'}>
+                  {data.timing ? '✓ Yes' : '✗ No'}
+                </span></div>
+                <div>Tokens: <span className={data.tokens ? 'text-green-400' : 'text-red-400'}>
+                  {data.tokens ? '✓ Yes' : '✗ No'}
+                </span></div>
+              </div>
             </div>
 
             {/* Opening Quality & Compliance Badges */}
