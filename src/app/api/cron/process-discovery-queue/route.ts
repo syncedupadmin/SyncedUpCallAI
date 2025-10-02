@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
           agency.convoso_credentials
         );
 
-        // Get next batch of pending calls with recordings (100 per run for optimal speed)
+        // Get next batch of pending calls with recordings (20 per run to avoid Deepgram rate limits)
         // CRITICAL: Only process calls that have recording_url to avoid failures
         const { data: pendingCalls, error: callsError } = await sbAdmin
           .from('discovery_calls')
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
           .eq('processing_status', 'pending')
           .not('recording_url', 'is', null)  // Skip calls without recordings
           .order('created_at', { ascending: true })
-          .limit(100);
+          .limit(20);
 
         if (callsError) {
           console.error(`[Discovery Queue] Error fetching calls for session ${session.id}:`, callsError);
@@ -150,12 +150,25 @@ export async function GET(req: NextRequest) {
             .eq('id', session.id);
         }
 
-        // Process calls in parallel
-        const processPromises = pendingCalls.map(call =>
-          processDiscoveryCall(call, credentials, session.id)
-        );
+        // Process calls in smaller batches to avoid Deepgram rate limits
+        // Process 5 at a time with 2 second delay between batches
+        const processResults: PromiseSettledResult<boolean>[] = [];
+        const batchSize = 5;
 
-        const processResults = await Promise.allSettled(processPromises);
+        for (let i = 0; i < pendingCalls.length; i += batchSize) {
+          const batch = pendingCalls.slice(i, i + batchSize);
+          const batchPromises = batch.map(call =>
+            processDiscoveryCall(call, credentials, session.id)
+          );
+
+          const batchResults = await Promise.allSettled(batchPromises);
+          processResults.push(...batchResults);
+
+          // Add delay between batches to avoid rate limiting (except for last batch)
+          if (i + batchSize < pendingCalls.length) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
 
         // Count successes/failures
         processResults.forEach(result => {

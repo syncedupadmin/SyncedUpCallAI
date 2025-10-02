@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Shield,
+  ShieldCheck,
   User,
   Wrench,
   Crown,
@@ -112,7 +113,7 @@ export default function AdminNav() {
       {
         name: 'Post Close',
         href: '/admin/post-close',
-        icon: Shield,
+        icon: ShieldCheck,
         description: 'Script compliance verification'
       },
       {
@@ -193,7 +194,7 @@ export default function AdminNav() {
       {
         name: 'Post Close',
         href: '/admin/post-close',
-        icon: Shield,
+        icon: ShieldCheck,
         description: 'Script compliance verification'
       },
       {

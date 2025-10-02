@@ -129,7 +129,7 @@ export default function SuperAdminNav() {
     {
       name: 'Post Close',
       href: '/superadmin/post-close',
-      icon: Shield,
+      icon: ShieldCheck,
       description: 'Script compliance verification'
     },
     {
