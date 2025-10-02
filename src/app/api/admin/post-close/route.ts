@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
-import { isAdminAuthenticated } from '@/server/auth/admin';
+import { withStrictAgencyIsolation } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  // Check admin authentication
-  const isAdmin = await isAdminAuthenticated(req);
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
     // Check for call_id filter
     const { searchParams } = new URL(req.url);
     const callId = searchParams.get('call_id');
 
-    // Get recent compliance results with segment details
+    // Get recent compliance results with segment details, filtered by agency
     const query = callId
       ? `SELECT
           pc.*,
@@ -29,7 +23,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
         LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
         LEFT JOIN calls c ON c.id = pc.call_id
-        WHERE pc.call_id = $1
+        WHERE pc.call_id = $1 AND pc.agency_id = $2
         ORDER BY pc.analyzed_at DESC
         LIMIT 100`
       : `SELECT
@@ -43,12 +37,13 @@ export async function GET(req: NextRequest) {
         LEFT JOIN post_close_segments pcs ON pcs.id = pc.segment_id
         LEFT JOIN post_close_scripts ps ON ps.id = pc.script_id
         LEFT JOIN calls c ON c.id = pc.call_id
+        WHERE pc.agency_id = $1
         ORDER BY pc.analyzed_at DESC
         LIMIT 100`;
 
     const results = callId
-      ? await db.manyOrNone(query, [callId])
-      : await db.manyOrNone(query);
+      ? await db.manyOrNone(query, [callId, context.agencyId])
+      : await db.manyOrNone(query, [context.agencyId]);
 
     return NextResponse.json({
       success: true,
@@ -62,4 +57,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

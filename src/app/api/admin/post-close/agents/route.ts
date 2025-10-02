@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
-import { isAdminAuthenticated } from '@/server/auth/admin';
+import { withStrictAgencyIsolation } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  const isAdmin = await isAdminAuthenticated(req);
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get agent performance stats
+    // Get agent performance stats, filtered by agency
     const agents = await db.manyOrNone(`
       SELECT
         agent_name,
@@ -24,10 +19,10 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN flagged_for_review THEN 1 ELSE 0 END) as violations_count,
         (SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END)::FLOAT / COUNT(*)::FLOAT) * 100 as pass_rate
       FROM post_close_compliance
-      WHERE agent_name IS NOT NULL
+      WHERE agent_name IS NOT NULL AND agency_id = $1
       GROUP BY agent_name
       ORDER BY avg_compliance_score DESC
-    `);
+    `, [context.agencyId]);
 
     return NextResponse.json({
       success: true,
@@ -41,4 +36,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

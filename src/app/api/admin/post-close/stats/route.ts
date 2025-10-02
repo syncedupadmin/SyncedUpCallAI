@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
-import { isAdminAuthenticated } from '@/server/auth/admin';
+import { withStrictAgencyIsolation } from '@/lib/security/agency-isolation';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  const isAdmin = await isAdminAuthenticated(req);
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export const GET = withStrictAgencyIsolation(async (req, context) => {
   try {
-    // Get overall stats
+    // Get overall stats, filtered by agency
     const stats = await db.oneOrNone(`
       SELECT
         COUNT(*) as total_analyzed,
@@ -21,12 +16,15 @@ export async function GET(req: NextRequest) {
         AVG(word_match_percentage) as avg_word_match,
         AVG(phrase_match_percentage) as avg_phrase_match
       FROM post_close_compliance
-    `);
+      WHERE agency_id = $1
+    `, [context.agencyId]);
 
-    // Get script count
+    // Get script count for this agency
     const scriptCount = await db.oneOrNone(`
-      SELECT COUNT(*) as script_count FROM post_close_scripts WHERE active = true
-    `);
+      SELECT COUNT(*) as script_count
+      FROM post_close_scripts
+      WHERE active = true AND agency_id = $1
+    `, [context.agencyId]);
 
     return NextResponse.json({
       success: true,
@@ -41,4 +39,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

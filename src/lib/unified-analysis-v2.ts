@@ -542,6 +542,7 @@ async function analyzeOpeningAndCompliance(
   if (postCloseSegment.detected_after_card && pass2Data.post_close_initial.detected) {
     try {
       // Check for active script
+      // TODO: Pass agency_id to getActiveScript() when available in meta
       const complianceStartTime = Date.now();
       const activeScript = await getActiveScript();
       if (activeScript) {

@@ -717,10 +717,15 @@ export async function uploadScript(data: {
 /**
  * Get active script
  */
-export async function getActiveScript(productType?: string, state?: string): Promise<PostCloseScript | null> {
+export async function getActiveScript(productType?: string, state?: string, agencyId?: string): Promise<PostCloseScript | null> {
   try {
     let query = 'SELECT * FROM post_close_scripts WHERE active = true';
     const params: any[] = [];
+
+    if (agencyId) {
+      params.push(agencyId);
+      query += ` AND agency_id = $${params.length}`;
+    }
 
     if (productType) {
       params.push(productType);
