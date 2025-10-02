@@ -96,36 +96,10 @@ export async function transcribeFromUrl(mp3Url: string, overrides?: AsrOverrides
     console.log('ASR overrides provided:', overrides);
   }
 
-  // Define search terms array - REDUCED TO 20 CRITICAL TERMS FOR SPEED
-  const searchTerms = [
-    // Payment essentials (8)
-    "visa or mastercard",
-    "routing number",
-    "CVV",
-    "name on the card",
-    "payment went through",
-    "declined",
-    "here's my card",
-    "let me get my card",
-
-    // Key objections (7)
-    "call me back",
-    "talk to my husband",
-    "talk to my wife",
-    "do not call",
-    "already have insurance",
-    "not interested",
-    "can't afford",
-
-    // Success indicators (5)
-    "congratulations",
-    "you're all set",
-    "per month",
-    "monthly",
-    "enrollment complete"
-  ];
-
-  console.log('SEARCH TERMS COUNT:', searchTerms.length);
+  // REMOVED: Search terms array (20 terms) - Disabled for speed optimization
+  // Acoustic search adds 3-5 seconds to Deepgram processing time
+  // const searchTerms = [...];
+  // console.log('SEARCH TERMS COUNT:', searchTerms.length);
 
   // Convert keywords from overrides format [["term", weight]] to Deepgram format ["term:weight"]
   const keywordsFromOverrides = overrides?.keywords?.map(([term, weight]) => `${term}:${weight}`) || [];
@@ -144,14 +118,14 @@ export async function transcribeFromUrl(mp3Url: string, overrides?: AsrOverrides
       numerals: overrides?.numerals !== undefined ? overrides.numerals : true,
       paragraphs: overrides?.paragraphs !== undefined ? overrides.paragraphs : true,
 
-      // Entity detection
-      detect_entities: overrides?.detect_entities !== undefined ? overrides.detect_entities : true,
+      // DISABLED: Entity detection (adds processing overhead)
+      detect_entities: false,
 
       // NO SENTIMENT
       // sentiment: false,
 
-      // COMPREHENSIVE SEARCH PATTERNS (using searchTerms variable)
-      search: searchTerms,
+      // DISABLED: Acoustic search (adds 3-5s overhead)
+      // search: searchTerms,
 
       // KEYWORDS - use overrides if provided, otherwise use defaults
       keywords: keywordsFromOverrides.length > 0 ? keywordsFromOverrides : [
@@ -167,13 +141,13 @@ export async function transcribeFromUrl(mp3Url: string, overrides?: AsrOverrides
 
   console.log('=== CALLING DEEPGRAM ===');
   console.log('URL:', mp3Url);
-  console.log('Search terms:', searchTerms.length);
+  console.log('Search terms: DISABLED (speed optimization)');
   console.log('Features enabled:', {
     smart_format: true,
     diarize: true,
     utterances: true,
     utt_split: 1.1,
-    detect_entities: true,
+    detect_entities: false,
     punctuate: true,
     numerals: true,
     paragraphs: true

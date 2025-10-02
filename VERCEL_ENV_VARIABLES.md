@@ -49,9 +49,6 @@ CONVOSO_AUTH_TOKEN=[your-convoso-api-token]
 ```env
 # Transcription Services
 DEEPGRAM_API_KEY=[your-deepgram-key]
-ASSEMBLYAI_API_KEY=[your-assemblyai-key]
-ASR_PRIMARY=deepgram
-ASR_FALLBACK=assemblyai
 
 # AI Analysis
 OPENAI_API_KEY=sk-[your-openai-key]

@@ -1,71 +1,28 @@
 import { transcribeDeepgram, ASRResult } from './deepgram';
-import { transcribeAssemblyAI } from './assemblyai';
 import { withRetry } from '../lib/retry';
 
-const ASR_PRIMARY = process.env.ASR_PRIMARY || 'deepgram';
-const ASR_FALLBACK = process.env.ASR_FALLBACK || 'assemblyai';
-
 export async function transcribe(recordingUrl: string): Promise<ASRResult> {
-  // Try primary ASR provider with retry
-  try {
-    if (ASR_PRIMARY === 'deepgram' && process.env.DEEPGRAM_API_KEY) {
-      return await withRetry(
-        () => transcribeDeepgram(recordingUrl),
-        {
-          maxAttempts: 2,
-          delayMs: 10000,
-          onError: (err, attempt) => {
-            console.error(`Deepgram attempt ${attempt} failed:`, err.message);
-          }
-        }
-      );
-    } else if (ASR_PRIMARY === 'assemblyai' && process.env.ASSEMBLYAI_API_KEY) {
-      return await withRetry(
-        () => transcribeAssemblyAI(recordingUrl),
-        {
-          maxAttempts: 2,
-          delayMs: 10000,
-          onError: (err, attempt) => {
-            console.error(`AssemblyAI attempt ${attempt} failed:`, err.message);
-          }
-        }
-      );
-    }
-  } catch (primaryError) {
-    console.error(`Primary ASR (${ASR_PRIMARY}) failed after retries:`, primaryError);
-    
-    // Try fallback provider with retry
-    try {
-      if (ASR_FALLBACK === 'assemblyai' && process.env.ASSEMBLYAI_API_KEY) {
-        return await withRetry(
-          () => transcribeAssemblyAI(recordingUrl),
-          {
-            maxAttempts: 2,
-            delayMs: 10000,
-            onError: (err, attempt) => {
-              console.error(`AssemblyAI fallback attempt ${attempt} failed:`, err.message);
-            }
-          }
-        );
-      } else if (ASR_FALLBACK === 'deepgram' && process.env.DEEPGRAM_API_KEY) {
-        return await withRetry(
-          () => transcribeDeepgram(recordingUrl),
-          {
-            maxAttempts: 2,
-            delayMs: 10000,
-            onError: (err, attempt) => {
-              console.error(`Deepgram fallback attempt ${attempt} failed:`, err.message);
-            }
-          }
-        );
-      }
-    } catch (fallbackError) {
-      console.error(`Fallback ASR (${ASR_FALLBACK}) failed after retries:`, fallbackError);
-      throw fallbackError;
-    }
+  // Check if Deepgram is configured
+  if (!process.env.DEEPGRAM_API_KEY) {
+    throw new Error('DEEPGRAM_API_KEY is not configured');
   }
 
-  throw new Error('No ASR provider available or configured');
+  // Try Deepgram with retry logic
+  try {
+    return await withRetry(
+      () => transcribeDeepgram(recordingUrl),
+      {
+        maxAttempts: 2,
+        delayMs: 10000,
+        onError: (err, attempt) => {
+          console.error(`Deepgram attempt ${attempt} failed:`, err.message);
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Deepgram failed after retries:', error);
+    throw error;
+  }
 }
 
 // Translate text using LLM if needed

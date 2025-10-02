@@ -47,10 +47,7 @@
 - **OPENAI_API_KEY**: OpenAI API key
   - Used for call analysis and embeddings
 
-- **ASR_PRIMARY**: Primary transcription service (`deepgram` or `assemblyai`)
-- **ASR_FALLBACK**: Fallback transcription service (`assemblyai` or `deepgram`)
-- **DEEPGRAM_API_KEY**: Deepgram API key (if using Deepgram)
-- **ASSEMBLYAI_API_KEY**: AssemblyAI API key (if using AssemblyAI)
+- **DEEPGRAM_API_KEY**: Deepgram API key for transcription
 
 ### Optional Configuration
 - **HIPAA_MODE**: Enable HIPAA compliance mode (`true` or `false`, default: `false`)

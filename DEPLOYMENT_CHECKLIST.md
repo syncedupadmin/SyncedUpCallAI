@@ -39,8 +39,7 @@ Ensure these are set in Vercel Dashboard (Settings → Environment Variables):
 ### Transcription Services
 - `OPENAI_API_KEY` - For GPT-4 analysis
 - `ANTHROPIC_API_KEY` - (Optional) Fallback for analysis
-- `DEEPGRAM_API_KEY` - (Optional) For transcription
-- `ASSEMBLYAI_API_KEY` - (Optional) For transcription
+- `DEEPGRAM_API_KEY` - For transcription
 
 ### System
 - `APP_URL` - Your Vercel app URL (https://your-app.vercel.app)

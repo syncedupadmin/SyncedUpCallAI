@@ -296,7 +296,7 @@ async function processDiscoveryCall(
 
     console.log(`${callInfo} ✓ Recording URL: ${recordingUrl.substring(0, 50)}...`);
 
-    // 2. Transcribe with Deepgram/AssemblyAI
+    // 2. Transcribe with Deepgram
     console.log(`${callInfo} Starting transcription...`);
     const asrResult = await transcribe(recordingUrl);
 

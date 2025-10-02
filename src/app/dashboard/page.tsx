@@ -221,7 +221,7 @@ export default function DashboardPage() {
               {recentCalls.map((call, index) => (
                 <motion.a
                   key={call.id}
-                  href={`/call/${call.id}`}
+                  href={`/calls/${call.id}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.5 + index * 0.05 }}
@@ -258,7 +258,7 @@ export default function DashboardPage() {
           className="grid md:grid-cols-3 gap-6 mt-8"
         >
           <a
-            href="/analytics"
+            href="/admin/analytics"
             className="group p-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl hover:border-cyan-500/40 transition"
           >
             <BarChart3 className="w-8 h-8 text-cyan-400 mb-3" />
@@ -267,7 +267,7 @@ export default function DashboardPage() {
           </a>
 
           <a
-            href="/reports"
+            href="/kpi"
             className="group p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl hover:border-purple-500/40 transition"
           >
             <Calendar className="w-8 h-8 text-purple-400 mb-3" />

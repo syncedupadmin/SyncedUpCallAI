@@ -4,7 +4,7 @@
 SyncedUp Call AI processes calls through a multi-stage pipeline:
 1. **Webhook Reception** → Receive call data from Convoso
 2. **Recording Fetch** → Retrieve audio recordings
-3. **Transcription** → Convert audio to text (Deepgram/AssemblyAI)
+3. **Transcription** → Convert audio to text (Deepgram)
 4. **Analysis** → Extract insights using AI (GPT-4/Claude)
 5. **Display** → Show results in dashboard
 
@@ -152,9 +152,7 @@ batchProcess().catch(console.error);
 
 ### Stage 2: Transcription
 - **Endpoint**: `/api/jobs/transcribe`
-- **Engines**:
-  - Primary: Deepgram (fast, accurate)
-  - Fallback: AssemblyAI
+- **Engine**: Deepgram (fast, accurate)
 - **Features**:
   - Speaker diarization
   - Word-level timestamps
@@ -271,9 +269,8 @@ LIMIT 100;
 ## Environment Variables Required
 
 ```env
-# Transcription Services
+# Transcription Service
 DEEPGRAM_API_KEY=your-deepgram-key
-ASSEMBLYAI_API_KEY=your-assemblyai-key
 
 # Analysis
 OPENAI_API_KEY=your-openai-key
@@ -321,7 +318,7 @@ LIMIT 20;
    - Run recording fetch cron manually
 
 2. **Transcription failures**
-   - Check API keys for Deepgram/AssemblyAI
+   - Check API key for Deepgram
    - Verify recording URLs are accessible
    - Check call duration (must be ≥ 10 seconds)
 

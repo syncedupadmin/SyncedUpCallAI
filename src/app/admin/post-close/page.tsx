@@ -31,6 +31,7 @@ interface Script {
   active: boolean;
   status: string;
   min_word_match_percentage: number;
+  strict_mode: boolean;
   created_at: string;
   updated_at: string;
   activated_at?: string;
@@ -81,6 +82,7 @@ function PostClosePageContent() {
   const [scriptName, setScriptName] = useState('');
   const [scriptText, setScriptText] = useState('');
   const [productType, setProductType] = useState('');
+  const [strictMode, setStrictMode] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'paste' | 'file'>('paste');
 
   // Test state
@@ -184,7 +186,8 @@ function PostClosePageContent() {
         body: JSON.stringify({
           script_name: scriptName,
           script_text: scriptText,
-          product_type: productType || null
+          product_type: productType || null,
+          strict_mode: strictMode
         })
       });
 
@@ -195,6 +198,7 @@ function PostClosePageContent() {
         setScriptName('');
         setScriptText('');
         setProductType('');
+        setStrictMode(false);
         await loadScripts();
       }
     } catch (error) {
@@ -240,6 +244,35 @@ function PostClosePageContent() {
     } catch (error) {
       console.error('Activation failed:', error);
       alert('Failed to activate script');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const toggleStrictMode = async (scriptId: string, currentValue: boolean) => {
+    setProcessing(true);
+    try {
+      const res = await fetch('/api/admin/post-close/scripts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'toggle_strict_mode',
+          script_id: scriptId,
+          strict_mode: !currentValue
+        })
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        alert(`Strict mode ${!currentValue ? 'enabled' : 'disabled'} successfully!`);
+        await loadScripts();
+      } else {
+        alert(result.error || 'Failed to toggle strict mode');
+      }
+    } catch (error) {
+      console.error('Toggle failed:', error);
+      alert('Failed to toggle strict mode');
     } finally {
       setProcessing(false);
     }
@@ -535,6 +568,28 @@ function PostClosePageContent() {
                   className="w-full bg-gray-800 text-white p-3 rounded-lg border border-gray-700"
                 />
 
+                {/* Strict Mode Toggle */}
+                <div className="flex items-center justify-between p-4 bg-gray-800 rounded-lg border border-gray-700">
+                  <div>
+                    <label className="font-medium text-white flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-red-400" />
+                      Strict Word-for-Word Mode
+                    </label>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Requires 100% exact matching - no paraphrasing allowed. Compliance score must reach 98%.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={strictMode}
+                      onChange={(e) => setStrictMode(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:bg-red-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                  </label>
+                </div>
+
                 {uploadMethod === 'paste' ? (
                   <textarea
                     placeholder="Paste the complete post-close script here..."
@@ -590,11 +645,17 @@ function PostClosePageContent() {
                     >
                       <div className="flex justify-between items-start mb-3">
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-bold text-lg">{script.script_name}</h3>
                             {script.active && (
                               <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
                                 ACTIVE
+                              </span>
+                            )}
+                            {script.strict_mode && (
+                              <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                STRICT MODE
                               </span>
                             )}
                             <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
@@ -607,7 +668,7 @@ function PostClosePageContent() {
                             </p>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           {!script.active && (
                             <button
                               onClick={() => activateScript(script.id)}
@@ -616,6 +677,19 @@ function PostClosePageContent() {
                               Activate
                             </button>
                           )}
+                          <button
+                            onClick={() => toggleStrictMode(script.id, script.strict_mode)}
+                            disabled={processing}
+                            className={`px-3 py-1 text-white text-sm rounded transition-colors ${
+                              script.strict_mode
+                                ? 'bg-orange-600 hover:bg-orange-700'
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            } disabled:opacity-50`}
+                            title={script.strict_mode ? 'Disable strict mode' : 'Enable strict mode'}
+                          >
+                            <Shield className="w-3 h-3 inline mr-1" />
+                            {script.strict_mode ? 'Disable Strict' : 'Enable Strict'}
+                          </button>
                           <button
                             onClick={() => deleteScript(script.id)}
                             disabled={script.active}

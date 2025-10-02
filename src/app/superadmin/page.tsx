@@ -34,12 +34,11 @@ export default function AdminPage() {
     const envVars = {
       OPENAI_API_KEY: process.env.NEXT_PUBLIC_OPENAI_KEY_SET === 'true',
       DEEPGRAM_API_KEY: process.env.NEXT_PUBLIC_DEEPGRAM_KEY_SET === 'true',
-      ASSEMBLYAI_API_KEY: process.env.NEXT_PUBLIC_ASSEMBLYAI_KEY_SET === 'true',
       JOBS_SECRET: process.env.NEXT_PUBLIC_JOBS_SECRET_SET === 'true',
       DATABASE_URL: true, // Assume set if app is running
       APP_URL: true
     };
-    
+
     // In production, call an API endpoint that checks these server-side
     try {
       const res = await fetch('/api/health');
@@ -47,7 +46,6 @@ export default function AdminPage() {
       setEnvStatus({
         OPENAI_API_KEY: data.ok,
         DEEPGRAM_API_KEY: data.ok,
-        ASSEMBLYAI_API_KEY: data.ok,
         JOBS_SECRET: data.ok,
         DATABASE_URL: data.db?.ok || false,
         APP_URL: data.ok

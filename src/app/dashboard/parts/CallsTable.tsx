@@ -163,8 +163,8 @@ export default function CallsTable({
               </td>
               <td style={{ textAlign: 'right' }}>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <a 
-                    href={`/call/${r.id}`} 
+                  <a
+                    href={`/calls/${r.id}`}
                     className="btn btn-ghost"
                     style={{ 
                       padding: '6px 12px',

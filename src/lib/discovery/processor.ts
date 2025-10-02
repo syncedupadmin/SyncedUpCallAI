@@ -216,16 +216,54 @@ export async function fetchCallsInChunks(
 
       console.log(`[Discovery] Received ${recordings.length} calls at offset ${offset}`);
 
+      // Log filtering stats for debugging
+      const tooShort = recordings.filter((c: any) => {
+        const d = c.call_length ? parseInt(c.call_length) : 0;
+        return d < 10;
+      }).length;
+      const noRecording = recordings.filter((c: any) =>
+        !c.recording || !Array.isArray(c.recording) || c.recording.length === 0
+      ).length;
+      const systemUser = recordings.filter((c: any) =>
+        c.user === 'System User' || c.user_id === '666666'
+      ).length;
+      const amd = recordings.filter((c: any) => {
+        const status = (c.status_name || c.status || '').toUpperCase();
+        return status.includes('ANSWERING MACHINE') || status.includes('AMD');
+      }).length;
+
+      console.log(`[Discovery] Filter stats: ${tooShort} too short, ${noRecording} no recording, ${systemUser} system user, ${amd} AMD`);
+
       if (recordings.length === 0) {
         hasMore = false;
         break;
       }
 
-      // Filter to 10+ seconds and extract recording URL
+      // Filter to valid calls: 10+ seconds, has recording, not system/AMD calls
       const validCalls = recordings
         .filter((call: any) => {
           const duration = call.call_length ? parseInt(call.call_length) : 0;
-          return duration >= 10;
+
+          // Must be 10+ seconds
+          if (duration < 10) return false;
+
+          // Must have a recording in the response
+          if (!call.recording || !Array.isArray(call.recording) || call.recording.length === 0) {
+            return false;
+          }
+
+          // Exclude System User calls (automated/AMD)
+          if (call.user === 'System User' || call.user_id === '666666') {
+            return false;
+          }
+
+          // Exclude answering machine detections
+          const status = (call.status_name || call.status || '').toUpperCase();
+          if (status.includes('ANSWERING MACHINE') || status.includes('AMD')) {
+            return false;
+          }
+
+          return true;
         })
         .map((call: any) => ({
           ...call,

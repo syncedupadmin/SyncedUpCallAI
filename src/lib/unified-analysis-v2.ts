@@ -376,6 +376,7 @@ async function extractComprehensiveWithSegments(
   settings?: Settings
 ): Promise<any> {
   const config = settings || DEFAULTS;
+  const pass1StartTime = Date.now();
 
   logInfo({ event_type: 'pass1_extraction_started', audio_url: audioUrl });
 
@@ -393,7 +394,9 @@ async function extractComprehensiveWithSegments(
     keywords: config.asr.keywords
   };
 
+  const deepgramStartTime = Date.now();
   const enrichedResult = await transcribeBulk(audioUrl, asrOverrides);
+  const deepgramDuration = Date.now() - deepgramStartTime;
   const segments: Segment[] = enrichedResult.segments;
   const formattedTranscript = enrichedResult.formatted;
   const entities = enrichedResult.entities || [];
@@ -404,6 +407,7 @@ async function extractComprehensiveWithSegments(
   ).join('\n');
 
   // Call Pass 1 with structured output
+  const openaiPass1StartTime = Date.now();
   const pass1Response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -423,15 +427,22 @@ async function extractComprehensiveWithSegments(
       }
     }
   });
+  const openaiPass1Duration = Date.now() - openaiPass1StartTime;
 
   const extracted = JSON.parse(pass1Response.choices[0].message.content || "{}");
+  const pass1TotalDuration = Date.now() - pass1StartTime;
 
   logInfo({
     event_type: 'pass1_extraction_complete',
     money_mentions: extracted.money_mentions?.length || 0,
     objections: extracted.objection_spans?.length || 0,
     opening_segment_duration: extracted.opening_segment?.duration_sec || 0,
-    post_close_detected: extracted.post_close_segment?.detected_after_card || false
+    post_close_detected: extracted.post_close_segment?.detected_after_card || false,
+    timing_deepgram_ms: deepgramDuration,
+    timing_openai_ms: openaiPass1Duration,
+    timing_total_ms: pass1TotalDuration,
+    tokens_input: pass1Response.usage?.prompt_tokens || 0,
+    tokens_output: pass1Response.usage?.completion_tokens || 0
   });
 
   return {
@@ -440,7 +451,16 @@ async function extractComprehensiveWithSegments(
     formattedTranscript,
     entities,
     duration: enrichedResult.duration || 0,
-    deepgram_summary: enrichedResult.summary
+    deepgram_summary: enrichedResult.summary,
+    timing: {
+      deepgram_ms: deepgramDuration,
+      openai_pass1_ms: openaiPass1Duration,
+      total_ms: pass1TotalDuration
+    },
+    tokens: {
+      pass1_input: pass1Response.usage?.prompt_tokens || 0,
+      pass1_output: pass1Response.usage?.completion_tokens || 0
+    }
   };
 }
 
@@ -484,6 +504,7 @@ async function analyzeOpeningAndCompliance(
   formattedTranscript: string,
   meta?: any
 ): Promise<any> {
+  const pass2StartTime = Date.now();
   logInfo({ event_type: 'pass2_analysis_started' });
 
   const { extracted, segments } = pass1Result;
@@ -491,6 +512,7 @@ async function analyzeOpeningAndCompliance(
   const postCloseSegment = extracted.post_close_segment;
 
   // Call Pass 2 with structured output
+  const openaiPass2StartTime = Date.now();
   const pass2Response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -510,14 +532,17 @@ async function analyzeOpeningAndCompliance(
       }
     }
   });
+  const openaiPass2Duration = Date.now() - openaiPass2StartTime;
 
   const pass2Data = JSON.parse(pass2Response.choices[0].message.content || "{}");
 
   // Run post-close compliance analysis if segment detected and active script exists
   let complianceResult = null;
+  let complianceDuration = 0;
   if (postCloseSegment.detected_after_card && pass2Data.post_close_initial.detected) {
     try {
       // Check for active script
+      const complianceStartTime = Date.now();
       const activeScript = await getActiveScript();
       if (activeScript) {
         logInfo({ event_type: 'post_close_compliance_started', script_id: activeScript.id });
@@ -526,11 +551,13 @@ async function analyzeOpeningAndCompliance(
           formattedTranscript,
           activeScript.id
         );
+        complianceDuration = Date.now() - complianceStartTime;
 
         logInfo({
           event_type: 'post_close_compliance_complete',
           overall_score: complianceResult?.overall_score || 0,
-          compliance_passed: complianceResult?.compliance_passed || false
+          compliance_passed: complianceResult?.compliance_passed || false,
+          timing_ms: complianceDuration
         });
       } else {
         logInfo({ event_type: 'post_close_no_active_script' });
@@ -540,16 +567,32 @@ async function analyzeOpeningAndCompliance(
     }
   }
 
+  const pass2TotalDuration = Date.now() - pass2StartTime;
+
   logInfo({
     event_type: 'pass2_analysis_complete',
     opening_score: pass2Data.opening_analysis.opening_score,
     rejection_detected: pass2Data.opening_analysis.rejection_detected,
-    compliance_checked: !!complianceResult
+    compliance_checked: !!complianceResult,
+    timing_openai_ms: openaiPass2Duration,
+    timing_compliance_ms: complianceDuration,
+    timing_total_ms: pass2TotalDuration,
+    tokens_input: pass2Response.usage?.prompt_tokens || 0,
+    tokens_output: pass2Response.usage?.completion_tokens || 0
   });
 
   return {
     ...pass2Data,
-    post_close_compliance: complianceResult
+    post_close_compliance: complianceResult,
+    timing: {
+      openai_pass2_ms: openaiPass2Duration,
+      compliance_ms: complianceDuration,
+      total_ms: pass2TotalDuration
+    },
+    tokens: {
+      pass2_input: pass2Response.usage?.prompt_tokens || 0,
+      pass2_output: pass2Response.usage?.completion_tokens || 0
+    }
   };
 }
 
@@ -598,6 +641,7 @@ async function generateFinalWhiteCard(
   pass2Result: any,
   formattedTranscript: string
 ): Promise<any> {
+  const pass3StartTime = Date.now();
   logInfo({ event_type: 'pass3_white_card_started' });
 
   const { extracted } = pass1Result;
@@ -629,6 +673,7 @@ async function generateFinalWhiteCard(
   };
 
   // Call Pass 3 with structured output
+  const openaiPass3StartTime = Date.now();
   const pass3Response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -648,17 +693,33 @@ async function generateFinalWhiteCard(
       }
     }
   });
+  const openaiPass3Duration = Date.now() - openaiPass3StartTime;
 
   const whiteCard = JSON.parse(pass3Response.choices[0].message.content || "{}");
+  const pass3TotalDuration = Date.now() - pass3StartTime;
 
   logInfo({
     event_type: 'pass3_white_card_complete',
     outcome: whiteCard.outcome,
     opening_quality: whiteCard.opening_quality,
-    compliance_status: whiteCard.compliance_status
+    compliance_status: whiteCard.compliance_status,
+    timing_openai_ms: openaiPass3Duration,
+    timing_total_ms: pass3TotalDuration,
+    tokens_input: pass3Response.usage?.prompt_tokens || 0,
+    tokens_output: pass3Response.usage?.completion_tokens || 0
   });
 
-  return whiteCard;
+  return {
+    ...whiteCard,
+    timing: {
+      openai_pass3_ms: openaiPass3Duration,
+      total_ms: pass3TotalDuration
+    },
+    tokens: {
+      pass3_input: pass3Response.usage?.prompt_tokens || 0,
+      pass3_output: pass3Response.usage?.completion_tokens || 0
+    }
+  };
 }
 
 // ============================================
@@ -709,7 +770,36 @@ export async function analyzeCallV2(
     }
 
     const duration = Date.now() - startTime;
-    logInfo({ event_type: 'analyze_v2_complete', duration_ms: duration, outcome: whiteCard.outcome });
+
+    // Aggregate all timing data
+    const timingData = {
+      deepgram_ms: pass1Result.timing?.deepgram_ms || 0,
+      openai_pass1_ms: pass1Result.timing?.openai_pass1_ms || 0,
+      openai_pass2_ms: pass2Result.timing?.openai_pass2_ms || 0,
+      compliance_ms: pass2Result.timing?.compliance_ms || 0,
+      openai_pass3_ms: whiteCard.timing?.openai_pass3_ms || 0,
+      total_ms: duration
+    };
+
+    // Aggregate all token usage
+    const tokenData = {
+      pass1_input: pass1Result.tokens?.pass1_input || 0,
+      pass1_output: pass1Result.tokens?.pass1_output || 0,
+      pass2_input: pass2Result.tokens?.pass2_input || 0,
+      pass2_output: pass2Result.tokens?.pass2_output || 0,
+      pass3_input: whiteCard.tokens?.pass3_input || 0,
+      pass3_output: whiteCard.tokens?.pass3_output || 0,
+      total_input: (pass1Result.tokens?.pass1_input || 0) + (pass2Result.tokens?.pass2_input || 0) + (whiteCard.tokens?.pass3_input || 0),
+      total_output: (pass1Result.tokens?.pass1_output || 0) + (pass2Result.tokens?.pass2_output || 0) + (whiteCard.tokens?.pass3_output || 0)
+    };
+
+    logInfo({
+      event_type: 'analyze_v2_complete',
+      duration_ms: duration,
+      outcome: whiteCard.outcome,
+      timing: timingData,
+      tokens: tokenData
+    });
 
     return {
       // White card (main output)
@@ -746,6 +836,10 @@ export async function analyzeCallV2(
       segments: pass1Result.segments,
       entities: pass1Result.entities,
       deepgram_summary: pass1Result.deepgram_summary,
+
+      // Performance metrics
+      timing: timingData,
+      tokens: tokenData,
 
       // Metadata
       duration_ms: duration,

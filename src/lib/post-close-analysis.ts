@@ -30,6 +30,7 @@ interface PostCloseScript {
   min_word_match_percentage: number;
   fuzzy_match_threshold: number;
   allow_minor_variations: boolean;
+  strict_mode: boolean;
   active: boolean;
 }
 
@@ -352,6 +353,10 @@ export async function analyzeCompliance(
       throw new Error('Script not found');
     }
 
+    // Determine thresholds based on strict mode
+    const fuzzyThreshold = script.strict_mode ? 1.0 : script.fuzzy_match_threshold;
+    const minPassingScore = script.strict_mode ? 98 : script.min_word_match_percentage;
+
     // Normalize texts
     const normalizedScript = normalizeText(script.script_text);
     const normalizedTranscript = normalizeText(transcript);
@@ -359,18 +364,18 @@ export async function analyzeCompliance(
     // Calculate word match percentage
     const wordMatchPercentage = calculateWordMatchPercentage(script.script_text, transcript);
 
-    // Analyze required phrases
+    // Analyze required phrases with appropriate fuzzy threshold
     const phraseAnalysis = analyzeRequiredPhrases(
       script.required_phrases || [],
       transcript,
-      script.fuzzy_match_threshold
+      fuzzyThreshold
     );
 
-    // Analyze sequence
+    // Analyze sequence with appropriate fuzzy threshold
     const sequenceAnalysis = analyzeSequence(
       script.required_phrases || [],
       transcript,
-      script.fuzzy_match_threshold
+      fuzzyThreshold
     );
 
     // Detect extra content
@@ -388,8 +393,8 @@ export async function analyzeCompliance(
       similarityScore * 100 * 0.1
     );
 
-    // Determine pass/fail
-    const compliancePassed = overallScore >= script.min_word_match_percentage;
+    // Determine pass/fail using mode-specific threshold
+    const compliancePassed = overallScore >= minPassingScore;
 
     // Determine flagging
     const flagReasons: string[] = [];
@@ -397,7 +402,10 @@ export async function analyzeCompliance(
 
     if (!compliancePassed) {
       flaggedForReview = true;
-      flagReasons.push('Score below threshold');
+      flagReasons.push(script.strict_mode
+        ? 'Score below strict mode threshold (98%)'
+        : 'Score below threshold'
+      );
     }
 
     if (phraseAnalysis.missing.length > 0) {
@@ -405,7 +413,11 @@ export async function analyzeCompliance(
       flagReasons.push(`Missing ${phraseAnalysis.missing.length} required phrases`);
     }
 
-    if (phraseAnalysis.paraphrased.length > 3) {
+    // In strict mode, flag ANY paraphrasing. In normal mode, flag excessive paraphrasing
+    if (script.strict_mode && phraseAnalysis.paraphrased.length > 0) {
+      flaggedForReview = true;
+      flagReasons.push('Paraphrasing detected (strict mode requires exact wording)');
+    } else if (!script.strict_mode && phraseAnalysis.paraphrased.length > 3) {
       flaggedForReview = true;
       flagReasons.push('Excessive paraphrasing');
     }
@@ -647,6 +659,8 @@ export async function uploadScript(data: {
   state?: string;
   required_phrases?: string[];
   uploaded_by?: string;
+  strict_mode?: boolean;
+  agency_id: string;
 }): Promise<any> {
   try {
     // Auto-extract required phrases if not provided
@@ -670,8 +684,10 @@ export async function uploadScript(data: {
         state,
         required_phrases,
         uploaded_by,
+        strict_mode,
+        agency_id,
         status
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'draft')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft')
       RETURNING *
     `, [
       data.script_name,
@@ -679,7 +695,9 @@ export async function uploadScript(data: {
       data.product_type,
       data.state,
       requiredPhrases,
-      data.uploaded_by
+      data.uploaded_by,
+      data.strict_mode || false,
+      data.agency_id
     ]);
 
     logInfo({
@@ -727,36 +745,39 @@ export async function getActiveScript(productType?: string, state?: string): Pro
 /**
  * Activate a script
  */
-export async function activateScript(scriptId: string): Promise<void> {
+export async function activateScript(scriptId: string, agencyId: string): Promise<void> {
   try {
-    // Get the script to activate
+    // Get the script to activate (ensuring it belongs to the agency)
     const script = await db.oneOrNone(`
-      SELECT product_type, state FROM post_close_scripts WHERE id = $1
-    `, [scriptId]);
+      SELECT product_type, state FROM post_close_scripts
+      WHERE id = $1 AND agency_id = $2
+    `, [scriptId, agencyId]);
 
     if (!script) {
-      throw new Error('Script not found');
+      throw new Error('Script not found or access denied');
     }
 
-    // Deactivate other scripts with same product_type/state
+    // Deactivate other scripts with same product_type/state IN THIS AGENCY
     await db.none(`
       UPDATE post_close_scripts
       SET active = false
       WHERE active = true
+      AND agency_id = $3
       AND (product_type = $1 OR (product_type IS NULL AND $1 IS NULL))
       AND (state = $2 OR (state IS NULL AND $2 IS NULL))
-    `, [script.product_type, script.state]);
+    `, [script.product_type, script.state, agencyId]);
 
     // Activate this script
     await db.none(`
       UPDATE post_close_scripts
       SET active = true, status = 'active'
-      WHERE id = $1
-    `, [scriptId]);
+      WHERE id = $1 AND agency_id = $2
+    `, [scriptId, agencyId]);
 
     logInfo({
       event_type: 'script_activated',
-      script_id: scriptId
+      script_id: scriptId,
+      agency_id: agencyId
     });
 
   } catch (error: any) {

@@ -72,8 +72,7 @@ Use the scripts in the `scripts/` directory for testing real-time features:
 Required variables (see `.env.local.example`):
 - `DATABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
 - `CONVOSO_WEBHOOK_SECRET`, `CONVOSO_AUTH_TOKEN`
-- `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY`, `OPENAI_API_KEY`
-- `ASR_PRIMARY`, `ASR_FALLBACK` - Configure ASR service priority
+- `DEEPGRAM_API_KEY`, `OPENAI_API_KEY`
 - `JOBS_SECRET`, `CRON_SECRET`
 - `APP_URL` (production URL)
 - Optional: `ANTHROPIC_API_KEY` (fallback), `REDACTION`, `HIPAA_MODE`

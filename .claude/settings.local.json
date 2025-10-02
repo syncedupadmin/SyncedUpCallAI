@@ -33,7 +33,12 @@
       "WebFetch(domain:supabase.com)",
       "Bash(npm run dev:*)",
       "Bash(rm:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "WebFetch(domain:platform.openai.com)",
+      "Bash(git reset:*)",
+      "WebFetch(domain:developers.deepgram.com)",
+      "WebFetch(domain:openai.com)",
+      "WebFetch(domain:www.workorb.com)"
     ]
   },
   "outputStyle": "default"

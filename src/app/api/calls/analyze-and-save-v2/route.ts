@@ -254,6 +254,9 @@ export async function POST(request: NextRequest) {
       opening_quality: result.opening_quality,
       opening_score: result.opening_score,
       compliance_status: result.compliance_status,
+      timing: result.timing,
+      tokens: result.tokens,
+      analysis_version: result.analysis_version,
       data: result
     });
 

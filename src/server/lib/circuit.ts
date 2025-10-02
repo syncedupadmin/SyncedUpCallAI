@@ -3,7 +3,7 @@
  */
 
 type CircuitState = 'closed' | 'open' | 'halfOpen';
-type Provider = 'deepgram' | 'assemblyai';
+type Provider = 'deepgram';
 
 interface CircuitBreaker {
   state: CircuitState;
@@ -24,13 +24,6 @@ const CONFIG = {
 // In-memory state for each provider
 const breakers: Record<Provider, CircuitBreaker> = {
   deepgram: {
-    state: 'closed',
-    failures: 0,
-    lastFailureTime: 0,
-    successCount: 0,
-    lastAttemptTime: 0,
-  },
-  assemblyai: {
     state: 'closed',
     failures: 0,
     lastFailureTime: 0,
