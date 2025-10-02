@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
 
       // Create discovery session
       const sessionId = uuidv4();
-      const targetCallCount = 2500; // Will be distributed across selected agents
+      const targetCallCount = 10000; // Fetch more calls to account for low recording availability (~6%)
 
       await sbAdmin.from('discovery_sessions').insert({
         id: sessionId,
@@ -291,11 +291,21 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Discovery] Successfully queued ${calls.length} calls for background processing`);
 
+      // Count calls with recordings
+      const { count: withRecordings } = await sbAdmin
+        .from('discovery_calls')
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', sessionId)
+        .not('recording_url', 'is', null);
+
+      console.log(`[Discovery] Recording availability: ${withRecordings}/${calls.length} (${Math.round((withRecordings || 0)/calls.length*100)}%)`);
+
       return NextResponse.json({
         success: true,
         sessionId,
         callCount: calls.length,
-        message: `Discovery queued - processing ${calls.length} calls from ${selected_agent_ids.length} agents in background`
+        callsWithRecordings: withRecordings || 0,
+        message: `Discovery queued - processing ${withRecordings || 0} calls with recordings (${calls.length} total fetched)`
       });
     }
 

@@ -96,12 +96,14 @@ export async function GET(req: NextRequest) {
           agency.convoso_credentials
         );
 
-        // Get next batch of pending calls (100 per run for optimal speed)
+        // Get next batch of pending calls with recordings (100 per run for optimal speed)
+        // CRITICAL: Only process calls that have recording_url to avoid failures
         const { data: pendingCalls, error: callsError } = await sbAdmin
           .from('discovery_calls')
           .select('*')
           .eq('session_id', session.id)
           .eq('processing_status', 'pending')
+          .not('recording_url', 'is', null)  // Skip calls without recordings
           .order('created_at', { ascending: true })
           .limit(100);
 
@@ -111,8 +113,22 @@ export async function GET(req: NextRequest) {
         }
 
         if (!pendingCalls || pendingCalls.length === 0) {
-          // All calls processed - finalize session
-          console.log(`[Discovery Queue] No more pending calls for session ${session.id}, finalizing...`);
+          // No more calls with recordings - mark remaining calls as skipped and finalize
+          console.log(`[Discovery Queue] No more calls with recordings for session ${session.id}`);
+
+          // Mark calls without recordings as failed/skipped
+          await sbAdmin
+            .from('discovery_calls')
+            .update({
+              processing_status: 'failed',
+              error_message: 'No recording URL available',
+              processed_at: new Date().toISOString()
+            })
+            .eq('session_id', session.id)
+            .eq('processing_status', 'pending')
+            .is('recording_url', null);
+
+          console.log(`[Discovery Queue] Marked calls without recordings as skipped, finalizing session...`);
           await finalizeDiscoverySession(session.id);
           continue;
         }
@@ -366,13 +382,13 @@ async function finalizeDiscoverySession(sessionId: string) {
       .eq('session_id', sessionId)
       .eq('processing_status', 'completed');
 
-    if (!completedCalls || completedCalls.length < 100) {
+    if (!completedCalls || completedCalls.length < 500) {
       // Not enough calls completed - mark as error
       await sbAdmin
         .from('discovery_sessions')
         .update({
           status: 'error',
-          error_message: `Only ${completedCalls?.length || 0} calls completed successfully. Need at least 100 for meaningful discovery.`,
+          error_message: `Only ${completedCalls?.length || 0} calls completed successfully. Need at least 500 for meaningful discovery.`,
           progress: 100,
           completed_at: new Date().toISOString()
         })
