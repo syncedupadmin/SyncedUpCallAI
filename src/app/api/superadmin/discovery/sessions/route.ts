@@ -3,6 +3,7 @@ import { sbAdmin } from '@/lib/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * Super Admin Discovery Sessions Management API
@@ -51,26 +52,32 @@ export async function GET(req: NextRequest) {
       throw sessionsError;
     }
 
-    // For each session, get queue stats
+    // For each session, get queue stats using SQL COUNT aggregations
     const sessionsWithStats = await Promise.all(
       (sessions || []).map(async (session) => {
-        // Count calls by status (handle case where table doesn't exist yet)
-        const { data: queueCounts, error: queueError } = await sbAdmin
-          .from('discovery_calls')
-          .select('processing_status')
-          .eq('session_id', session.id);
+        // Use SQL COUNT aggregations instead of fetching all rows and filtering in JavaScript
+        const [pending, processing, completed, failed] = await Promise.all([
+          sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+            .eq('session_id', session.id).eq('processing_status', 'pending'),
+          sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+            .eq('session_id', session.id).eq('processing_status', 'processing'),
+          sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+            .eq('session_id', session.id).eq('processing_status', 'completed'),
+          sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+            .eq('session_id', session.id).eq('processing_status', 'failed')
+        ]);
 
         // If table doesn't exist, use fallback stats
-        const queueStats = queueError ? {
+        const queueStats = pending.error ? {
           pending: 0,
           processing: 0,
           completed: 0,
           failed: 0
         } : {
-          pending: queueCounts?.filter(c => c.processing_status === 'pending').length || 0,
-          processing: queueCounts?.filter(c => c.processing_status === 'processing').length || 0,
-          completed: queueCounts?.filter(c => c.processing_status === 'completed').length || 0,
-          failed: queueCounts?.filter(c => c.processing_status === 'failed').length || 0
+          pending: pending.count || 0,
+          processing: processing.count || 0,
+          completed: completed.count || 0,
+          failed: failed.count || 0
         };
 
         // Calculate duration
@@ -119,15 +126,20 @@ export async function GET(req: NextRequest) {
       s.started_at?.startsWith(today)
     ).length;
 
-    // Get total pending/processing/completed calls across all sessions
-    const { data: allCalls, error: allCallsError } = await sbAdmin
-      .from('discovery_calls')
-      .select('processing_status');
+    // Get total pending/processing/completed calls across all sessions using SQL COUNT aggregations
+    const [totalPendingResult, totalProcessingResult, totalCompletedResult] = await Promise.all([
+      sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+        .eq('processing_status', 'pending'),
+      sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+        .eq('processing_status', 'processing'),
+      sbAdmin.from('discovery_calls').select('*', { count: 'exact', head: true })
+        .eq('processing_status', 'completed')
+    ]);
 
     // Handle case where table doesn't exist yet
-    const totalPending = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'pending').length || 0);
-    const totalProcessing = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'processing').length || 0);
-    const totalCompleted = allCallsError ? 0 : (allCalls?.filter(c => c.processing_status === 'completed').length || 0);
+    const totalPending = totalPendingResult.error ? 0 : (totalPendingResult.count || 0);
+    const totalProcessing = totalProcessingResult.error ? 0 : (totalProcessingResult.count || 0);
+    const totalCompleted = totalCompletedResult.error ? 0 : (totalCompletedResult.count || 0);
 
     // Calculate average duration for completed sessions
     const completedSessions = sessionsWithStats.filter(s => s.status === 'complete' && s.duration_seconds);
