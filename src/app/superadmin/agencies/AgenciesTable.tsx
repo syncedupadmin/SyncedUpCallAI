@@ -44,7 +44,7 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
     try {
       const { data, error, count } = await supabase
         .from('agencies')
-        .select('id, name, slug, owner_user_id, created_at, updated_at', { count: 'exact' })
+        .select('id, name, slug, owner_user_id, created_at, updated_at, discovery_status', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to)
 
@@ -124,6 +124,31 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
     }
   }
 
+  const handleResetDiscovery = async (agencyId: string) => {
+    if (!confirm('Reset discovery status for this agency? This will allow them to run discovery again.')) {
+      return
+    }
+
+    try {
+      const res = await fetch('/api/superadmin/discovery/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agency_id: agencyId })
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Reset failed')
+      }
+
+      toast.success('Discovery status reset - agency can now run discovery again')
+      handleRefresh() // Refresh the table to show updated status
+    } catch (error: any) {
+      console.error('Error resetting discovery:', error)
+      toast.error(error.message || 'Failed to reset discovery status')
+    }
+  }
+
   const formatDate = (date: string) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -199,6 +224,9 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                   Created
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Discovery
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   ID
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -209,7 +237,7 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
             <tbody className="divide-y divide-gray-800">
               {filteredAgencies.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     {searchTerm ? 'No agencies found matching your search' : 'No agencies available'}
                   </td>
                 </tr>
@@ -236,6 +264,24 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                     <td className="px-6 py-4 text-gray-400">{formatShortId(agency.owner_user_id)}</td>
                     <td className="px-6 py-4 text-sm text-gray-400">
                       {formatDate(agency.created_at)}
+                    </td>
+                    <td className="px-6 py-4">
+                      {agency.discovery_status === 'completed' ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-400 text-sm">✅ Completed</span>
+                          <button
+                            onClick={() => handleResetDiscovery(agency.id)}
+                            className="px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                            title="Reset discovery status - allows agency to run discovery again"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ) : agency.discovery_status === 'in_progress' ? (
+                        <span className="text-blue-400 text-sm">⏱️ In Progress</span>
+                      ) : (
+                        <span className="text-gray-500 text-sm">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
