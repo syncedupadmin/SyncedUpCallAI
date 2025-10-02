@@ -140,6 +140,35 @@ export async function GET(req: NextRequest) {
           results.calls_processed++;
         });
 
+        // Log batch summary
+        const successRate = results.calls_processed > 0
+          ? Math.round((results.calls_succeeded / results.calls_processed) * 100)
+          : 0;
+        console.log(`[Discovery Queue] Session ${session.id} batch complete:`, {
+          processed: results.calls_processed,
+          succeeded: results.calls_succeeded,
+          failed: results.calls_failed,
+          successRate: `${successRate}%`
+        });
+
+        // Query and log failure reasons
+        const { data: failureAnalysis } = await sbAdmin
+          .from('discovery_calls')
+          .select('error_message')
+          .eq('session_id', session.id)
+          .eq('processing_status', 'failed')
+          .limit(50);
+
+        if (failureAnalysis && failureAnalysis.length > 0) {
+          const errorSummary = failureAnalysis.reduce((acc: any, item: any) => {
+            const msg = item.error_message || 'Unknown';
+            acc[msg] = (acc[msg] || 0) + 1;
+            return acc;
+          }, {});
+
+          console.log(`[Discovery Queue] Failure reasons:`, errorSummary);
+        }
+
         // Update session progress
         await updateSessionProgress(session.id);
 
@@ -186,10 +215,13 @@ async function processDiscoveryCall(
   credentials: ConvosoCredentials,
   sessionId: string
 ): Promise<boolean> {
+  const callInfo = `[Call ${call.call_id}]`;
+
   try {
-    console.log(`[Discovery Queue] Processing call ${call.call_id}`);
+    console.log(`${callInfo} Starting processing...`);
 
     // 1. Fetch recording URL
+    console.log(`${callInfo} Fetching recording URL...`);
     const recordingUrl = await fetchRecordingUrl(
       call.call_id,
       call.lead_id,
@@ -197,23 +229,36 @@ async function processDiscoveryCall(
     );
 
     if (!recordingUrl) {
+      console.warn(`${callInfo} ❌ No recording URL found`);
       throw new Error('No recording URL found');
     }
+    console.log(`${callInfo} ✓ Recording URL: ${recordingUrl.substring(0, 50)}...`);
 
     // 2. Transcribe with Deepgram/AssemblyAI
+    console.log(`${callInfo} Starting transcription...`);
     const asrResult = await transcribe(recordingUrl);
 
-    if (!asrResult || !asrResult.text) {
-      throw new Error('Transcription failed or returned empty');
+    if (!asrResult?.text && !asrResult?.translated_text) {
+      console.error(`${callInfo} ❌ No transcript returned`);
+      throw new Error('Transcription returned empty');
     }
+    const transcript = asrResult.translated_text || asrResult.text;
+    console.log(`${callInfo} ✓ Transcribed: ${transcript.substring(0, 100)}...`);
 
     // 3. Analyze with OpenAI 2-pass
+    console.log(`${callInfo} Starting OpenAI analysis...`);
     const analysis = await analyzeCallWithOpenAI({
       ...call,
-      transcript: asrResult.translated_text || asrResult.text,
+      transcript,
       duration_sec: call.call_length,
       recording_url: recordingUrl
     });
+
+    if (!analysis) {
+      console.error(`${callInfo} ❌ OpenAI analysis failed`);
+      throw new Error('Analysis returned null');
+    }
+    console.log(`${callInfo} ✓ Analysis complete: QA Score ${analysis.qa_score || 'N/A'}`);
 
     // 4. Store results
     await sbAdmin
@@ -221,17 +266,24 @@ async function processDiscoveryCall(
       .update({
         processing_status: 'completed',
         recording_url: recordingUrl,
-        transcript: asrResult.translated_text || asrResult.text,
+        transcript,
         analysis,
         processed_at: new Date().toISOString()
       })
       .eq('id', call.id);
 
-    console.log(`[Discovery Queue] Successfully processed call ${call.call_id}`);
+    console.log(`${callInfo} ✅ Successfully processed`);
     return true;
 
   } catch (error: any) {
-    console.error(`[Discovery Queue] Failed to process call ${call.call_id}:`, error.message);
+    const stage = error.message.includes('recording') ? 'recording_fetch' :
+                  error.message.includes('Transcription') ? 'transcription' :
+                  error.message.includes('Analysis') ? 'analysis' : 'unknown';
+
+    console.error(`${callInfo} ❌ FAILED at ${stage}:`, {
+      error: error.message,
+      stage
+    });
 
     // Mark as failed and increment attempts
     await sbAdmin

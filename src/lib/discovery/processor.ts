@@ -65,18 +65,34 @@ export async function fetchRecordingUrl(
     );
 
     if (!response.ok) {
-      console.warn(`[Discovery] Recording fetch failed for call ${callId}: ${response.status}`);
+      console.warn(`[Recording] Fetch failed for call ${callId}: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
     if (data.success && data.data?.entries?.length > 0) {
-      return data.data.entries[0].url || null;
+      let url = data.data.entries[0].url || null;
+
+      if (url) {
+        // Check if URL needs base path (some Convoso URLs are relative)
+        if (!url.startsWith('http')) {
+          const baseUrl = credentials.api_base.replace('/v1', '');
+          url = `${baseUrl}/recordings/${url}`;
+          console.log(`[Recording] Constructed full URL for call ${callId}: ${url.substring(0, 60)}...`);
+        } else {
+          console.log(`[Recording] Got absolute URL for call ${callId}: ${url.substring(0, 60)}...`);
+        }
+      } else {
+        console.warn(`[Recording] Empty URL returned for call ${callId}`);
+      }
+
+      return url;
     }
 
+    console.warn(`[Recording] No entries found for call ${callId}`);
     return null;
   } catch (error: any) {
-    console.error(`[Discovery] Failed to fetch recording for call ${callId}:`, error.message);
+    console.error(`[Recording] Failed to fetch recording for call ${callId}:`, error.message);
     return null;
   }
 }
