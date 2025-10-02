@@ -65,6 +65,9 @@
     "src/app/api/**/*.ts": {
       "maxDuration": 60
     },
+    "src/app/api/discovery/start/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/cron/retention/route.ts": {
       "maxDuration": 300
     },

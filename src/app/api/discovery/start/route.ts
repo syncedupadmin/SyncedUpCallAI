@@ -10,7 +10,7 @@ import {
 } from '@/lib/discovery/processor';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Only needs 60s for metadata queueing
+export const maxDuration = 120; // Needs 120s to fetch 5000 calls from Convoso
 
 export async function POST(req: NextRequest) {
   try {
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
 
       // Create discovery session
       const sessionId = uuidv4();
-      const targetCallCount = 10000; // Fetch more calls to account for low recording availability (~6%)
+      const targetCallCount = 5000; // Fetch more calls to account for low recording availability (~6%)
 
       await sbAdmin.from('discovery_sessions').insert({
         id: sessionId,
