@@ -15,7 +15,13 @@ import {
   TrendingUp,
   Shield,
   ExternalLink,
-  Calendar
+  Calendar,
+  ChevronDown,
+  FileText,
+  Tag,
+  MessageSquare,
+  Database,
+  Cpu
 } from 'lucide-react';
 
 export default function AnalyzeDemoV2() {
@@ -25,6 +31,10 @@ export default function AnalyzeDemoV2() {
   const [err, setErr] = useState<string | null>(null);
   const [showOpeningDetails, setShowOpeningDetails] = useState(false);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
+  const [showEntities, setShowEntities] = useState(false);
+  const [showRebuttalAnalysis, setShowRebuttalAnalysis] = useState(false);
+  const [showPass1Details, setShowPass1Details] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
   const router = useRouter();
 
   async function run() {
@@ -227,48 +237,106 @@ export default function AnalyzeDemoV2() {
 
                   {showOpeningDetails && data.opening_analysis && (
                     <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        {data.opening_analysis.pace_assessment && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                        {data.opening_analysis.control_score !== undefined && (
+                          <div>
+                            <div className="text-xs text-gray-400">Control Score</div>
+                            <div className="text-white font-medium">{data.opening_analysis.control_score}/100</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.greeting_type && (
+                          <div>
+                            <div className="text-xs text-gray-400">Greeting Type</div>
+                            <div className="text-white font-medium">{data.opening_analysis.greeting_type}</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.pace_wpm && (
                           <div>
                             <div className="text-xs text-gray-400">Pace</div>
-                            <div className="text-white font-medium">{data.opening_analysis.pace_assessment}</div>
+                            <div className="text-white font-medium">{data.opening_analysis.pace_wpm} WPM</div>
                           </div>
                         )}
-                        {data.opening_analysis.greeting_quality && (
+                        {data.opening_analysis.company_mentioned !== undefined && (
                           <div>
-                            <div className="text-xs text-gray-400">Greeting</div>
-                            <div className="text-white font-medium">{data.opening_analysis.greeting_quality}</div>
+                            <div className="text-xs text-gray-400">Company Mentioned</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.company_mentioned ? 'text-green-400' : 'text-red-400'}`}>
+                              {data.opening_analysis.company_mentioned ? 'Yes' : 'No'}
+                            </div>
                           </div>
                         )}
-                        {data.opening_analysis.control_establishment && (
+                        {data.opening_analysis.agent_name_mentioned !== undefined && (
                           <div>
-                            <div className="text-xs text-gray-400">Control</div>
-                            <div className="text-white font-medium">{data.opening_analysis.control_establishment}</div>
+                            <div className="text-xs text-gray-400">Agent Name Mentioned</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.agent_name_mentioned ? 'text-green-400' : 'text-red-400'}`}>
+                              {data.opening_analysis.agent_name_mentioned ? 'Yes' : 'No'}
+                            </div>
                           </div>
                         )}
-                        {data.opening_analysis.engagement_level && (
+                        {data.opening_analysis.value_prop_mentioned !== undefined && (
                           <div>
-                            <div className="text-xs text-gray-400">Engagement</div>
-                            <div className="text-white font-medium">{data.opening_analysis.engagement_level}</div>
+                            <div className="text-xs text-gray-400">Value Prop Mentioned</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.value_prop_mentioned ? 'text-green-400' : 'text-red-400'}`}>
+                              {data.opening_analysis.value_prop_mentioned ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                        )}
+                        {data.opening_analysis.question_asked !== undefined && (
+                          <div>
+                            <div className="text-xs text-gray-400">Question Asked</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.question_asked ? 'text-green-400' : 'text-red-400'}`}>
+                              {data.opening_analysis.question_asked ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                        )}
+                        {data.opening_analysis.rejection_detected !== undefined && (
+                          <div>
+                            <div className="text-xs text-gray-400">Early Rejection</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.rejection_detected ? 'text-red-400' : 'text-green-400'}`}>
+                              {data.opening_analysis.rejection_detected ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                        )}
+                        {data.opening_analysis.rejection_type && (
+                          <div>
+                            <div className="text-xs text-gray-400">Rejection Type</div>
+                            <div className="text-red-400 font-medium">{data.opening_analysis.rejection_type}</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.rebuttal_attempted !== undefined && (
+                          <div>
+                            <div className="text-xs text-gray-400">Rebuttal Attempted</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.rebuttal_attempted ? 'text-green-400' : 'text-yellow-400'}`}>
+                              {data.opening_analysis.rebuttal_attempted ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                        )}
+                        {data.opening_analysis.rebuttal_quality && (
+                          <div>
+                            <div className="text-xs text-gray-400">Rebuttal Quality</div>
+                            <div className={`text-white font-medium ${
+                              data.opening_analysis.rebuttal_quality === 'effective' ? 'text-green-400' :
+                              data.opening_analysis.rebuttal_quality === 'weak' ? 'text-yellow-400' :
+                              'text-gray-400'
+                            }`}>
+                              {data.opening_analysis.rebuttal_quality}
+                            </div>
+                          </div>
+                        )}
+                        {data.opening_analysis.led_to_pitch !== undefined && (
+                          <div>
+                            <div className="text-xs text-gray-400">Led to Pitch</div>
+                            <div className={`text-white font-medium ${data.opening_analysis.led_to_pitch ? 'text-green-400' : 'text-red-400'}`}>
+                              {data.opening_analysis.led_to_pitch ? 'Yes' : 'No'}
+                            </div>
                           </div>
                         )}
                       </div>
-                      {data.opening_analysis.strengths && data.opening_analysis.strengths.length > 0 && (
+                      {data.opening_analysis.opening_feedback && data.opening_analysis.opening_feedback.length > 0 && (
                         <div>
-                          <div className="text-xs text-green-400 mb-1">Strengths</div>
+                          <div className="text-xs text-cyan-400 mb-1">Opening Feedback</div>
                           <ul className="text-xs text-gray-300 space-y-1">
-                            {data.opening_analysis.strengths.map((strength: string, i: number) => (
-                              <li key={i}>• {strength}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {data.opening_analysis.areas_for_improvement && data.opening_analysis.areas_for_improvement.length > 0 && (
-                        <div>
-                          <div className="text-xs text-yellow-400 mb-1">Areas for Improvement</div>
-                          <ul className="text-xs text-gray-300 space-y-1">
-                            {data.opening_analysis.areas_for_improvement.map((area: string, i: number) => (
-                              <li key={i}>• {area}</li>
+                            {data.opening_analysis.opening_feedback.map((feedback: string, i: number) => (
+                              <li key={i}>• {feedback}</li>
                             ))}
                           </ul>
                         </div>
@@ -450,11 +518,250 @@ export default function AnalyzeDemoV2() {
               )}
             </div>
 
+            {/* Entities Section */}
+            {data.entities && data.entities.length > 0 && (
+              <div className="p-6 rounded-xl bg-gray-800/30 backdrop-blur-sm border border-gray-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Tag className="w-5 h-5 text-cyan-500" />
+                    Deepgram Entities (Carrier Context)
+                  </h3>
+                  <button
+                    onClick={() => setShowEntities(!showEntities)}
+                    className="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+                  >
+                    <span>{showEntities ? 'Hide' : 'Show'} ({data.entities.length})</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showEntities ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {showEntities && (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {data.entities.map((entity: any, i: number) => (
+                      <div key={i} className="p-3 rounded-lg bg-gray-900/50 border border-gray-700/30">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-white">{entity.value}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              Type: <span className="text-cyan-400">{entity.label}</span> •
+                              Speaker: <span className="text-purple-400">{entity.speaker || 'unknown'}</span> •
+                              Time: <span className="text-yellow-400">{entity.startMs}ms</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Rebuttal Analysis Section */}
+            {data.rebuttal_analysis && data.rebuttal_analysis.objections && data.rebuttal_analysis.objections.length > 0 && (
+              <div className="p-6 rounded-xl bg-gray-800/30 backdrop-blur-sm border border-gray-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-orange-500" />
+                    Rebuttal Analysis
+                  </h3>
+                  <button
+                    onClick={() => setShowRebuttalAnalysis(!showRebuttalAnalysis)}
+                    className="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+                  >
+                    <span>{showRebuttalAnalysis ? 'Hide' : 'Show'} ({data.rebuttal_analysis.objections.length} objections)</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showRebuttalAnalysis ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {showRebuttalAnalysis && (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {data.rebuttal_analysis.objections.map((objection: any, i: number) => (
+                      <div key={i} className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                        <div className="flex items-start gap-3 mb-2">
+                          <span className="px-2 py-1 rounded bg-orange-500/20 text-orange-300 text-xs font-medium uppercase">
+                            {objection.stall_type}
+                          </span>
+                          <span className="text-xs text-gray-500">{objection.startMs}ms - {objection.endMs}ms</span>
+                        </div>
+                        <div className="text-sm text-gray-300 italic mb-2">"{objection.quote}"</div>
+                        {data.rebuttal_analysis.agent_responses?.[i] && (
+                          <div className="mt-2 pt-2 border-t border-gray-700/50">
+                            <div className="text-xs text-gray-500 mb-1">Agent Response:</div>
+                            <div className="text-sm text-gray-300">{data.rebuttal_analysis.agent_responses[i].text}</div>
+                          </div>
+                        )}
+                        {data.rebuttal_analysis.classifications?.[i] && (
+                          <div className="mt-2 pt-2 border-t border-gray-700/50">
+                            <div className="text-xs text-gray-500 mb-1">Quality:</div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              data.rebuttal_analysis.classifications[i] === 'effective' ? 'bg-green-500/20 text-green-300' :
+                              data.rebuttal_analysis.classifications[i] === 'weak' ? 'bg-yellow-500/20 text-yellow-300' :
+                              'bg-gray-500/20 text-gray-300'
+                            }`}>
+                              {data.rebuttal_analysis.classifications[i]}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pass 1 Extraction Details */}
+            {data.pass1_extraction && (
+              <div className="p-6 rounded-xl bg-gray-800/30 backdrop-blur-sm border border-gray-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Database className="w-5 h-5 text-purple-500" />
+                    Pass 1: Extraction Details
+                  </h3>
+                  <button
+                    onClick={() => setShowPass1Details(!showPass1Details)}
+                    className="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+                  >
+                    <span>{showPass1Details ? 'Hide' : 'Show'} Details</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showPass1Details ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {showPass1Details && (
+                  <div className="space-y-4">
+                    {/* Carrier Mentions */}
+                    {data.pass1_extraction.carrier_mentions && data.pass1_extraction.carrier_mentions.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-gray-400 mb-2">Carrier Mentions ({data.pass1_extraction.carrier_mentions.length})</div>
+                        <div className="space-y-2">
+                          {data.pass1_extraction.carrier_mentions.map((mention: any, i: number) => (
+                            <div key={i} className="p-2 rounded bg-blue-500/10 border border-blue-500/30">
+                              <div className="text-sm text-white font-medium">{mention.carrier}</div>
+                              <div className="text-xs text-gray-400 italic">"{mention.quote}"</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Plan Mentions */}
+                    {data.pass1_extraction.plan_mentions && data.pass1_extraction.plan_mentions.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-gray-400 mb-2">Plan Mentions ({data.pass1_extraction.plan_mentions.length})</div>
+                        <div className="space-y-2">
+                          {data.pass1_extraction.plan_mentions.map((mention: any, i: number) => (
+                            <div key={i} className="p-2 rounded bg-green-500/10 border border-green-500/30">
+                              <div className="text-sm text-white font-medium">{mention.plan_type}</div>
+                              <div className="text-xs text-gray-400 italic">"{mention.quote}"</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Money Mentions */}
+                    {data.pass1_extraction.money_mentions && data.pass1_extraction.money_mentions.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-gray-400 mb-2">Money Mentions ({data.pass1_extraction.money_mentions.length})</div>
+                        <div className="space-y-2">
+                          {data.pass1_extraction.money_mentions.map((mention: any, i: number) => (
+                            <div key={i} className="p-2 rounded bg-yellow-500/10 border border-yellow-500/30">
+                              <div className="text-sm text-white font-medium">{mention.field_hint}: {mention.value_raw}</div>
+                              <div className="text-xs text-gray-400">
+                                Speaker: {mention.speaker} • "{mention.quote}"
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Date Mentions */}
+                    {data.pass1_extraction.date_mentions && data.pass1_extraction.date_mentions.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-gray-400 mb-2">Date Mentions ({data.pass1_extraction.date_mentions.length})</div>
+                        <div className="space-y-2">
+                          {data.pass1_extraction.date_mentions.map((mention: any, i: number) => (
+                            <div key={i} className="p-2 rounded bg-purple-500/10 border border-purple-500/30">
+                              <div className="text-sm text-white font-medium">{mention.kind}: {mention.value_raw}</div>
+                              <div className="text-xs text-gray-400 italic">"{mention.quote}"</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Transcript Section */}
+            {data.transcript && (
+              <div className="p-6 rounded-xl bg-gray-800/30 backdrop-blur-sm border border-gray-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-green-500" />
+                    Full Transcript
+                  </h3>
+                  <button
+                    onClick={() => setShowTranscript(!showTranscript)}
+                    className="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+                  >
+                    <span>{showTranscript ? 'Hide' : 'Show'} Transcript</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showTranscript ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {showTranscript && (
+                  <div className="p-4 rounded-lg bg-gray-900/50 border border-gray-700/30 max-h-96 overflow-y-auto">
+                    <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">{data.transcript}</pre>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Technical Info */}
             <div className="p-4 rounded-lg bg-gray-800/20 border border-gray-700/30">
-              <div className="text-xs text-gray-500">
-                <div>Analysis Version: <span className="text-gray-400 font-mono">{data.analysis_version}</span></div>
-                <div className="mt-1">Duration: <span className="text-gray-400 font-mono">{data.duration_ms}ms</span></div>
+              <div className="flex items-center gap-2 mb-3">
+                <Cpu className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-400">Performance Metrics</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
+                <div>
+                  <div className="text-gray-600">Version</div>
+                  <div className="text-gray-400 font-mono">{data.analysis_version}</div>
+                </div>
+                <div>
+                  <div className="text-gray-600">Total Duration</div>
+                  <div className="text-gray-400 font-mono">{data.duration_ms}ms</div>
+                </div>
+                {data.timing && (
+                  <>
+                    <div>
+                      <div className="text-gray-600">Deepgram</div>
+                      <div className="text-gray-400 font-mono">{data.timing.deepgram_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Pass 1</div>
+                      <div className="text-gray-400 font-mono">{data.timing.openai_pass1_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Pass 2</div>
+                      <div className="text-gray-400 font-mono">{data.timing.openai_pass2_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Pass 3</div>
+                      <div className="text-gray-400 font-mono">{data.timing.openai_pass3_ms}ms</div>
+                    </div>
+                  </>
+                )}
+                {data.tokens && (
+                  <>
+                    <div>
+                      <div className="text-gray-600">Input Tokens</div>
+                      <div className="text-gray-400 font-mono">{data.tokens.total_input}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Output Tokens</div>
+                      <div className="text-gray-400 font-mono">{data.tokens.total_output}</div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
