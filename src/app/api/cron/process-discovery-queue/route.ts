@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
           agency.convoso_credentials
         );
 
-        // Get next batch of pending calls with recordings (20 per run to avoid Deepgram rate limits)
+        // Get next batch of pending calls with recordings (100 per run - Deepgram supports 100 concurrent)
         // CRITICAL: Only process calls that have recording_url to avoid failures
         const { data: pendingCalls, error: callsError } = await sbAdmin
           .from('discovery_calls')
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
           .eq('processing_status', 'pending')
           .not('recording_url', 'is', null)  // Skip calls without recordings
           .order('created_at', { ascending: true })
-          .limit(20);
+          .limit(100);
 
         if (callsError) {
           console.error(`[Discovery Queue] Error fetching calls for session ${session.id}:`, callsError);
@@ -170,10 +170,10 @@ export async function GET(req: NextRequest) {
             .eq('id', session.id);
         }
 
-        // Process calls in smaller batches to avoid Deepgram rate limits
-        // Process 5 at a time with 2 second delay between batches
+        // Process calls in batches - Deepgram Growth plan supports 100 concurrent requests
+        // Process 25 at a time (well under 100 limit) with minimal delay between batches
         const processResults: PromiseSettledResult<boolean>[] = [];
-        const batchSize = 5;
+        const batchSize = 25;
 
         for (let i = 0; i < pendingCalls.length; i += batchSize) {
           const batch = pendingCalls.slice(i, i + batchSize);
@@ -184,9 +184,9 @@ export async function GET(req: NextRequest) {
           const batchResults = await Promise.allSettled(batchPromises);
           processResults.push(...batchResults);
 
-          // Add delay between batches to avoid rate limiting (except for last batch)
+          // Small delay between batches for safety (except for last batch)
           if (i + batchSize < pendingCalls.length) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
 
