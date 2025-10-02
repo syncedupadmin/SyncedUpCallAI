@@ -150,19 +150,37 @@ function DiscoverySetupContent() {
       await new Promise(resolve => setTimeout(resolve, 600));
       setLoadingStage(4);
 
-      // Stage 4: Finalizing (skip agent fetch - we analyze ALL agents)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Stage 4: Extracting agent information - fetch agents during this stage
+      const agentsResponse = await fetch('/api/discovery/get-agents');
+      const agentsData = await agentsResponse.json();
+
+      if (!agentsResponse.ok) {
+        throw new Error(agentsData.error || 'Failed to fetch agents');
+      }
+
+      if (!agentsData.agents || agentsData.agents.length === 0) {
+        toast.error('No agents found with calls 10+ seconds in the last 30 days');
+        setLoading(false);
+        return;
+      }
+
+      // Ensure we stay on stage 4 for at least a moment before finalizing
+      await new Promise(resolve => setTimeout(resolve, 400));
       setLoadingStage(5);
 
-      // Stage 5: Complete
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Stage 5: Finalizing
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Skip agent selection - go directly to starting discovery
+      setAgents(agentsData.agents);
+
+      // Select all agents by default
+      const allAgentIds = new Set<string>(agentsData.agents.map((a: Agent) => a.user_id));
+      setSelectedAgents(allAgentIds);
+
+      // Move to agent selection step
+      setCurrentStep('agents');
       setLoading(false);
-      toast.success('Credentials validated - starting discovery...');
-
-      // Start discovery immediately with all agents
-      handleStartDiscoveryDirect();
+      toast.success(`Found ${agentsData.agents.length} agents`);
 
     } catch (error: any) {
       toast.error(error.message);
@@ -203,32 +221,6 @@ function DiscoverySetupContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           selected_agent_ids: Array.from(selectedAgents)
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to start discovery');
-      }
-
-      toast.success('Discovery started! Analyzing your calls...');
-      router.push(`/dashboard/discovery/results?session=${data.sessionId}`);
-    } catch (error: any) {
-      toast.error(error.message);
-      setLoading(false);
-    }
-  };
-
-  const handleStartDiscoveryDirect = async () => {
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/discovery/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selected_agent_ids: ['all'] // Analyze all agents
         })
       });
 

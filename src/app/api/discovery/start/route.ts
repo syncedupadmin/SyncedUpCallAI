@@ -10,7 +10,7 @@ import {
 } from '@/lib/discovery/processor';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10; // Only creates DB records, background job fetches calls
+export const maxDuration = 30; // Creates DB records and returns immediately
 
 export async function POST(req: NextRequest) {
   try {
@@ -167,23 +167,9 @@ export async function POST(req: NextRequest) {
         discovery_session_id: sessionId
       }).eq('id', agencyId);
 
-      console.log(`[Discovery] Session ${sessionId} created, triggering background fetch...`);
+      console.log(`[Discovery] Session ${sessionId} created. Cron will fetch calls within 60 seconds.`);
 
-      // Trigger background job to fetch calls (non-blocking)
-      // The cron will detect 'initializing' status and fetch calls
-      fetch(`${process.env.APP_URL || 'http://localhost:3000'}/api/discovery/queue-calls`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.CRON_SECRET}`
-        },
-        body: JSON.stringify({ sessionId })
-      }).catch(err => {
-        console.error('[Discovery] Failed to trigger background job:', err.message);
-        // Don't throw - cron will pick it up anyway
-      });
-
-      // Return immediately - background job will handle the rest
+      // Return immediately - cron will detect 'initializing' status and trigger background job
       return NextResponse.json({
         success: true,
         sessionId,
