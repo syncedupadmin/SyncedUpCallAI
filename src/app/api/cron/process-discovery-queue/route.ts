@@ -382,13 +382,13 @@ async function finalizeDiscoverySession(sessionId: string) {
       .eq('session_id', sessionId)
       .eq('processing_status', 'completed');
 
-    if (!completedCalls || completedCalls.length < 500) {
+    if (!completedCalls || completedCalls.length < 100) {
       // Not enough calls completed - mark as error
       await sbAdmin
         .from('discovery_sessions')
         .update({
           status: 'error',
-          error_message: `Only ${completedCalls?.length || 0} calls completed successfully. Need at least 500 for meaningful discovery.`,
+          error_message: `Only ${completedCalls?.length || 0} calls completed successfully. Need at least 100 for meaningful discovery.`,
           progress: 100,
           completed_at: new Date().toISOString()
         })
