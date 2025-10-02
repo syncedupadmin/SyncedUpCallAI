@@ -272,20 +272,15 @@ export async function fetchCallsInChunks(
   const uniqueCalls = Array.from(uniqueCallsMap.values());
   console.log(`[Discovery] Deduplicated ${allCalls.length} calls to ${uniqueCalls.length} unique calls`);
 
-  // Filter by selected agents if provided
-  let filteredCalls = uniqueCalls;
+  // NOTE: selectedAgentIds parameter is IGNORED because Convoso's user_id in
+  // /agent-performance/search doesn't match user_id in /log/retrieve.
+  // We fetch from ALL agents and return a random sample.
   if (selectedAgentIds && selectedAgentIds.length > 0) {
-    console.log(`[Discovery] Filtering by ${selectedAgentIds.length} selected agents...`);
-    filteredCalls = uniqueCalls.filter((call: any) => {
-      // Check both user_id (string) and user field (name)
-      const userId = String(call.user_id);
-      return selectedAgentIds.includes(userId);
-    });
-    console.log(`[Discovery] After agent filter: ${filteredCalls.length} calls remain`);
+    console.log(`[Discovery] Note: Ignoring agent selection (${selectedAgentIds.length} agents), fetching from all agents instead`);
   }
 
   // Randomize and select final set
-  const shuffled = filteredCalls.sort(() => Math.random() - 0.5);
+  const shuffled = uniqueCalls.sort(() => Math.random() - 0.5);
   const selectedCalls = shuffled.slice(0, targetCallCount);
 
   console.log(`[Discovery] Selected ${selectedCalls.length} calls for queueing`);
