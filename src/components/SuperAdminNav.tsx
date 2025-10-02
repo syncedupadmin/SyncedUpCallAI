@@ -127,6 +127,12 @@ export default function SuperAdminNav() {
       description: 'Opening analysis & training'
     },
     {
+      name: 'Post Close',
+      href: '/superadmin/post-close',
+      icon: Shield,
+      description: 'Script compliance verification'
+    },
+    {
       name: 'Discovery Test',
       href: '/superadmin/discovery-test',
       icon: Activity,

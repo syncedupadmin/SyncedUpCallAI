@@ -231,18 +231,25 @@ async function processDiscoveryCall(
   try {
     console.log(`${callInfo} Starting processing...`);
 
-    // 1. Fetch recording URL
-    console.log(`${callInfo} Fetching recording URL...`);
-    const recordingUrl = await fetchRecordingUrl(
-      call.call_id,
-      call.lead_id,
-      credentials
-    );
+    // 1. Get recording URL (use stored URL if available, otherwise fetch)
+    let recordingUrl = call.recording_url;
 
     if (!recordingUrl) {
-      console.warn(`${callInfo} ❌ No recording URL found`);
-      throw new Error('No recording URL found');
+      console.log(`${callInfo} No recording URL stored, fetching from Convoso...`);
+      recordingUrl = await fetchRecordingUrl(
+        call.call_id,
+        call.lead_id,
+        credentials
+      );
+
+      if (!recordingUrl) {
+        console.warn(`${callInfo} ❌ No recording URL found`);
+        throw new Error('No recording URL found');
+      }
+    } else {
+      console.log(`${callInfo} ✓ Using stored recording URL`);
     }
+
     console.log(`${callInfo} ✓ Recording URL: ${recordingUrl.substring(0, 50)}...`);
 
     // 2. Transcribe with Deepgram/AssemblyAI

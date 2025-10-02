@@ -244,6 +244,7 @@ export async function POST(req: NextRequest) {
           call_length: parseInt(call.call_length) || 0,
           call_type: call.call_type || 'outbound',
           started_at: call.started_at,
+          recording_url: call.recording_url || null,  // Store recording URL from API
           processing_status: 'pending'
         }));
 

@@ -14,11 +14,29 @@ const { Pool } = require('pg');
 async function runMigration() {
   console.log('🚀 Starting Post Close Compliance Migration...\n');
 
-  // Check for DATABASE_URL
-  const connectionString = process.env.DATABASE_URL;
+  // Check for DATABASE_URL or construct from Supabase variables
+  let connectionString = process.env.DATABASE_URL;
+
   if (!connectionString) {
-    console.error('❌ Error: DATABASE_URL not found in .env.local');
-    console.log('\nPlease set DATABASE_URL in your .env.local file.');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+
+    if (supabaseUrl && dbPassword) {
+      // Extract project ref from Supabase URL
+      const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
+      if (projectRef) {
+        connectionString = `postgresql://postgres.${projectRef}:${dbPassword}@aws-0-us-east-1.pooler.supabase.com:5432/postgres`;
+        console.log('✓ Using Supabase connection (constructed from SUPABASE variables)');
+      }
+    }
+  }
+
+  if (!connectionString) {
+    console.error('❌ Error: No database connection configured');
+    console.log('\nPlease set one of the following in .env.local:');
+    console.log('  - DATABASE_URL (direct PostgreSQL connection string)');
+    console.log('  - NEXT_PUBLIC_SUPABASE_URL + SUPABASE_DB_PASSWORD');
     process.exit(1);
   }
 

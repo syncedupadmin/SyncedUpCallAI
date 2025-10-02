@@ -256,7 +256,8 @@ export async function fetchCallsInChunks(
           start: task.chunkStart,
           end: task.chunkEnd,
           limit: String(task.limit),
-          offset: String(task.offset)
+          offset: String(task.offset),
+          include_recordings: '1'  // CRITICAL: Include recording URLs in response
         });
 
         const response = await fetch(
@@ -272,13 +273,20 @@ export async function fetchCallsInChunks(
         const data = await response.json();
         const recordings = data.data?.results || [];
 
-        // Filter to 10+ seconds using 'call_length' field
-        const validCalls = recordings.filter((call: any) => {
-          const duration = call.call_length ? parseInt(call.call_length) : 0;
-          return duration >= 10;
-        });
+        // Filter to 10+ seconds and extract recording URL
+        const validCalls = recordings
+          .filter((call: any) => {
+            const duration = call.call_length ? parseInt(call.call_length) : 0;
+            return duration >= 10;
+          })
+          .map((call: any) => ({
+            ...call,
+            // Extract recording URL from response (matches convoso-service.ts pattern)
+            recording_url: call.recording?.[0]?.public_url || call.recording?.[0]?.src || null
+          }));
 
-        console.log(`[Discovery] Agent ${task.userId} chunk ${task.chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec) from ${recordings.length} total`);
+        const withRecordings = validCalls.filter((c: any) => c.recording_url).length;
+        console.log(`[Discovery] Agent ${task.userId} chunk ${task.chunkIndex + 1}/${dateChunks}: ${validCalls.length} calls (10+ sec), ${withRecordings} with recordings`);
 
         return validCalls;
       } catch (error: any) {
