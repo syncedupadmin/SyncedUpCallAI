@@ -42,9 +42,26 @@ export const GET = withStrictAgencyIsolation(async (req, context) => {
 
     const results = await db.manyOrNone(query, params);
 
+    // Parse JSON fields that come as strings from database
+    const parsedResults = (results || []).map(r => ({
+      ...r,
+      paraphrased_sections: typeof r.paraphrased_sections === 'string'
+        ? JSON.parse(r.paraphrased_sections || '[]')
+        : (r.paraphrased_sections || []),
+      sequence_errors: typeof r.sequence_errors === 'string'
+        ? JSON.parse(r.sequence_errors || '[]')
+        : (r.sequence_errors || []),
+      missing_phrases: Array.isArray(r.missing_phrases)
+        ? r.missing_phrases
+        : (r.missing_phrases || []),
+      flag_reasons: Array.isArray(r.flag_reasons)
+        ? r.flag_reasons
+        : (r.flag_reasons || [])
+    }));
+
     return NextResponse.json({
       success: true,
-      results: results || []
+      results: parsedResults
     });
 
   } catch (error: any) {

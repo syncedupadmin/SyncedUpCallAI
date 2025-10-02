@@ -911,7 +911,27 @@ export default function PostClosePage() {
                   <label className="text-sm text-red-400">Missing Required Phrases</label>
                   <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
                     {selectedResult.missing_phrases.map((phrase, i) => (
-                      <li key={i} className="text-gray-300">{phrase}</li>
+                      <li key={i} className="text-gray-300">
+                        {typeof phrase === 'string' ? phrase : JSON.stringify(phrase)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedResult.paraphrased_sections?.length > 0 && (
+                <div className="mb-4">
+                  <label className="text-sm text-blue-400">Paraphrased Sections</label>
+                  <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                    {selectedResult.paraphrased_sections.map((section: any, i: number) => (
+                      <li key={i} className="text-gray-300">
+                        <span className="text-gray-500">Original:</span> {section.original || 'N/A'}
+                        {' → '}
+                        <span className="text-gray-500">Actual:</span> {section.actual || 'N/A'}
+                        {section.similarity && (
+                          <span className="text-gray-600 ml-2">({Math.round(section.similarity * 100)}% match)</span>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -922,7 +942,9 @@ export default function PostClosePage() {
                   <label className="text-sm text-orange-400">Flag Reasons</label>
                   <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
                     {selectedResult.flag_reasons.map((reason, i) => (
-                      <li key={i} className="text-gray-300">{reason}</li>
+                      <li key={i} className="text-gray-300">
+                        {typeof reason === 'string' ? reason : JSON.stringify(reason)}
+                      </li>
                     ))}
                   </ul>
                 </div>
