@@ -22,6 +22,9 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
   const [isLoading, setIsLoading] = useState(false)
   const [deleteAgencyId, setDeleteAgencyId] = useState<string | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [editingProductTypeId, setEditingProductTypeId] = useState<string | null>(null)
+  const [editingProductTypeValue, setEditingProductTypeValue] = useState<'full' | 'compliance_only'>('full')
+  const [isSavingProductType, setIsSavingProductType] = useState(false)
   const supabase = createClient()
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -149,6 +152,75 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
     }
   }
 
+  const handleProductTypeClick = (agencyId: string, currentType: 'full' | 'compliance_only') => {
+    setEditingProductTypeId(agencyId)
+    setEditingProductTypeValue(currentType)
+  }
+
+  const handleProductTypeSave = async (agencyId: string) => {
+    setIsSavingProductType(true)
+
+    try {
+      // Try the RPC function first
+      const { data: rpcData, error: rpcError } = await supabase.rpc('update_agency_product_type', {
+        p_agency_id: agencyId,
+        p_product_type: editingProductTypeValue
+      })
+
+      if (rpcError) {
+        // If RPC doesn't exist or fails, try direct update
+        console.log('RPC failed, trying direct update...', rpcError)
+
+        // Check if user is super admin
+        const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+
+        if (!isSuperAdmin) {
+          toast.error('Only super admins can update product type')
+          return
+        }
+
+        // Direct update as fallback
+        const { error: updateError } = await supabase
+          .from('agencies')
+          .update({
+            product_type: editingProductTypeValue,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', agencyId)
+
+        if (updateError) {
+          toast.error(updateError.message || 'Failed to update product type')
+          return
+        }
+      } else if (rpcData && !rpcData.success) {
+        toast.error(rpcData.error || 'Failed to update product type')
+        return
+      }
+
+      // Update local state
+      setAgencies((prev) =>
+        prev.map(agency =>
+          agency.id === agencyId
+            ? { ...agency, product_type: editingProductTypeValue }
+            : agency
+        )
+      )
+
+      toast.success(`Product type updated to ${editingProductTypeValue === 'full' ? 'Full Platform' : 'Compliance Only'}`)
+      setEditingProductTypeId(null)
+    } catch (error) {
+      console.error('Error updating product type:', error)
+      toast.error('Failed to update product type')
+    } finally {
+      setIsSavingProductType(false)
+    }
+  }
+
+  const handleProductTypeCancel = () => {
+    setEditingProductTypeId(null)
+    setEditingProductTypeValue('full')
+  }
+
   const formatDate = (date: string) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -265,14 +337,50 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {agency.product_type === 'compliance_only' ? (
-                        <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded font-medium">
-                          Compliance Only
-                        </span>
+                      {editingProductTypeId === agency.id ? (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={editingProductTypeValue}
+                            onChange={(e) => setEditingProductTypeValue(e.target.value as 'full' | 'compliance_only')}
+                            disabled={isSavingProductType}
+                            className="px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="full">Full Platform</option>
+                            <option value="compliance_only">Compliance Only</option>
+                          </select>
+                          <button
+                            onClick={() => handleProductTypeSave(agency.id)}
+                            disabled={isSavingProductType}
+                            className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50"
+                            title="Save"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={handleProductTypeCancel}
+                            disabled={isSavingProductType}
+                            className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       ) : (
-                        <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded font-medium">
-                          Full Platform
-                        </span>
+                        <button
+                          onClick={() => handleProductTypeClick(agency.id, agency.product_type || 'full')}
+                          className="group hover:opacity-80 transition-opacity"
+                          title="Click to change product type"
+                        >
+                          {agency.product_type === 'compliance_only' ? (
+                            <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded font-medium group-hover:border-cyan-400">
+                              Compliance Only
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded font-medium group-hover:border-blue-300">
+                              Full Platform
+                            </span>
+                          )}
+                        </button>
                       )}
                     </td>
                     <td className="px-6 py-4 text-gray-400">{formatShortId(agency.owner_user_id)}</td>
