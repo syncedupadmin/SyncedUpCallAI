@@ -23,6 +23,10 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
     formState: { errors },
   } = useForm<CreateAgencyInput>({
     resolver: zodResolver(createAgencySchema),
+    defaultValues: {
+      name: '',
+      product_type: 'full',
+    },
   })
 
   const onSubmit = async (data: CreateAgencyInput) => {
@@ -50,7 +54,10 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
         const newAgency = agency as Agency
         onAgencyCreated(newAgency)
         toast.success(`Successfully created ${newAgency.name}`)
-        reset()
+        reset({
+          name: '',
+          product_type: 'full',
+        })
       }
     } catch (error) {
       console.error('Error creating agency:', error)
