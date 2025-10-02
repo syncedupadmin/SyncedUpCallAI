@@ -107,35 +107,111 @@ async function handler(req: NextRequest) {
         [callId, truncatePayload({ error: embedError.message })]);
     }
 
+    // Check if this is a compliance-only agency
+    const agencyInfo = await db.oneOrNone(`
+      SELECT a.id as agency_id, a.product_type
+      FROM calls c
+      LEFT JOIN agencies a ON a.id = c.agency_id
+      WHERE c.id = $1
+    `, [callId]);
+
+    const isComplianceOnly = agencyInfo?.product_type === 'compliance_only';
+
     // Trigger analysis
     let analyzeOk = false;
     let analyzeData: any = {};
-    try {
-      // Send SSE update: analyzing
-      SSEManager.sendStatus(callId, 'analyzing', { stage: 'starting' });
-      
-      const analyzeResp = await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId })
-      });
-      
-      if (analyzeResp.ok) {
-        analyzeOk = true;
-        const data = await analyzeResp.json();
-        analyzeData = {
-          qa_score: data.qa_score,
-          reason_primary: data.reason_primary
-        };
-      } else {
-        const errorText = await analyzeResp.text();
-        await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`, 
-          [callId, truncatePayload({ status: analyzeResp.status, error: errorText })]);
+
+    if (isComplianceOnly) {
+      // For compliance-only customers, skip expensive full analysis
+      // Instead, automatically extract post-close segment and analyze compliance
+      try {
+        SSEManager.sendStatus(callId, 'analyzing', { stage: 'compliance_only' });
+
+        const { extractPostCloseSegment, analyzeCompliance } = await import('@/lib/post-close-analysis');
+
+        // Extract post-close segment
+        const segment = await extractPostCloseSegment(callId);
+
+        if (segment) {
+          // Get active script for this agency
+          const activeScript = await db.oneOrNone(`
+            SELECT id FROM post_close_scripts
+            WHERE agency_id = $1 AND active = true
+            ORDER BY created_at DESC
+            LIMIT 1
+          `, [agencyInfo.agency_id]);
+
+          if (activeScript) {
+            // Run compliance analysis
+            const complianceResult = await analyzeCompliance(segment.transcript, activeScript.id);
+
+            // Store result
+            await db.none(`
+              INSERT INTO post_close_compliance (
+                segment_id, script_id, call_id, agency_id,
+                overall_score, compliance_passed, word_match_percentage,
+                phrase_match_percentage, sequence_score, missing_phrases,
+                paraphrased_sections, sequence_errors, extra_content,
+                levenshtein_distance, similarity_score, flagged_for_review,
+                flag_reasons, agent_name
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            `, [
+              segment.id, activeScript.id, callId, agencyInfo.agency_id,
+              complianceResult.overall_score, complianceResult.compliance_passed,
+              complianceResult.word_match_percentage, complianceResult.phrase_match_percentage,
+              complianceResult.sequence_score, complianceResult.missing_phrases,
+              JSON.stringify(complianceResult.paraphrased_sections),
+              JSON.stringify(complianceResult.sequence_errors),
+              complianceResult.extra_content, complianceResult.levenshtein_distance,
+              complianceResult.similarity_score, complianceResult.flagged_for_review,
+              complianceResult.flag_reasons, segment.agent_name
+            ]);
+
+            analyzeOk = true;
+            analyzeData = {
+              compliance_score: complianceResult.overall_score,
+              compliance_passed: complianceResult.compliance_passed
+            };
+          }
+        }
+
+        await db.none(`insert into call_events(call_id, type, payload) values($1, 'compliance_analysis_completed', $2)`,
+          [callId, { segment_extracted: !!segment, analyzed: analyzeOk }]);
+
+      } catch (complianceError: any) {
+        console.error('Compliance analysis failed:', complianceError);
+        await db.none(`insert into call_events(call_id, type, payload) values($1, 'compliance_analysis_error', $2)`,
+          [callId, truncatePayload({ error: complianceError.message })]);
       }
-    } catch (analyzeError: any) {
-      console.error('Analysis trigger failed:', analyzeError);
-      await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`, 
-        [callId, truncatePayload({ error: analyzeError.message })]);
+    } else {
+      // Full analysis for regular customers
+      try {
+        // Send SSE update: analyzing
+        SSEManager.sendStatus(callId, 'analyzing', { stage: 'starting' });
+
+        const analyzeResp = await fetch(`${process.env.APP_URL}/api/jobs/analyze`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${process.env.JOBS_SECRET}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callId })
+        });
+
+        if (analyzeResp.ok) {
+          analyzeOk = true;
+          const data = await analyzeResp.json();
+          analyzeData = {
+            qa_score: data.qa_score,
+            reason_primary: data.reason_primary
+          };
+        } else {
+          const errorText = await analyzeResp.text();
+          await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`,
+            [callId, truncatePayload({ status: analyzeResp.status, error: errorText })]);
+        }
+      } catch (analyzeError: any) {
+        console.error('Analysis trigger failed:', analyzeError);
+        await db.none(`insert into call_events(call_id, type, payload) values($1, 'analyze_error', $2)`,
+          [callId, truncatePayload({ error: analyzeError.message })]);
+      }
     }
 
     // Send final SSE status

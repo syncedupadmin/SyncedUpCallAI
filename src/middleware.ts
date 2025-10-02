@@ -260,7 +260,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Protected routes (excluding admin which has its own auth)
-  const protectedPaths = ['/dashboard', '/calls', '/analytics', '/reports'];
+  const protectedPaths = ['/dashboard', '/calls', '/analytics', '/reports', '/compliance'];
   const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
   if (isProtectedPath && !user) {
@@ -274,7 +274,8 @@ export async function middleware(request: NextRequest) {
       '/dashboard/billing',
       '/dashboard/settings',
       '/dashboard/support',
-      '/dashboard/discovery' // Allow access to discovery pages
+      '/dashboard/discovery', // Allow access to discovery pages
+      '/compliance' // Compliance portal has its own product tier checks
     ];
 
     const isExemptPath = subscriptionExemptPaths.some(path =>
@@ -409,7 +410,20 @@ export async function middleware(request: NextRequest) {
     if (isSuperAdmin) {
       return NextResponse.redirect(new URL('/superadmin', request.url));
     } else {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      // Check if user's agency is compliance-only
+      const { data: userAgency } = await supabase
+        .from('user_agencies')
+        .select('agencies!inner(product_type)')
+        .eq('user_id', user.id)
+        .single();
+
+      const isComplianceOnly = (userAgency as any)?.agencies?.product_type === 'compliance_only';
+
+      if (isComplianceOnly) {
+        return NextResponse.redirect(new URL('/compliance', request.url));
+      } else {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
     }
   }
 
