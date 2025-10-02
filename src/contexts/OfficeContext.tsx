@@ -20,14 +20,19 @@ export const OfficeContext = createContext<OfficeContextValue | null>(null);
 
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const { data: memberships, loading } = useMyMemberships();
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(() => {
-    // Try to restore from localStorage
-    if (typeof window !== 'undefined') {
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Handle hydration and localStorage separately to avoid SSR mismatch
+  useEffect(() => {
+    if (!isHydrated) {
       const saved = localStorage.getItem('app:selectedOfficeId');
-      return saved ? Number(saved) : null;
+      if (saved) {
+        setSelectedOfficeId(Number(saved));
+      }
+      setIsHydrated(true);
     }
-    return null;
-  });
+  }, [isHydrated]);
 
   // Validate selection against memberships and persist
   useEffect(() => {
