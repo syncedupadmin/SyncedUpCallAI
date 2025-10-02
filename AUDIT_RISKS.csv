@@ -1,0 +1,11 @@
+Risk#,Risk Description,Category,Impact,Likelihood,Effort Days,Owner,Target Date,Evidence File,Line Numbers
+1,ENV files with secrets in Git,Security,CRITICAL,Happened,1,DevOps,2025-10-03,.env.local .env.production,All
+2,No HIPAA audit logging,Compliance,HIGH,Certain,7,Backend,2025-10-09,No audit_logs table found,N/A
+3,Missing consent management,Legal,HIGH,Likely,7,Backend,2025-10-16,No consent_tracking table,N/A
+4,40% accessibility compliance,Legal,HIGH,Likely,14,Frontend,2025-11-02,src/components/*,All components
+5,No automated testing,Quality,HIGH,Certain,14,QA,2025-11-02,package.json,No test script
+6,No CI/CD pipeline,Operations,MEDIUM,Certain,3,DevOps,2025-10-09,.github/workflows/,Missing CI
+7,1208 console.log in production,Operations,MEDIUM,Happened,7,All Teams,2025-10-16,269 files,Various
+8,No caching layer,Performance,MEDIUM,Likely,7,Backend,2025-10-23,All API routes,force-dynamic
+9,Single ASR provider dependency,Reliability,MEDIUM,Possible,7,Backend,2025-11-02,src/lib/asr-nova2.ts,All
+10,No spending controls or quotas,Cost,MEDIUM,Likely,3,Backend,2025-10-09,No quota tracking,N/A

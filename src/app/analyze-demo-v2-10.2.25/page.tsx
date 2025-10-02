@@ -23,6 +23,8 @@ export default function AnalyzeDemoV2() {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showOpeningDetails, setShowOpeningDetails] = useState(false);
+  const [showComplianceDetails, setShowComplianceDetails] = useState(false);
   const router = useRouter();
 
   async function run() {
@@ -215,13 +217,64 @@ export default function AnalyzeDemoV2() {
                     </span>
                   </div>
                   <div className="text-3xl font-bold text-white">{data.opening_score}/100</div>
-                  <Link
-                    href={`/admin/openings`}
+                  <button
+                    onClick={() => setShowOpeningDetails(!showOpeningDetails)}
                     className="mt-3 inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
                   >
-                    <span>View Opening Analysis</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
+                    <span>{showOpeningDetails ? 'Hide' : 'View'} Opening Analysis</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showOpeningDetails ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showOpeningDetails && data.opening_analysis && (
+                    <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {data.opening_analysis.pace_assessment && (
+                          <div>
+                            <div className="text-xs text-gray-400">Pace</div>
+                            <div className="text-white font-medium">{data.opening_analysis.pace_assessment}</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.greeting_quality && (
+                          <div>
+                            <div className="text-xs text-gray-400">Greeting</div>
+                            <div className="text-white font-medium">{data.opening_analysis.greeting_quality}</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.control_establishment && (
+                          <div>
+                            <div className="text-xs text-gray-400">Control</div>
+                            <div className="text-white font-medium">{data.opening_analysis.control_establishment}</div>
+                          </div>
+                        )}
+                        {data.opening_analysis.engagement_level && (
+                          <div>
+                            <div className="text-xs text-gray-400">Engagement</div>
+                            <div className="text-white font-medium">{data.opening_analysis.engagement_level}</div>
+                          </div>
+                        )}
+                      </div>
+                      {data.opening_analysis.strengths && data.opening_analysis.strengths.length > 0 && (
+                        <div>
+                          <div className="text-xs text-green-400 mb-1">Strengths</div>
+                          <ul className="text-xs text-gray-300 space-y-1">
+                            {data.opening_analysis.strengths.map((strength: string, i: number) => (
+                              <li key={i}>• {strength}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {data.opening_analysis.areas_for_improvement && data.opening_analysis.areas_for_improvement.length > 0 && (
+                        <div>
+                          <div className="text-xs text-yellow-400 mb-1">Areas for Improvement</div>
+                          <ul className="text-xs text-gray-300 space-y-1">
+                            {data.opening_analysis.areas_for_improvement.map((area: string, i: number) => (
+                              <li key={i}>• {area}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -242,13 +295,69 @@ export default function AnalyzeDemoV2() {
                       {Math.round(data.compliance_details.overall_score)}%
                     </div>
                   )}
-                  <Link
-                    href={`/admin/post-close`}
+                  <button
+                    onClick={() => setShowComplianceDetails(!showComplianceDetails)}
                     className="mt-3 inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
                   >
-                    <span>View Compliance Details</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
+                    <span>{showComplianceDetails ? 'Hide' : 'View'} Compliance Details</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showComplianceDetails ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showComplianceDetails && data.compliance_details && (
+                    <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <div className="text-xs text-gray-400">Word Match</div>
+                          <div className="text-white font-medium">{Math.round(data.compliance_details.word_match_percentage)}%</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400">Phrase Match</div>
+                          <div className="text-white font-medium">{Math.round(data.compliance_details.phrase_match_percentage)}%</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400">Sequence Score</div>
+                          <div className="text-white font-medium">{Math.round(data.compliance_details.sequence_score)}%</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400">Similarity Score</div>
+                          <div className="text-white font-medium">{Math.round(data.compliance_details.similarity_score)}%</div>
+                        </div>
+                      </div>
+                      {data.compliance_details.missing_required_phrases && data.compliance_details.missing_required_phrases.length > 0 && (
+                        <div>
+                          <div className="text-xs text-red-400 mb-1">Missing Required Phrases ({data.compliance_details.missing_required_phrases.length})</div>
+                          <div className="max-h-32 overflow-y-auto">
+                            <ul className="text-xs text-gray-300 space-y-1">
+                              {data.compliance_details.missing_required_phrases.map((phrase: string, i: number) => (
+                                <li key={i} className="text-red-300">• {phrase}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      {data.compliance_details.paraphrased_sections && data.compliance_details.paraphrased_sections.length > 0 && (
+                        <div>
+                          <div className="text-xs text-yellow-400 mb-1">Paraphrased Sections ({data.compliance_details.paraphrased_sections.length})</div>
+                          <div className="max-h-32 overflow-y-auto">
+                            <ul className="text-xs text-gray-300 space-y-1">
+                              {data.compliance_details.paraphrased_sections.slice(0, 3).map((section: any, i: number) => (
+                                <li key={i} className="text-yellow-300">• {section.expected || section}</li>
+                              ))}
+                              {data.compliance_details.paraphrased_sections.length > 3 && (
+                                <li className="text-gray-500">... and {data.compliance_details.paraphrased_sections.length - 3} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      {data.compliance_details.script_name && (
+                        <div className="pt-2 border-t border-gray-700/50">
+                          <div className="text-xs text-gray-400">Script Used</div>
+                          <div className="text-xs text-white font-medium">{data.compliance_details.script_name}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
