@@ -108,18 +108,23 @@ export async function POST(req: Request) {
       console.error('[invite-and-add] Profile upsert error (non-fatal):', profileError)
     }
 
-    // 3) Add to agency via RPC only (no direct table access)
-    const { error: rpcError } = await admin.rpc('add_user_to_agency', {
-      p_agency: agencyId,
-      p_user: userId,
-      p_role: role || 'agent'
-    })
+    // 3) Add to agency directly (service role bypasses RLS)
+    const { error: memberError } = await admin
+      .from('user_agencies')
+      .upsert({
+        user_id: userId,
+        agency_id: agencyId,
+        role: role || 'agent',
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,agency_id'
+      })
 
-    if (rpcError) {
-      console.error('[invite-and-add] Failed to add user to agency:', rpcError)
+    if (memberError) {
+      console.error('[invite-and-add] Failed to add user to agency:', memberError)
 
       // Check if it's a duplicate entry
-      if (rpcError.message?.includes('duplicate') || rpcError.code === '23505') {
+      if (memberError.message?.includes('duplicate') || memberError.code === '23505') {
         return NextResponse.json(
           { ok: false, error: 'User is already a member of this agency' },
           { status: 400 }
@@ -127,7 +132,7 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json(
-        { ok: false, error: `Failed to add user to agency: ${rpcError.message}` },
+        { ok: false, error: `Failed to add user to agency: ${memberError.message}` },
         { status: 400 }
       )
     }
