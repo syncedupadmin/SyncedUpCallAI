@@ -25,7 +25,8 @@ import {
   Monitor,
   ShieldCheck,
   CreditCard,
-  ChevronDown
+  ChevronDown,
+  Search
 } from 'lucide-react';
 import { OfficeSelector } from '@/components/OfficeSelector';
 
@@ -61,6 +62,12 @@ export default function SuperAdminNav() {
       href: '/superadmin/agencies',
       icon: Building2,
       description: 'Agency management'
+    },
+    {
+      name: 'Discovery',
+      href: '/superadmin/discovery-management',
+      icon: Search,
+      description: 'Discovery sessions & progress'
     },
     {
       name: 'Billing',
