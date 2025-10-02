@@ -10,7 +10,7 @@ import {
 } from '@/lib/discovery/processor';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120; // Needs 120s to fetch 5000 calls from Convoso
+export const maxDuration = 10; // Only creates DB records, background job fetches calls
 
 export async function POST(req: NextRequest) {
   try {
@@ -123,8 +123,6 @@ export async function POST(req: NextRequest) {
     // MODE 2: Start discovery with selected agents
     if (selected_agent_ids && Array.isArray(selected_agent_ids)) {
       console.log(`[Discovery] Starting discovery for agency ${agencyId} with ${selected_agent_ids.length} agents`);
-      console.log(`[Discovery] Selected agent IDs:`, selected_agent_ids);
-      console.log(`[Discovery] First agent ID type:`, typeof selected_agent_ids[0], selected_agent_ids[0]);
 
       // Check if discovery already completed
       if (agency.discovery_status === 'completed') {
@@ -142,14 +140,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Create discovery session
+      // Create discovery session IMMEDIATELY (don't fetch calls yet)
       const sessionId = uuidv4();
-      const targetCallCount = 5000; // Fetch more calls to account for low recording availability (~6%)
+      const targetCallCount = 5000;
 
       await sbAdmin.from('discovery_sessions').insert({
         id: sessionId,
         agency_id: agencyId,
-        status: 'initializing',
+        status: 'initializing', // Background job will fetch calls and change to 'queued'
         total_calls: targetCallCount,
         progress: 0,
         processed: 0,
@@ -157,7 +155,7 @@ export async function POST(req: NextRequest) {
           callCount: targetCallCount,
           selectedAgents: selected_agent_ids,
           agentSelection: 'custom',
-          includeShortCalls: false, // CRITICAL: Only 10+ second calls
+          includeShortCalls: false,
           detectLying: true,
           analyzeOpenings: true,
           trackRebuttals: true
@@ -169,143 +167,27 @@ export async function POST(req: NextRequest) {
         discovery_session_id: sessionId
       }).eq('id', agencyId);
 
-      console.log(`[Discovery] Queueing calls for session ${sessionId}`);
+      console.log(`[Discovery] Session ${sessionId} created, triggering background fetch...`);
 
-      // Decrypt credentials
-      const credentials: ConvosoCredentials = decryptConvosoCredentials(
-        agency.convoso_credentials
-      );
+      // Trigger background job to fetch calls (non-blocking)
+      // The cron will detect 'initializing' status and fetch calls
+      fetch(`${process.env.APP_URL || 'http://localhost:3000'}/api/discovery/queue-calls`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
+        },
+        body: JSON.stringify({ sessionId })
+      }).catch(err => {
+        console.error('[Discovery] Failed to trigger background job:', err.message);
+        // Don't throw - cron will pick it up anyway
+      });
 
-      // Fetch metadata only (30-40s)
-      const calls = await fetchCallsInChunks(
-        credentials,
-        sessionId,
-        targetCallCount,
-        selected_agent_ids
-      );
-
-      if (!calls || calls.length === 0) {
-        await sbAdmin.from('discovery_sessions').update({
-          status: 'error',
-          error_message: 'No calls found from Convoso'
-        }).eq('id', sessionId);
-
-        return NextResponse.json(
-          { error: 'No calls found from Convoso API' },
-          { status: 400 }
-        );
-      }
-
-      console.log(`[Discovery] Fetched ${calls.length} calls, inserting into queue...`);
-
-      // Check if discovery_calls table exists
-      console.log(`[Discovery] Verifying discovery_calls table exists...`);
-      const { error: tableCheck } = await sbAdmin
-        .from('discovery_calls')
-        .select('id')
-        .limit(1);
-
-      if (tableCheck) {
-        console.error('[Discovery] Table check error:', tableCheck);
-        if (tableCheck.code === '42P01' || tableCheck.message?.includes('does not exist')) {
-          await sbAdmin.from('discovery_sessions').update({
-            status: 'error',
-            error_message: 'Database not configured - discovery_calls table missing. Contact support.'
-          }).eq('id', sessionId);
-
-          return NextResponse.json({
-            error: 'System not configured for queue-based discovery. The discovery_calls table does not exist. Please run the database migrations.',
-            hint: 'Admin: Run supabase/migrations/add-discovery-queue-system-safe.sql'
-          }, { status: 500 });
-        }
-      }
-
-      console.log(`[Discovery] Table verified, preparing ${calls.length} call records...`);
-
-      // Deduplicate calls before inserting (safety check)
-      const seenCallIds = new Set();
-      const callRecords = calls
-        .filter(call => {
-          if (seenCallIds.has(call.id)) {
-            console.warn(`[Discovery] Skipping duplicate call_id in batch: ${call.id}`);
-            return false;
-          }
-          seenCallIds.add(call.id);
-          return true;
-        })
-        .map(call => ({
-          session_id: sessionId,
-          call_id: call.id,
-          lead_id: call.lead_id,
-          user_id: call.user_id,
-          user_name: call.user,
-          campaign: call.campaign,
-          status: call.status,
-          call_length: parseInt(call.call_length) || 0,
-          call_type: call.call_type || 'outbound',
-          started_at: call.started_at,
-          recording_url: call.recording_url || null,  // Store recording URL from API
-          processing_status: 'pending'
-        }));
-
-      console.log(`[Discovery] Deduplicated to ${callRecords.length} unique calls for insert`);
-
-      // Batch insert (Supabase handles up to 1000 rows per insert)
-      const totalBatches = Math.ceil(callRecords.length / 1000);
-      for (let i = 0; i < callRecords.length; i += 1000) {
-        const batch = callRecords.slice(i, Math.min(i + 1000, callRecords.length));
-        const batchNum = Math.floor(i / 1000) + 1;
-
-        console.log(`[Discovery] Upserting batch ${batchNum}/${totalBatches} (${batch.length} calls)...`);
-
-        const { error: insertError } = await sbAdmin
-          .from('discovery_calls')
-          .upsert(batch, {
-            onConflict: 'session_id,call_id',
-            ignoreDuplicates: true
-          });
-
-        if (insertError) {
-          console.error(`[Discovery] Failed to upsert batch ${batchNum}:`, insertError);
-          console.error(`[Discovery] Error details:`, {
-            code: insertError.code,
-            message: insertError.message,
-            details: insertError.details,
-            hint: insertError.hint
-          });
-
-          // Continue with next batch instead of throwing
-          console.warn(`[Discovery] Continuing with remaining batches despite error in batch ${batchNum}`);
-          continue;
-        }
-
-        console.log(`[Discovery] Batch ${batchNum}/${totalBatches} upserted successfully`);
-      }
-
-      // Update session to queued
-      await sbAdmin.from('discovery_sessions').update({
-        status: 'queued',
-        total_calls: calls.length,
-        progress: 5  // Metadata pulled
-      }).eq('id', sessionId);
-
-      console.log(`[Discovery] Successfully queued ${calls.length} calls for background processing`);
-
-      // Count calls with recordings
-      const { count: withRecordings } = await sbAdmin
-        .from('discovery_calls')
-        .select('*', { count: 'exact', head: true })
-        .eq('session_id', sessionId)
-        .not('recording_url', 'is', null);
-
-      console.log(`[Discovery] Recording availability: ${withRecordings}/${calls.length} (${Math.round((withRecordings || 0)/calls.length*100)}%)`);
-
+      // Return immediately - background job will handle the rest
       return NextResponse.json({
         success: true,
         sessionId,
-        callCount: calls.length,
-        callsWithRecordings: withRecordings || 0,
-        message: `Discovery queued - processing ${withRecordings || 0} calls with recordings (${calls.length} total fetched)`
+        message: 'Discovery started - fetching calls in background'
       });
     }
 

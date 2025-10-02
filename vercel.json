@@ -66,7 +66,10 @@
       "maxDuration": 60
     },
     "src/app/api/discovery/start/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 10
+    },
+    "src/app/api/discovery/queue-calls/route.ts": {
+      "maxDuration": 300
     },
     "src/app/api/cron/retention/route.ts": {
       "maxDuration": 300

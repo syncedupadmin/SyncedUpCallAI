@@ -29,11 +29,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Find active discovery sessions (queued or processing)
+    // Find active discovery sessions (initializing, queued, or processing)
     const { data: sessions, error: sessionsError } = await sbAdmin
       .from('discovery_sessions')
       .select('*')
-      .in('status', ['queued', 'processing'])
+      .in('status', ['initializing', 'queued', 'processing'])
       .order('started_at', { ascending: true })
       .limit(3); // Process up to 3 sessions concurrently
 
@@ -71,7 +71,27 @@ export async function GET(req: NextRequest) {
       try {
         results.sessions_processed++;
 
-        console.log(`[Discovery Queue] Processing session ${session.id}`);
+        console.log(`[Discovery Queue] Processing session ${session.id} (status: ${session.status})`);
+
+        // Handle 'initializing' sessions - trigger background fetch if needed
+        if (session.status === 'initializing') {
+          console.log(`[Discovery Queue] Session ${session.id} still initializing - triggering queue-calls job`);
+
+          // Trigger background fetch (failsafe in case initial trigger failed)
+          fetch(`${process.env.APP_URL || 'http://localhost:3000'}/api/discovery/queue-calls`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.CRON_SECRET}`
+            },
+            body: JSON.stringify({ sessionId: session.id })
+          }).catch(err => {
+            console.error(`[Discovery Queue] Failed to trigger queue-calls for ${session.id}:`, err.message);
+          });
+
+          // Skip to next session
+          continue;
+        }
 
         // Get agency credentials
         const { data: agency, error: agencyError } = await sbAdmin
