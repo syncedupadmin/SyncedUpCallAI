@@ -42,7 +42,18 @@ export async function GET(req: NextRequest) {
       throw sessionsError;
     }
 
+    console.log('[Discovery Queue] Query complete:', {
+      found: sessions?.length || 0,
+      sessions: sessions?.map(s => ({
+        id: s.id.substring(0, 8),
+        status: s.status,
+        calls: s.total_calls,
+        agency_id: s.agency_id?.substring(0, 8)
+      }))
+    });
+
     if (!sessions || sessions.length === 0) {
+      console.log('[Discovery Queue] No active sessions found - exiting');
       return NextResponse.json({
         message: 'No active discovery sessions',
         processed: 0

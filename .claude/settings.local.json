@@ -32,7 +32,8 @@
       "Bash(taskkill:*)",
       "WebFetch(domain:supabase.com)",
       "Bash(npm run dev:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(echo:*)"
     ]
   },
   "outputStyle": "default"

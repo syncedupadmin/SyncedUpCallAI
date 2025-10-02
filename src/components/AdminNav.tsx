@@ -110,6 +110,12 @@ export default function AdminNav() {
         description: 'Opening analysis & training'
       },
       {
+        name: 'Post Close',
+        href: '/admin/post-close',
+        icon: Shield,
+        description: 'Script compliance verification'
+      },
+      {
         name: 'Simple Analysis',
         href: '/test-simple',
         icon: Activity,
@@ -183,6 +189,12 @@ export default function AdminNav() {
         href: '/admin/openings',
         icon: Mic,
         description: 'Opening analysis & training'
+      },
+      {
+        name: 'Post Close',
+        href: '/admin/post-close',
+        icon: Shield,
+        description: 'Script compliance verification'
       },
       {
         name: 'Simple Analysis',
