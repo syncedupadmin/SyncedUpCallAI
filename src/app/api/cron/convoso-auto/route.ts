@@ -98,31 +98,39 @@ export async function GET(req: NextRequest) {
     // Save to database
     const savedCount = await service.saveCallsToDatabase(autoImportCalls, 'system');
 
-    // Queue for transcription
+    // Queue for transcription (batch operation for performance)
     let queuedCount = 0;
-    for (const call of autoImportCalls) {
-      if (call.recording_url) {
-        const { data: savedCall } = await supabase
-          .from('calls')
-          .select('id')
-          .eq('call_id', `convoso_${call.recording_id}`)
-          .single();
 
-        if (savedCall) {
+    if (autoImportCalls.length > 0) {
+      // Get all saved calls in one query
+      const callIds = autoImportCalls
+        .filter(c => c.recording_url)
+        .map(c => `convoso_${c.recording_id}`);
+
+      if (callIds.length > 0) {
+        const { data: savedCalls } = await supabase
+          .from('calls')
+          .select('id, call_id')
+          .in('call_id', callIds);
+
+        if (savedCalls && savedCalls.length > 0) {
+          // Batch insert into transcription queue
+          const queueEntries = savedCalls.map(call => ({
+            call_id: call.id,
+            status: 'pending' as const,
+            priority: 3, // Lower priority for auto imports
+            metadata: {
+              auto_import: true,
+              imported_at: new Date().toISOString()
+            }
+          }));
+
           const { error } = await supabase
             .from('transcription_queue')
-            .insert({
-              call_id: savedCall.id,
-              status: 'pending',
-              priority: 3, // Lower priority for auto imports
-              metadata: {
-                auto_import: true,
-                imported_at: new Date().toISOString()
-              }
-            });
+            .insert(queueEntries);
 
           if (!error) {
-            queuedCount++;
+            queuedCount = queueEntries.length;
           }
         }
       }
