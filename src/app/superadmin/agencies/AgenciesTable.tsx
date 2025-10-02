@@ -44,7 +44,7 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
     try {
       const { data, error, count } = await supabase
         .from('agencies')
-        .select('id, name, slug, owner_user_id, created_at, updated_at, discovery_status', { count: 'exact' })
+        .select('id, name, slug, owner_user_id, created_at, updated_at, discovery_status, product_type', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to)
 
@@ -218,6 +218,9 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                   Slug
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Product Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Owner
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -237,7 +240,7 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
             <tbody className="divide-y divide-gray-800">
               {filteredAgencies.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     {searchTerm ? 'No agencies found matching your search' : 'No agencies available'}
                   </td>
                 </tr>
@@ -259,6 +262,17 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                         </span>
                       ) : (
                         <span className="text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {agency.product_type === 'compliance_only' ? (
+                        <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded font-medium">
+                          Compliance Only
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded font-medium">
+                          Full Platform
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-gray-400">{formatShortId(agency.owner_user_id)}</td>

@@ -19,6 +19,7 @@ const updateAgencySchema = z.object({
     .trim()
     .min(2, 'Agency name must be at least 2 characters')
     .max(60, 'Agency name must not exceed 60 characters'),
+  product_type: z.enum(['full', 'compliance_only']),
 })
 
 type UpdateAgencyInput = z.infer<typeof updateAgencySchema>
@@ -29,6 +30,7 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
     name: initialName,
     slug: '',
     id: agencyId,
+    product_type: 'full' as 'full' | 'compliance_only',
   })
 
   const supabase = createClient()
@@ -50,16 +52,24 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
     const loadAgencyData = async () => {
       const { data } = await supabase
         .from('agencies')
-        .select('slug')
+        .select('slug, product_type')
         .eq('id', agencyId)
         .single()
 
       if (data) {
-        setAgencyData(prev => ({ ...prev, slug: data.slug || '' }))
+        setAgencyData(prev => ({
+          ...prev,
+          slug: data.slug || '',
+          product_type: (data.product_type || 'full') as 'full' | 'compliance_only'
+        }))
+        reset({
+          name: initialName,
+          product_type: (data.product_type || 'full') as 'full' | 'compliance_only'
+        })
       }
     }
     loadAgencyData()
-  }, [agencyId, supabase])
+  }, [agencyId, supabase, initialName, reset])
 
   const onSubmit = async (data: UpdateAgencyInput) => {
     setIsUpdating(true)
@@ -67,7 +77,10 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
     try {
       const { data: updatedAgency, error } = await supabase
         .from('agencies')
-        .update({ name: data.name })
+        .update({
+          name: data.name,
+          product_type: data.product_type
+        })
         .eq('id', agencyId)
         .select()
         .single()
@@ -82,9 +95,16 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
       }
 
       if (updatedAgency) {
-        setAgencyData(prev => ({ ...prev, name: data.name }))
-        toast.success('Agency name updated successfully')
-        reset({ name: data.name })
+        setAgencyData(prev => ({
+          ...prev,
+          name: data.name,
+          product_type: data.product_type
+        }))
+        toast.success('Agency settings updated successfully')
+        reset({
+          name: data.name,
+          product_type: data.product_type
+        })
 
         // Update the page header if possible
         if (typeof window !== 'undefined') {
@@ -135,13 +155,34 @@ export function AgencySettings({ agencyId, initialName }: AgencySettingsProps) {
             )}
           </div>
 
+          <div>
+            <label htmlFor="product_type" className="block text-sm font-medium mb-1">
+              Product Type
+            </label>
+            <select
+              id="product_type"
+              {...register('product_type')}
+              disabled={isUpdating}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+            >
+              <option value="full">Full Platform (All Features)</option>
+              <option value="compliance_only">Compliance Only (Post-Close Analysis Only)</option>
+            </select>
+            {errors.product_type && (
+              <p className="text-sm text-red-500 mt-1">{errors.product_type.message}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Full: Access to all features. Compliance Only: Only post-close verification (~80% cost savings)
+            </p>
+          </div>
+
           <button
             type="submit"
             disabled={isUpdating || !isDirty}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Save className="h-4 w-4" />
-            {isUpdating ? 'Updating...' : 'Update Name'}
+            {isUpdating ? 'Updating...' : 'Update Settings'}
           </button>
         </form>
       </div>

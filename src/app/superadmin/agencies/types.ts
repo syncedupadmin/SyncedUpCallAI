@@ -7,6 +7,7 @@ export const createAgencySchema = z.object({
     .min(2, 'Agency name must be at least 2 characters')
     .max(60, 'Agency name must not exceed 60 characters')
     .refine((val) => val.length > 0, 'Agency name is required'),
+  product_type: z.enum(['full', 'compliance_only']).default('full'),
 })
 
 export type CreateAgencyInput = z.infer<typeof createAgencySchema>
@@ -19,4 +20,5 @@ export interface Agency {
   created_at: string
   updated_at: string
   discovery_status?: string | null
+  product_type: 'full' | 'compliance_only'
 }

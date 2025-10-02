@@ -21,7 +21,7 @@ export default async function AgencyDetailsPage({ params, searchParams }: PagePr
   // Fetch agency details
   const { data: agency, error } = await supabase
     .from('agencies')
-    .select('id, name, slug, owner_user_id, created_at')
+    .select('id, name, slug, owner_user_id, created_at, product_type')
     .eq('id', params.id)
     .single()
 

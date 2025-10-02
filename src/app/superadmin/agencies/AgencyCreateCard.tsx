@@ -30,7 +30,10 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
 
     try {
       const { data: agency, error } = await supabase
-        .rpc('create_agency_with_owner', { p_name: data.name })
+        .rpc('create_agency_with_owner', {
+          p_name: data.name,
+          p_product_type: data.product_type || 'full'
+        })
         .single()
 
       if (error) {
@@ -87,6 +90,30 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
               A unique slug will be generated automatically (e.g., "PHS" → "phs", "phs-2", "phs-3")
             </p>
           </div>
+
+          <div className="space-y-2">
+            <label htmlFor="product_type" className="block text-sm font-medium mb-1">Product Type</label>
+            <select
+              id="product_type"
+              disabled={isSubmitting}
+              {...register('product_type')}
+              aria-invalid={errors.product_type ? 'true' : 'false'}
+              aria-describedby={errors.product_type ? 'product-type-error' : undefined}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"
+            >
+              <option value="full">Full Platform (All Features)</option>
+              <option value="compliance_only">Compliance Only (Post-Close Analysis Only)</option>
+            </select>
+            {errors.product_type && (
+              <p id="product-type-error" className="text-sm text-red-500">
+                {errors.product_type.message}
+              </p>
+            )}
+            <p className="text-sm text-gray-500">
+              Full: Access to all features. Compliance Only: Only post-close verification (~80% cost savings)
+            </p>
+          </div>
+
           <button type="submit" disabled={isSubmitting} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
             {isSubmitting ? (
               <>
