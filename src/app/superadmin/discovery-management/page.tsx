@@ -258,8 +258,8 @@ export default function DiscoveryManagementPage() {
 
       {/* Sessions Table */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto overflow-y-visible">
+          <table className="w-full min-w-[1200px]">
             <thead className="bg-gray-900/50 border-b border-gray-700">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -280,7 +280,7 @@ export default function DiscoveryManagementPage() {
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Duration
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider w-40">
                   Actions
                 </th>
               </tr>
