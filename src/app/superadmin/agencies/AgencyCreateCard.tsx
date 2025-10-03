@@ -37,11 +37,32 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
     console.log('Product type being sent:', data.product_type)
 
     try {
+      // TEMPORARY FIX: Direct insert instead of RPC
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData?.user?.id
+
+      if (!userId) {
+        toast.error('Not authenticated')
+        return
+      }
+
+      // Generate unique slug
+      const baseSlug = data.name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      const uniqueSlug = `${baseSlug}-${Date.now()}`
+
       const { data: agency, error } = await supabase
-        .rpc('create_agency_with_owner', {
-          p_name: data.name,
-          p_product_type: data.product_type || 'full'
+        .from('agencies')
+        .insert({
+          name: data.name,
+          slug: uniqueSlug,
+          owner_user_id: userId,
+          product_type: data.product_type || 'full',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
+        .select()
         .single()
 
       if (error) {
@@ -58,6 +79,18 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
         const newAgency = agency as Agency
         console.log('Agency created response:', agency)
         console.log('Product type in response:', newAgency.product_type)
+
+        // Also add the owner to user_agencies
+        await supabase
+          .from('user_agencies')
+          .insert({
+            user_id: userId,
+            agency_id: newAgency.id,
+            role: 'owner',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+
         onAgencyCreated(newAgency)
         toast.success(`Successfully created ${newAgency.name} with product type: ${newAgency.product_type}`)
         reset({
