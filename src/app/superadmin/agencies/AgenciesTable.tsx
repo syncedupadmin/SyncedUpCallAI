@@ -25,6 +25,9 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
   const [editingProductTypeId, setEditingProductTypeId] = useState<string | null>(null)
   const [editingProductTypeValue, setEditingProductTypeValue] = useState<'full' | 'compliance_only'>('full')
   const [isSavingProductType, setIsSavingProductType] = useState(false)
+  const [editingDiscoveryId, setEditingDiscoveryId] = useState<string | null>(null)
+  const [editingDiscoveryValue, setEditingDiscoveryValue] = useState<'pending' | 'skipped' | 'completed' | null>(null)
+  const [isSavingDiscovery, setIsSavingDiscovery] = useState(false)
   const supabase = createClient()
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -221,6 +224,59 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
     setEditingProductTypeValue('full')
   }
 
+  const handleDiscoveryToggle = async (agencyId: string, newStatus: 'pending' | 'skipped' | 'completed' | null) => {
+    setIsSavingDiscovery(true)
+
+    try {
+      const res = await fetch('/api/superadmin/discovery/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agency_id: agencyId,
+          discovery_status: newStatus
+        })
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to update discovery status')
+      }
+
+      const result = await res.json()
+
+      // Update local state
+      setAgencies((prev) =>
+        prev.map(agency =>
+          agency.id === agencyId
+            ? { ...agency, discovery_status: newStatus }
+            : agency
+        )
+      )
+
+      toast.success(`Discovery status updated to ${newStatus || 'reset'}`)
+      setEditingDiscoveryId(null)
+    } catch (error: any) {
+      console.error('Error updating discovery status:', error)
+      toast.error(error.message || 'Failed to update discovery status')
+    } finally {
+      setIsSavingDiscovery(false)
+    }
+  }
+
+  const handleDiscoveryClick = (agencyId: string, currentStatus: string | null) => {
+    setEditingDiscoveryId(agencyId)
+    setEditingDiscoveryValue(currentStatus as 'pending' | 'skipped' | 'completed' | null)
+  }
+
+  const handleDiscoverySave = (agencyId: string) => {
+    handleDiscoveryToggle(agencyId, editingDiscoveryValue)
+  }
+
+  const handleDiscoveryCancel = () => {
+    setEditingDiscoveryId(null)
+    setEditingDiscoveryValue(null)
+  }
+
   const formatDate = (date: string) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -388,21 +444,58 @@ export function AgenciesTable({ initialData, initialCount }: AgenciesTableProps)
                       {formatDate(agency.created_at)}
                     </td>
                     <td className="px-6 py-4">
-                      {agency.discovery_status === 'completed' ? (
+                      {editingDiscoveryId === agency.id ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-green-400 text-sm">✅ Completed</span>
-                          <button
-                            onClick={() => handleResetDiscovery(agency.id)}
-                            className="px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
-                            title="Reset discovery status - allows agency to run discovery again"
+                          <select
+                            value={editingDiscoveryValue || ''}
+                            onChange={(e) => setEditingDiscoveryValue(e.target.value ? e.target.value as any : null)}
+                            disabled={isSavingDiscovery}
+                            className="px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-blue-500"
                           >
-                            Reset
+                            <option value="">Not Set</option>
+                            <option value="pending">🔄 Pending</option>
+                            <option value="skipped">⏭️ Skipped</option>
+                            <option value="completed">✅ Completed</option>
+                            <option value="in_progress">⏱️ In Progress</option>
+                            <option value="failed">❌ Failed</option>
+                          </select>
+                          <button
+                            onClick={() => handleDiscoverySave(agency.id)}
+                            disabled={isSavingDiscovery}
+                            className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50"
+                            title="Save"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={handleDiscoveryCancel}
+                            disabled={isSavingDiscovery}
+                            className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            ✕
                           </button>
                         </div>
-                      ) : agency.discovery_status === 'in_progress' ? (
-                        <span className="text-blue-400 text-sm">⏱️ In Progress</span>
                       ) : (
-                        <span className="text-gray-500 text-sm">—</span>
+                        <button
+                          onClick={() => handleDiscoveryClick(agency.id, agency.discovery_status || null)}
+                          className="group hover:opacity-80 transition-opacity text-left"
+                          title="Click to change discovery status"
+                        >
+                          {agency.discovery_status === 'completed' ? (
+                            <span className="text-green-400 text-sm group-hover:underline">✅ Completed</span>
+                          ) : agency.discovery_status === 'skipped' ? (
+                            <span className="text-yellow-400 text-sm group-hover:underline">⏭️ Skipped</span>
+                          ) : agency.discovery_status === 'in_progress' ? (
+                            <span className="text-blue-400 text-sm group-hover:underline">⏱️ In Progress</span>
+                          ) : agency.discovery_status === 'pending' ? (
+                            <span className="text-cyan-400 text-sm group-hover:underline">🔄 Pending</span>
+                          ) : agency.discovery_status === 'failed' ? (
+                            <span className="text-red-400 text-sm group-hover:underline">❌ Failed</span>
+                          ) : (
+                            <span className="text-gray-500 text-sm group-hover:underline">— Not Set</span>
+                          )}
+                        </button>
                       )}
                     </td>
                     <td className="px-6 py-4">

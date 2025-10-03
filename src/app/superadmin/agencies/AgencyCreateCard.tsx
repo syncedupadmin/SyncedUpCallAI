@@ -14,6 +14,7 @@ interface AgencyCreateCardProps {
 
 export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCreatingTest, setIsCreatingTest] = useState(false)
   const supabase = createClient()
 
   const {
@@ -106,6 +107,82 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
     }
   }
 
+  const createTestAgency = async () => {
+    setIsCreatingTest(true)
+
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData?.user?.id
+
+      if (!userId) {
+        toast.error('Not authenticated')
+        return
+      }
+
+      // Generate test agency name with timestamp
+      const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, '')
+      const testName = `Test Compliance ${timestamp}`
+      const uniqueSlug = `test-compliance-${Date.now()}`
+
+      // Create agency with compliance_only type
+      const { data: agency, error: createError } = await supabase
+        .from('agencies')
+        .insert({
+          name: testName,
+          slug: uniqueSlug,
+          owner_user_id: userId,
+          product_type: 'compliance_only',
+          discovery_status: 'skipped',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        toast.error(createError.message || 'Failed to create test agency.')
+        return
+      }
+
+      if (agency) {
+        const newAgency = agency as Agency
+
+        // Add owner to user_agencies
+        await supabase
+          .from('user_agencies')
+          .insert({
+            user_id: userId,
+            agency_id: newAgency.id,
+            role: 'owner',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+
+        // Update discovery status to skipped using admin API
+        try {
+          await fetch('/api/superadmin/discovery/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              agency_id: newAgency.id,
+              discovery_status: 'skipped'
+            })
+          })
+        } catch (err) {
+          console.log('Could not update discovery status, but agency created')
+        }
+
+        onAgencyCreated({ ...newAgency, discovery_status: 'skipped' })
+        toast.success(`Test agency "${testName}" created with compliance-only access and discovery skipped!`)
+      }
+    } catch (error) {
+      console.error('Error creating test agency:', error)
+      toast.error('Failed to create test agency.')
+    } finally {
+      setIsCreatingTest(false)
+    }
+  }
+
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
       <div className="mb-4">
@@ -171,6 +248,28 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
             )}
           </button>
         </form>
+
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <p className="text-sm text-gray-400 mb-2">Quick Actions:</p>
+          <button
+            onClick={createTestAgency}
+            disabled={isCreatingTest || isSubmitting}
+            className="w-full px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            title="Creates a compliance-only agency with discovery skipped for testing"
+          >
+            {isCreatingTest ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating Test Agency...
+              </>
+            ) : (
+              '🧪 Create Test Compliance Agency'
+            )}
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            Creates a compliance-only agency with discovery pre-skipped for immediate testing
+          </p>
+        </div>
       </div>
     </div>
   )

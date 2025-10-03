@@ -325,8 +325,13 @@ export async function middleware(request: NextRequest) {
       const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard');
       const isDiscoveryRoute = request.nextUrl.pathname.startsWith('/dashboard/discovery');
 
+      // If discovery is skipped, allow normal access
+      if (agency?.discovery_status === 'skipped') {
+        // Discovery was intentionally skipped - allow full dashboard access
+        console.log(`[Middleware] Discovery skipped for agency ${agency.id}, allowing dashboard access`);
+      }
       // If user hasn't completed discovery yet
-      if (agency?.discovery_status === 'pending' && isDashboardRoute) {
+      else if (agency?.discovery_status === 'pending' && isDashboardRoute) {
         // Allow discovery routes but redirect others to discovery setup
         if (!isDiscoveryRoute) {
           console.log(`[Middleware] Redirecting new user to discovery setup`);
