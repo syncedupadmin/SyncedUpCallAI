@@ -1,67 +1,29 @@
 # Manual Migration Instructions
 
-## To enable inline editing of product_type in the super admin portal
+## 🚀 FINAL FIX - Apply This One Migration
 
-The super admin portal now supports inline editing of agency product types. To enable this feature fully, you need to run the migration.
+### The Issue
+- Product type changes weren't persisting
+- Realtime subscription errors
+- RLS policies preventing updates
 
-## IMPORTANT: Apply BOTH Migrations to Fix All Issues
-
-### ⚠️ NEW: Fix Realtime Subscription Error
-
-If you're seeing this error:
-```
-"Unable to subscribe to changes with given parameters. Please check Realtime is enabled"
-```
-
-**Run this first** in SQL Editor:
-```sql
--- Enable Realtime for agencies table
-ALTER PUBLICATION supabase_realtime ADD TABLE public.agencies;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.user_agencies;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
-```
-
-Then continue with the main migration below.
-
-## Main Migration: Fix Product Type Updates
-
-### Run the Complete Migration (Required)
+### The Solution - Run This Migration
 
 1. **Go to your Supabase Dashboard**: https://supabase.com/dashboard
 2. **Navigate to SQL Editor**
-3. **Copy ALL contents of** `20250203_complete_product_type_setup.sql`
+3. **Copy ALL contents of** `20250203_final_product_type_fix.sql`
 4. **Paste and click "Run"**
-
-This migration includes:
-- ✅ RLS policies for the agencies table
-- ✅ RPC function for secure product_type updates
-- ✅ Proper permissions for super admins
-- ✅ Audit logging support
-
-### Alternative: Quick Fix (if main migration fails)
-
-If the complete migration has issues, run this minimal version:
-
-```sql
--- Enable direct updates for super admins (temporary workaround)
-ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Super admins can do anything" ON public.agencies
-  FOR ALL
-  TO authenticated
-  USING (public.is_super_admin())
-  WITH CHECK (public.is_super_admin());
-```
 
 ### What This Migration Does
 
-1. **Enables Row Level Security** on the agencies table
-2. **Creates RLS policies** that allow:
-   - All users to view their agencies
-   - Super admins to update any agency's product_type
-   - Agency owners to update their own agencies
-3. **Creates the RPC function** `update_agency_product_type` for secure updates
-4. **Grants proper permissions** to authenticated users
+✅ **Fixes all issues at once:**
+- Enables Realtime on agencies, user_agencies, and profiles tables
+- Creates proper RLS policies with correct USING/WITH CHECK clauses
+- Adds a trigger to enforce update scope (super admins can update all fields)
+- Maintains updated_at timestamps for change tracking
+- Creates RPC function for secure product_type updates
+- Grants necessary permissions
+
 
 ### Testing the Feature
 
@@ -71,37 +33,35 @@ After running the migration:
 2. Click on any product type badge (Full Platform or Compliance Only)
 3. Select the new product type from the dropdown
 4. Click ✓ to save or ✕ to cancel
+5. The change should persist and appear immediately
 
-### Troubleshooting
+### Verification Queries
 
-If updates still don't work:
-
-1. **Check you're logged in as super admin**
-   - Run this in SQL Editor: `SELECT public.is_super_admin();`
-   - Should return `true`
-
-2. **Verify RLS is enabled**
-   - Run: `SELECT tablename, rowsecurity FROM pg_tables WHERE tablename = 'agencies';`
-   - Should show `rowsecurity = true`
-
-3. **Check the browser console** for any error messages
-
-4. **Use the fallback**: The UI includes a fallback to direct database updates that should work for super admins even without the migration
-
-### Production Verification
-
-After applying to production, verify with:
+Run these in SQL Editor to verify the migration worked:
 
 ```sql
--- Check if function exists
-SELECT proname FROM pg_proc WHERE proname = 'update_agency_product_type';
+-- 1. Check Realtime is enabled
+SELECT * FROM pg_publication_tables
+WHERE pubname='supabase_realtime' AND tablename='agencies';
 
--- Check if RLS policies exist
-SELECT polname FROM pg_policy WHERE polrelid = 'agencies'::regclass;
+-- 2. Check RLS policies exist
+SELECT polname FROM pg_policy
+WHERE polrelid = 'agencies'::regclass;
 
--- Test the function (replace with real agency ID)
+-- 3. Verify you're a super admin
+SELECT public.is_super_admin();
+-- Should return: true
+
+-- 4. Test the RPC function (replace with real agency ID)
 SELECT public.update_agency_product_type(
   'your-agency-id-here'::uuid,
   'compliance_only'
 );
 ```
+
+### If Issues Persist
+
+Contact support with:
+- The error message from browser console
+- Results of the verification queries above
+- Your Supabase project URL
