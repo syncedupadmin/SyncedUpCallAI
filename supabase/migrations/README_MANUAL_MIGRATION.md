@@ -4,7 +4,26 @@
 
 The super admin portal now supports inline editing of agency product types. To enable this feature fully, you need to run the migration.
 
-## IMPORTANT: Apply This Migration to Fix the Issue
+## IMPORTANT: Apply BOTH Migrations to Fix All Issues
+
+### ⚠️ NEW: Fix Realtime Subscription Error
+
+If you're seeing this error:
+```
+"Unable to subscribe to changes with given parameters. Please check Realtime is enabled"
+```
+
+**Run this first** in SQL Editor:
+```sql
+-- Enable Realtime for agencies table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.agencies;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.user_agencies;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+```
+
+Then continue with the main migration below.
+
+## Main Migration: Fix Product Type Updates
 
 ### Run the Complete Migration (Required)
 
