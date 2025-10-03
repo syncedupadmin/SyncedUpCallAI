@@ -37,61 +37,103 @@ export async function POST(req: Request) {
 
     console.log('[invite-and-add] Using redirectTo:', redirectTo)
 
-    // 1) Invite the user via Supabase Auth Admin API
-    console.log('[invite-and-add] Attempting to invite user with email:', email)
-    console.log('[invite-and-add] Admin client created, calling inviteUserByEmail...')
+    // 1) First check if user already exists
+    console.log('[invite-and-add] Checking if user exists with email:', email)
+    const { data: existingUser, error: lookupError } = await admin.auth.admin.getUserByEmail(email)
 
-    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: {
-        name: name || email.split('@')[0]
-      },
-      redirectTo
-    })
+    let userId: string | undefined
+    let isNewUser = false
 
-    console.log('[invite-and-add] Invite response:', {
-      hasData: !!invited,
-      hasError: !!inviteErr,
-      errorMessage: inviteErr?.message,
-      userId: invited?.user?.id,
-      userEmail: invited?.user?.email
-    })
+    if (existingUser && existingUser.user) {
+      console.log('[invite-and-add] User already exists, using existing user ID:', existingUser.user.id)
+      userId = existingUser.user.id
 
-    if (inviteErr) {
-      console.error('[invite-and-add] Failed to invite user - Full error:', {
-        message: inviteErr.message,
-        status: inviteErr.status,
-        code: inviteErr.code,
-        name: inviteErr.name
-      })
-      return NextResponse.json(
-        {
-          ok: false,
-          error: inviteErr.message,
-          details: {
-            code: inviteErr.code,
-            status: inviteErr.status
-          }
+      // Update profile if name is provided
+      if (name) {
+        await admin
+          .from('profiles')
+          .upsert({
+            id: userId,
+            email: email.toLowerCase(),
+            name: name
+          }, {
+            onConflict: 'id'
+          })
+      }
+    } else {
+      // User doesn't exist, invite them
+      console.log('[invite-and-add] User does not exist, creating invitation...')
+      console.log('[invite-and-add] Admin client created, calling inviteUserByEmail...')
+
+      const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: {
+          name: name || email.split('@')[0]
         },
-        { status: 400 }
-      )
+        redirectTo
+      })
+
+      console.log('[invite-and-add] Invite response:', {
+        hasData: !!invited,
+        hasError: !!inviteErr,
+        errorMessage: inviteErr?.message,
+        userId: invited?.user?.id,
+        userEmail: invited?.user?.email
+      })
+
+      if (inviteErr) {
+        console.error('[invite-and-add] Failed to invite user - Full error:', {
+          message: inviteErr.message,
+          status: inviteErr.status,
+          code: inviteErr.code,
+          name: inviteErr.name
+        })
+
+        // Check if it's because user already exists (shouldn't happen since we checked, but just in case)
+        if (inviteErr.message?.includes('already registered') || inviteErr.message?.includes('already exists')) {
+          // Try to get the user again
+          const { data: existingUserRetry } = await admin.auth.admin.getUserByEmail(email)
+          if (existingUserRetry?.user) {
+            userId = existingUserRetry.user.id
+            console.log('[invite-and-add] Found user on retry, ID:', userId)
+          } else {
+            return NextResponse.json(
+              { ok: false, error: 'User exists but could not retrieve user information' },
+              { status: 400 }
+            )
+          }
+        } else {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: inviteErr.message,
+              details: {
+                code: inviteErr.code,
+                status: inviteErr.status
+              }
+            },
+            { status: 400 }
+          )
+        }
+      } else if (invited?.user?.id) {
+        userId = invited.user.id
+        isNewUser = true
+        console.log('[invite-and-add] User created/invited successfully, ID:', userId)
+        console.log('[invite-and-add] User details:', {
+          id: invited.user.id,
+          email: invited.user.email,
+          email_confirmed_at: invited.user.email_confirmed_at,
+          confirmation_sent_at: invited.user.confirmation_sent_at
+        })
+      }
     }
 
-    const userId = invited?.user?.id
     if (!userId) {
-      console.error('[invite-and-add] No user ID returned from invitation. Full response:', invited)
+      console.error('[invite-and-add] No user ID available after all attempts')
       return NextResponse.json(
-        { ok: false, error: 'Failed to create user - no ID returned' },
+        { ok: false, error: 'Failed to create or find user' },
         { status: 500 }
       )
     }
-
-    console.log('[invite-and-add] User created/invited successfully, ID:', userId)
-    console.log('[invite-and-add] User details:', {
-      id: invited.user.id,
-      email: invited.user.email,
-      email_confirmed_at: invited.user.email_confirmed_at,
-      confirmation_sent_at: invited.user.confirmation_sent_at
-    })
 
     // 2) Add user to profiles table
     const { error: profileError } = await admin
@@ -142,7 +184,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       userId,
-      message: 'User invited and added to agency successfully'
+      isNewUser,
+      message: isNewUser
+        ? 'User invited and added to agency successfully. They will receive an invitation email.'
+        : 'Existing user added to agency successfully.'
     })
   } catch (error) {
     console.error('[invite-and-add] Unexpected error:', error)

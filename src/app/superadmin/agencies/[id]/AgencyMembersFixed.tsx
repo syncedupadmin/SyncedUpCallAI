@@ -140,23 +140,29 @@ export function AgencyMembers({ agencyId }: AgencyMembersProps) {
           })
 
           // Show more detailed error
-          const errorMessage = json.details?.code === 'email_exists'
-            ? 'A user with this email already exists. Try unchecking "Create new user" to add them.'
-            : json.error || 'Failed to invite user. Check console for details.'
-
+          const errorMessage = json.error || 'Failed to add user. Check console for details.'
           toast.error(errorMessage)
           return
         }
 
-        console.log('Success! Showing modal...')
-        // Show success modal for invite
-        setSuccessMessage({
-          email: email.toLowerCase(),
-          name: name || email.split('@')[0],
-          isInvite: true
-        })
-        setShowSuccessModal(true)
-        console.log('Modal state set:', { showSuccessModal: true })
+        // Success! Show appropriate message
+        console.log('Success! User added, isNewUser:', json.isNewUser)
+
+        if (json.isNewUser) {
+          // New user - show invitation success modal
+          setSuccessMessage({
+            email: email.toLowerCase(),
+            name: name || email.split('@')[0],
+            isInvite: true
+          })
+          setShowSuccessModal(true)
+          toast.success('Invitation sent! The user will receive an email to set up their account.')
+        } else {
+          // Existing user - just show toast
+          toast.success('Existing user added to agency successfully!')
+        }
+
+        console.log('Modal state set:', { showSuccessModal: json.isNewUser })
       } else {
         // Add existing user by email lookup using RPC only
         const { data, error } = await supabase
