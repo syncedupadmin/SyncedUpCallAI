@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Agency Creation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Agency Creation with Product Type</h1>
+
+    <div>
+        <input type="text" id="agencyName" placeholder="Agency Name" value="Test Compliance Agency">
+        <select id="productType">
+            <option value="full">Full Platform</option>
+            <option value="compliance_only">Compliance Only</option>
+        </select>
+        <button onclick="createAgency()">Create Agency</button>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        // Replace with your actual Supabase credentials
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function createAgency() {
+            const name = document.getElementById('agencyName').value;
+            const productType = document.getElementById('productType').value;
+
+            console.log('Creating agency with:', { name, productType });
+
+            const { data, error } = await supabase
+                .rpc('create_agency_with_owner', {
+                    p_name: name,
+                    p_product_type: productType
+                })
+                .single();
+
+            if (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${JSON.stringify(error)}</p>`;
+            } else {
+                console.log('Success:', data);
+                document.getElementById('result').innerHTML = `
+                    <p style="color: green;">Success!</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+
+                // Verify by fetching the agency
+                const { data: verifyData } = await supabase
+                    .from('agencies')
+                    .select('*')
+                    .eq('id', data.id)
+                    .single();
+
+                document.getElementById('result').innerHTML += `
+                    <h3>Verification:</h3>
+                    <pre>${JSON.stringify(verifyData, null, 2)}</pre>
+                    <p>Product Type: <strong>${verifyData?.product_type || 'NOT SET'}</strong></p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

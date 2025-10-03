@@ -32,6 +32,10 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
   const onSubmit = async (data: CreateAgencyInput) => {
     setIsSubmitting(true)
 
+    // Debug logging
+    console.log('Creating agency with data:', data)
+    console.log('Product type being sent:', data.product_type)
+
     try {
       const { data: agency, error } = await supabase
         .rpc('create_agency_with_owner', {
@@ -52,8 +56,10 @@ export function AgencyCreateCard({ onAgencyCreated }: AgencyCreateCardProps) {
 
       if (agency) {
         const newAgency = agency as Agency
+        console.log('Agency created response:', agency)
+        console.log('Product type in response:', newAgency.product_type)
         onAgencyCreated(newAgency)
-        toast.success(`Successfully created ${newAgency.name}`)
+        toast.success(`Successfully created ${newAgency.name} with product type: ${newAgency.product_type}`)
         reset({
           name: '',
           product_type: 'full',
