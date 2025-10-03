@@ -236,6 +236,9 @@ END$$;
 -- ============================================
 -- 9) RPC FUNCTION FOR PRODUCT TYPE UPDATES
 -- ============================================
+-- Drop existing function if it exists (handles return type mismatch)
+DROP FUNCTION IF EXISTS public.update_agency_product_type(uuid, text);
+
 CREATE OR REPLACE FUNCTION public.update_agency_product_type(
   p_agency_id uuid,
   p_product_type text
