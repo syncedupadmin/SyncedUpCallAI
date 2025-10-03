@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, Upload, Play, Trash2, FileText } from 'lucide-react';
+import { Shield, Upload, Play, Trash2, FileText, FileCode } from 'lucide-react';
 
 interface Script {
   id: string;
@@ -15,10 +15,20 @@ interface Script {
   updated_at: string;
 }
 
+interface Template {
+  id: string;
+  name: string;
+  product_type: string;
+  script_text: string;
+  required_phrases: string[];
+}
+
 export default function ScriptsPage() {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Upload form state
   const [scriptName, setScriptName] = useState('');
@@ -28,6 +38,7 @@ export default function ScriptsPage() {
 
   useEffect(() => {
     loadScripts();
+    loadTemplates();
   }, []);
 
   const loadScripts = async () => {
@@ -40,6 +51,23 @@ export default function ScriptsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      const res = await fetch('/api/admin/post-close/templates');
+      const data = await res.json();
+      setTemplates(data.templates || []);
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+    }
+  };
+
+  const useTemplate = async (template: Template) => {
+    setScriptName(template.name);
+    setScriptText(template.script_text);
+    setProductType(template.product_type || '');
+    setShowTemplates(false);
   };
 
   const uploadScript = async () => {
@@ -160,10 +188,38 @@ export default function ScriptsPage() {
 
       {/* Upload Form */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Upload className="w-5 h-5 text-cyan-500" />
-          Upload New Script
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Upload className="w-5 h-5 text-cyan-500" />
+            Upload New Script
+          </h2>
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            <FileCode className="w-4 h-4" />
+            {showTemplates ? 'Hide Templates' : 'Use Template'}
+          </button>
+        </div>
+
+        {/* Template Selection */}
+        {showTemplates && (
+          <div className="mb-6 p-4 bg-gray-900 rounded-lg">
+            <h3 className="text-sm font-bold text-purple-400 mb-3">Choose a Template</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => useTemplate(template)}
+                  className="text-left p-3 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-600 hover:border-purple-500 transition-all"
+                >
+                  <div className="font-medium text-white text-sm">{template.name}</div>
+                  <div className="text-xs text-gray-400 mt-1">{template.product_type}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, XCircle, TrendingUp, TrendingDown, Users, FileText, AlertCircle } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, TrendingUp, TrendingDown, Users, FileText, AlertCircle, Settings, Activity } from 'lucide-react';
 import Link from 'next/link';
+import AgentComplianceManager from '@/components/compliance/AgentComplianceManager';
 
 interface Stats {
   total_analyzed: number;
@@ -36,6 +37,7 @@ interface AgentSummary {
 }
 
 export default function ComplianceDashboard() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'convoso'>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [activeScript, setActiveScript] = useState<Script | null>(null);
   const [recentChecks, setRecentChecks] = useState<RecentCheck[]>([]);
@@ -106,6 +108,49 @@ export default function ComplianceDashboard() {
         <h1 className="text-3xl font-bold text-white">Compliance Dashboard</h1>
         <p className="text-gray-400 mt-1">Real-time post-close verification monitoring</p>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-700">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`
+              py-2 px-1 border-b-2 font-medium text-sm transition-colors
+              ${activeTab === 'overview'
+                ? 'border-cyan-500 text-cyan-500'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+              }
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Overview
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('convoso')}
+            className={`
+              py-2 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2
+              ${activeTab === 'convoso'
+                ? 'border-cyan-500 text-cyan-500'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+              }
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Convoso Agent Monitor
+              <span className="ml-1 bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full">
+                NEW
+              </span>
+            </div>
+          </button>
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' ? (
+        <div className="space-y-6">
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -266,6 +311,10 @@ export default function ComplianceDashboard() {
           </div>
         </div>
       </div>
+        </div>
+      ) : (
+        <AgentComplianceManager />
+      )}
     </div>
   );
 }

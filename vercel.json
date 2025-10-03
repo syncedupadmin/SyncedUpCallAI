@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/process-discovery-queue",
       "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/process-compliance",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
@@ -84,6 +88,9 @@
       "maxDuration": 60
     },
     "src/app/api/cron/process-discovery-queue/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/process-compliance/route.ts": {
       "maxDuration": 300
     }
   }

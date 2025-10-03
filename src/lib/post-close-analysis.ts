@@ -461,10 +461,11 @@ export async function analyzeCompliance(
  */
 export async function extractPostCloseSegment(callId: string): Promise<PostCloseSegment | null> {
   try {
-    // Get call data with transcript
+    // Get call data with transcript and agency_id
     const call = await db.oneOrNone(`
       SELECT
         c.id,
+        c.agency_id,
         c.duration_sec,
         c.disposition,
         c.agent_name,
@@ -556,10 +557,11 @@ export async function extractPostCloseSegment(callId: string): Promise<PostClose
 
     const durationSec = Math.round((endMs - startMs) / 1000);
 
-    // Store in database
+    // Store in database with agency_id
     const result = await db.one(`
       INSERT INTO post_close_segments (
         call_id,
+        agency_id,
         start_ms,
         end_ms,
         duration_sec,
@@ -570,10 +572,11 @@ export async function extractPostCloseSegment(callId: string): Promise<PostClose
         disposition,
         agent_name,
         campaign
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       callId,
+      call.agency_id,
       startMs,
       endMs,
       durationSec,
@@ -621,6 +624,7 @@ export async function extractSegmentsInBatch(limit: number = 100): Promise<{
       WHERE c.disposition = 'SALE'
       AND c.duration_sec > 60
       AND pcs.id IS NULL
+      AND c.agency_id IS NOT NULL
       ORDER BY c.created_at DESC
       LIMIT $1
     `, [limit]);
@@ -801,10 +805,11 @@ export async function activateScript(scriptId: string, agencyId: string): Promis
 export async function getAgentPerformance(
   agentName: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  agencyId?: string
 ): Promise<any> {
   try {
-    const result = await db.oneOrNone(`
+    let query = `
       SELECT
         COUNT(*) as total_analyzed,
         SUM(CASE WHEN compliance_passed THEN 1 ELSE 0 END) as total_passed,
@@ -817,7 +822,16 @@ export async function getAgentPerformance(
       WHERE agent_name = $1
       AND analyzed_at >= $2
       AND analyzed_at <= $3
-    `, [agentName, startDate, endDate]);
+    `;
+
+    const params: any[] = [agentName, startDate, endDate];
+
+    if (agencyId) {
+      query += ` AND agency_id = $4`;
+      params.push(agencyId);
+    }
+
+    const result = await db.oneOrNone(query, params);
 
     if (result && result.total_analyzed > 0) {
       result.pass_rate = (result.total_passed / result.total_analyzed) * 100;
