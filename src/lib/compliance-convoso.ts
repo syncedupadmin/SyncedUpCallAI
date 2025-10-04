@@ -133,34 +133,61 @@ export class ComplianceConvosoService {
    */
   async discoverAgents(): Promise<ConvosoAgent[]> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/users`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${this.authToken}`,
-          'Content-Type': 'application/json'
-        }
+      // Calculate date range (last 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      const dateStart = startDate.toISOString().split('T')[0];
+      const dateEnd = endDate.toISOString().split('T')[0];
+
+      // Use agent-performance/search to get agents (verified working pattern)
+      const params = new URLSearchParams({
+        auth_token: this.authToken,
+        date_start: dateStart,
+        date_end: dateEnd
       });
+
+      const response = await fetch(
+        `${this.apiBaseUrl}/agent-performance/search?${params.toString()}`,
+        {
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Convoso API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
-      const agents: ConvosoAgent[] = data.agents || data.data || [];
+      const result = await response.json();
 
-      // Filter for active agents only
-      const activeAgents = agents.filter(agent =>
-        agent.status === 'active' || !agent.status
-      );
+      if (!result.success || !result.data) {
+        throw new Error('Invalid response from Convoso API');
+      }
+
+      // Extract agent data from response
+      const agentData = Object.values(result.data) as any[];
+
+      // Convert to ConvosoAgent format
+      const agents: ConvosoAgent[] = agentData
+        .filter(agent => agent.human_answered > 0) // Only agents with calls
+        .map(agent => ({
+          id: agent.user_id || agent.id,
+          name: agent.user_name || agent.name || 'Unknown',
+          email: agent.email || null,
+          status: 'active'
+        }));
 
       logInfo({
         event_type: 'agents_discovered',
         agency_id: this.agencyId,
         total_agents: agents.length,
-        active_agents: activeAgents.length
+        active_agents: agents.length
       });
 
-      return activeAgents;
+      return agents;
 
     } catch (error: any) {
       logError('Failed to discover agents', error, {
@@ -302,46 +329,70 @@ export class ComplianceConvosoService {
     endDate: Date
   ): Promise<ConvosoCall[]> {
     try {
+      const dateStart = startDate.toISOString().split('T')[0];
+      const dateEnd = endDate.toISOString().split('T')[0];
+
+      // Use log/retrieve endpoint (verified working pattern from discovery)
       const params = new URLSearchParams({
-        agent_id: agentId,
-        disposition: 'SALE',
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        include_recording: 'true',
-        include_transcript: 'true'
+        auth_token: this.authToken,
+        start: dateStart,
+        end: dateEnd,
+        limit: '1000',
+        offset: '0',
+        include_recordings: '1'
       });
 
-      const response = await fetch(`${this.apiBaseUrl}/reports/calls?${params}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${this.authToken}`,
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        `${this.apiBaseUrl}/log/retrieve?${params.toString()}`,
+        {
+          headers: {
+            'Accept': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Convoso API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      const calls: ConvosoCall[] = data.calls || data.data || [];
+      const recordings = data.data?.results || [];
 
-      // Filter for SALE disposition only
-      const salesCalls = calls.filter(call =>
-        call.disposition === 'SALE' ||
-        call.disposition === 'Sale' ||
-        call.disposition?.toLowerCase().includes('sale')
-      );
+      // Filter for this specific agent and SALE disposition
+      const salesCalls = recordings.filter((call: any) => {
+        const matchesAgent = call.user_id === agentId || call.user === agentId;
+        const isSale = call.status_name?.toUpperCase().includes('SALE') ||
+                      call.status?.toUpperCase().includes('SALE') ||
+                      call.disposition?.toUpperCase().includes('SALE');
+        const hasRecording = call.recording && Array.isArray(call.recording) && call.recording.length > 0;
+        const duration = call.call_length ? parseInt(call.call_length) : 0;
+        const isLongEnough = duration >= 10; // At least 10 seconds
+
+        return matchesAgent && isSale && hasRecording && isLongEnough;
+      });
+
+      // Convert to ConvosoCall format
+      const formattedCalls: ConvosoCall[] = salesCalls.map((call: any) => ({
+        id: call.id,
+        lead_id: call.lead_id,
+        user_id: call.user_id,
+        user_name: call.user || 'Unknown',
+        disposition: call.status_name || call.status || 'SALE',
+        call_length: parseInt(call.call_length) || 0,
+        recording_url: Array.isArray(call.recording) && call.recording.length > 0 ? call.recording[0] : null,
+        started_at: call.started_at,
+        campaign: call.campaign || null
+      }));
 
       logInfo({
         event_type: 'agent_sales_fetched',
         agency_id: this.agencyId,
         agent_id: agentId,
-        total_calls: calls.length,
-        sales_calls: salesCalls.length
+        total_calls: recordings.length,
+        sales_calls: formattedCalls.length
       });
 
-      return salesCalls;
+      return formattedCalls;
 
     } catch (error: any) {
       logError('Failed to fetch agent sales calls', error, {
