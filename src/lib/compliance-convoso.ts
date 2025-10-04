@@ -163,18 +163,49 @@ export class ComplianceConvosoService {
 
       const result = await response.json();
 
-      if (!result.success || !result.data) {
-        throw new Error('Invalid response from Convoso API');
+      // Log the actual response structure for debugging
+      logInfo({
+        event_type: 'convoso_agent_response',
+        agency_id: this.agencyId,
+        has_success: !!result.success,
+        has_data: !!result.data,
+        response_keys: Object.keys(result)
+      });
+
+      // Handle different response structures
+      let agentData: any[] = [];
+
+      if (result.success && result.data) {
+        // Standard format: { success: true, data: { ... } }
+        agentData = Object.values(result.data) as any[];
+      } else if (result.data) {
+        // Format without success flag: { data: { ... } }
+        agentData = Object.values(result.data) as any[];
+      } else if (Array.isArray(result)) {
+        // Direct array response
+        agentData = result;
+      } else if (typeof result === 'object') {
+        // Direct object with agents as keys
+        agentData = Object.values(result) as any[];
+      }
+
+      if (agentData.length === 0) {
+        throw new Error('No agent data in Convoso response');
       }
 
       // Extract agent data from response
-      const agentData = Object.values(result.data) as any[];
 
       // Convert to ConvosoAgent format
       const agents: ConvosoAgent[] = agentData
-        .filter(agent => agent.human_answered > 0) // Only agents with calls
+        .filter(agent => {
+          // Filter out system users and agents with no activity
+          if (!agent) return false;
+          const humanAnswered = agent.human_answered || 0;
+          const isSystemUser = agent.user_name === 'System User' || agent.user_id === '666666';
+          return !isSystemUser && humanAnswered >= 0; // Include all real agents
+        })
         .map(agent => ({
-          id: agent.user_id || agent.id,
+          id: agent.user_id || agent.id || String(Math.random()),
           name: agent.user_name || agent.name || 'Unknown',
           email: agent.email || null,
           status: 'active'
