@@ -335,6 +335,7 @@ export class ComplianceConvosoService {
 
   /**
    * Fetch sales calls for a specific agent (or all if agentId is empty)
+   * Uses pagination to fetch ALL sales, not just first 5000 records
    */
   private async fetchAgentSalesCalls(
     agentId: string,
@@ -346,83 +347,19 @@ export class ComplianceConvosoService {
       const dateStart = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const dateEnd = endDate.toISOString().split('T')[0];     // YYYY-MM-DD
 
-      // Build params for log/retrieve endpoint (use same params as discovery)
-      const params = new URLSearchParams({
-        auth_token: this.authToken,
-        start: dateStart,
-        end: dateEnd,
-        limit: '5000',
-        offset: '0',
-        include_recordings: '1'
-        // NOTE: Can't filter by disposition at API level - must filter client-side
-      });
-
-      const response = await fetch(
-        `${this.apiBaseUrl}/log/retrieve?${params.toString()}`,
-        {
-          headers: {
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Convoso API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      // Extract recordings array with proper fallback
-      let recordings: any[] = [];
-      if (data.data?.results && Array.isArray(data.data.results)) {
-        recordings = data.data.results;
-      } else if (data.results && Array.isArray(data.results)) {
-        recordings = data.results;
-      } else if (Array.isArray(data)) {
-        recordings = data;
-      }
-
-      // DEBUG: Log the actual API response structure
-      logInfo({
-        event_type: 'convoso_api_response_debug',
-        agency_id: this.agencyId,
-        response_structure: {
-          has_data: !!data.data,
-          has_results: !!data.results,
-          has_data_results: !!data.data?.results,
-          is_array: Array.isArray(data),
-          top_keys: Object.keys(data || {}),
-          data_keys: data.data ? Object.keys(data.data) : null,
-          recordings_count: recordings.length,
-          recordings_is_array: Array.isArray(recordings)
-        }
-      });
-
-      // DEBUG: Log what we're filtering
-      logInfo({
-        event_type: 'filtering_recordings_debug',
-        agency_id: this.agencyId,
-        total_recordings: recordings.length,
-        is_array: Array.isArray(recordings),
-        agent_filter: agentId ? 'specific_agent' : 'all_agents',
-        sample_record: recordings.length > 0 && recordings[0] ? {
-          has_status_name: !!recordings[0].status_name,
-          has_status: !!recordings[0].status,
-          has_disposition: !!recordings[0].disposition,
-          has_recording: !!recordings[0].recording,
-          has_call_length: !!recordings[0].call_length,
-          status_name: recordings[0].status_name,
-          status: recordings[0].status,
-          disposition: recordings[0].disposition,
-          all_keys: Object.keys(recordings[0] || {})
-        } : 'no_records_found'
-      });
-
       // Get agent name if specific agent requested
       const agentName = agentId ? this.agentIdToNameMap.get(agentId) : null;
 
-      // DEBUG: Track filtering stats
-      let filterStats = {
+      // PAGINATION: Fetch multiple pages until we collect enough sales
+      const allSalesCalls: ConvosoCall[] = [];
+      let offset = 0;
+      const limit = 5000;
+      let hasMore = true;
+      let totalRecordsFetched = 0;
+      let pagesFetched = 0;
+
+      // Global filter stats across all pages
+      let globalFilterStats = {
         total: 0,
         failed_sale_check: 0,
         failed_agent_check: 0,
@@ -431,106 +368,204 @@ export class ComplianceConvosoService {
         passed: 0
       };
 
-      // Filter recordings (must filter client-side since API doesn't support disposition filter)
-      const salesCalls = recordings.filter((call: any) => {
-        filterStats.total++;
+      logInfo({
+        event_type: 'pagination_start',
+        agency_id: this.agencyId,
+        date_range: `${dateStart} to ${dateEnd}`,
+        agent_filter: agentName || 'all_agents'
+      });
 
-        // Check if it's a SALE (must check client-side)
-        const isSale =
-          call.status_name?.toUpperCase().includes('SALE') ||
-          call.status?.toUpperCase().includes('SALE');
+      // Loop through pages until we have enough sales or run out of data
+      while (hasMore && allSalesCalls.length < 10000) { // Cap at 10k sales for safety
+        pagesFetched++;
 
-        if (!isSale) {
-          filterStats.failed_sale_check++;
-          return false;
+        // Build params for this page
+        const params = new URLSearchParams({
+          auth_token: this.authToken,
+          start: dateStart,
+          end: dateEnd,
+          limit: String(limit),
+          offset: String(offset),
+          include_recordings: '1'
+        });
+
+        logInfo({
+          event_type: 'fetching_page',
+          agency_id: this.agencyId,
+          page: pagesFetched,
+          offset,
+          limit
+        });
+
+        const response = await fetch(
+          `${this.apiBaseUrl}/log/retrieve?${params.toString()}`,
+          {
+            headers: {
+              'Accept': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Convoso API error: ${response.status} ${response.statusText}`);
         }
 
-        // If specific agent requested, match by name
-        if (agentName) {
-          const callAgentName = call.user || call.user_name || '';
-          const matchesAgent = callAgentName.toLowerCase() === agentName.toLowerCase();
-          if (!matchesAgent) {
-            filterStats.failed_agent_check++;
+        const data = await response.json();
+
+        // Extract recordings array with proper fallback
+        let recordings: any[] = [];
+        if (data.data?.results && Array.isArray(data.data.results)) {
+          recordings = data.data.results;
+        } else if (data.results && Array.isArray(data.results)) {
+          recordings = data.results;
+        } else if (Array.isArray(data)) {
+          recordings = data;
+        }
+
+        totalRecordsFetched += recordings.length;
+
+        // Log sample record from first page only
+        if (pagesFetched === 1 && recordings.length > 0) {
+          logInfo({
+            event_type: 'sample_record_debug',
+            agency_id: this.agencyId,
+            sample_record: recordings[0] ? {
+              has_status_name: !!recordings[0].status_name,
+              has_status: !!recordings[0].status,
+              has_disposition: !!recordings[0].disposition,
+              has_recording: !!recordings[0].recording,
+              has_call_length: !!recordings[0].call_length,
+              status_name: recordings[0].status_name,
+              status: recordings[0].status,
+              disposition: recordings[0].disposition,
+              all_keys: Object.keys(recordings[0] || {})
+            } : 'no_records_found'
+          });
+        }
+
+        // Filter recordings (must filter client-side since API doesn't support disposition filter)
+        const salesInPage = recordings.filter((call: any) => {
+          globalFilterStats.total++;
+
+          // Check if it's a SALE (must check client-side)
+          const isSale =
+            call.status_name?.toUpperCase().includes('SALE') ||
+            call.status?.toUpperCase().includes('SALE');
+
+          if (!isSale) {
+            globalFilterStats.failed_sale_check++;
             return false;
           }
+
+          // If specific agent requested, match by name
+          if (agentName) {
+            const callAgentName = call.user || call.user_name || '';
+            const matchesAgent = callAgentName.toLowerCase() === agentName.toLowerCase();
+            if (!matchesAgent) {
+              globalFilterStats.failed_agent_check++;
+              return false;
+            }
+          }
+
+          // Check for recording (required for compliance review)
+          const hasRecording = call.recording &&
+            (typeof call.recording === 'string' ||
+             (Array.isArray(call.recording) && call.recording.length > 0));
+
+          if (!hasRecording) {
+            globalFilterStats.failed_recording_check++;
+            return false;
+          }
+
+          // Check duration (at least 10 seconds for meaningful compliance check)
+          const duration = call.call_length ? parseInt(call.call_length) : 0;
+          const isLongEnough = duration >= 10;
+
+          if (!isLongEnough) {
+            globalFilterStats.failed_duration_check++;
+            return false;
+          }
+
+          globalFilterStats.passed++;
+          return true;
+        });
+
+        // Convert to ConvosoCall format
+        const formattedCalls: ConvosoCall[] = salesInPage.map((call: any) => {
+          // Get recording URL - handle both string and array formats
+          let recordingUrl = null;
+          if (typeof call.recording === 'string') {
+            recordingUrl = call.recording;
+          } else if (Array.isArray(call.recording) && call.recording.length > 0) {
+            recordingUrl = call.recording[0];
+          }
+
+          // Map agent name to our ID if we have it
+          const callAgentName = call.user || call.user_name || '';
+          const mappedAgentId = this.agentNameToIdMap.get(callAgentName.toLowerCase()) || agentId || '';
+
+          return {
+            id: call.id || call.unique_id || call.lead_id,
+            agent_id: mappedAgentId,
+            agent_name: callAgentName,
+            campaign_id: call.campaign_id || call.campaign || '',
+            list_id: call.list_id || '',
+            phone_number: call.phone_number || call.phone || '',
+            disposition: call.status_name || call.status || call.disposition || 'SALE',
+            call_date: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[0] :
+                       call.started_at ? call.started_at.split(' ')[0] : '',
+            call_time: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[1].split('.')[0] :
+                       call.started_at ? call.started_at.split(' ')[1] : '',
+            duration: parseInt(call.call_length) || 0,
+            recording_url: recordingUrl,
+            transcript: call.transcript || undefined,
+            sale_amount: call.sale_amount || undefined,
+            product_type: call.product_type || undefined,
+            state: call.state || undefined
+          };
+        });
+
+        allSalesCalls.push(...formattedCalls);
+
+        logInfo({
+          event_type: 'page_processed',
+          agency_id: this.agencyId,
+          page: pagesFetched,
+          records_in_page: recordings.length,
+          sales_in_page: formattedCalls.length,
+          total_sales_collected: allSalesCalls.length
+        });
+
+        // Check if there are more pages
+        hasMore = recordings.length === limit;
+        offset += limit;
+
+        // Safety: Don't make infinite requests
+        if (pagesFetched >= 20) {
+          logInfo({
+            event_type: 'pagination_limit_reached',
+            agency_id: this.agencyId,
+            pages_fetched: pagesFetched,
+            total_sales: allSalesCalls.length
+          });
+          break;
         }
+      }
 
-        // Check for recording (required for compliance review)
-        const hasRecording = call.recording &&
-          (typeof call.recording === 'string' ||
-           (Array.isArray(call.recording) && call.recording.length > 0));
-
-        if (!hasRecording) {
-          filterStats.failed_recording_check++;
-          return false;
-        }
-
-        // Check duration (at least 10 seconds for meaningful compliance check)
-        const duration = call.call_length ? parseInt(call.call_length) : 0;
-        const isLongEnough = duration >= 10;
-
-        if (!isLongEnough) {
-          filterStats.failed_duration_check++;
-          return false;
-        }
-
-        filterStats.passed++;
-        return true;
-      });
-
-      // DEBUG: Log filtering results
+      // Final summary
       logInfo({
-        event_type: 'filtering_results_debug',
-        agency_id: this.agencyId,
-        filter_stats: filterStats
-      });
-
-      // Convert to ConvosoCall format
-      const formattedCalls: ConvosoCall[] = salesCalls.map((call: any) => {
-        // Get recording URL - handle both string and array formats
-        let recordingUrl = null;
-        if (typeof call.recording === 'string') {
-          recordingUrl = call.recording;
-        } else if (Array.isArray(call.recording) && call.recording.length > 0) {
-          recordingUrl = call.recording[0];
-        }
-
-        // Map agent name to our ID if we have it
-        const callAgentName = call.user || call.user_name || '';
-        const mappedAgentId = this.agentNameToIdMap.get(callAgentName.toLowerCase()) || agentId || '';
-
-        return {
-          id: call.id || call.unique_id || call.lead_id,
-          agent_id: mappedAgentId,
-          agent_name: callAgentName,
-          campaign_id: call.campaign_id || call.campaign || '',
-          list_id: call.list_id || '',
-          phone_number: call.phone_number || call.phone || '',
-          disposition: call.status_name || call.status || call.disposition || 'SALE',
-          call_date: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[0] :
-                     call.started_at ? call.started_at.split(' ')[0] : '',
-          call_time: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[1].split('.')[0] :
-                     call.started_at ? call.started_at.split(' ')[1] : '',
-          duration: parseInt(call.call_length) || 0,
-          recording_url: recordingUrl,
-          transcript: call.transcript || undefined,
-          sale_amount: call.sale_amount || undefined,
-          product_type: call.product_type || undefined,
-          state: call.state || undefined
-        };
-      });
-
-      logInfo({
-        event_type: 'agent_sales_fetched',
+        event_type: 'pagination_complete',
         agency_id: this.agencyId,
         agent_id: agentId,
         agent_name: agentName || 'all_agents',
-        total_recordings: Array.isArray(recordings) ? recordings.length : 0,
-        sales_with_recordings: formattedCalls.length,
+        pages_fetched: pagesFetched,
+        total_records_fetched: totalRecordsFetched,
+        total_sales_found: allSalesCalls.length,
+        filter_stats: globalFilterStats,
         date_range: `${startDate.toISOString()} - ${endDate.toISOString()}`
       });
 
-      return formattedCalls;
+      return allSalesCalls;
 
     } catch (error: any) {
       logError('Failed to fetch agent sales calls', error, {
