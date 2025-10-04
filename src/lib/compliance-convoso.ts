@@ -332,14 +332,15 @@ export class ComplianceConvosoService {
       const endTime = Math.floor(endDate.getTime() / 1000).toString();
 
       // Build params for log/retrieve endpoint
+      // Use Convoso's built-in filtering to only get SALE calls
       const params = new URLSearchParams({
         auth_token: this.authToken,
         start_time: startTime,
         end_time: endTime,
-        limit: '5000',  // Increased limit to get more results
+        limit: '5000',
         offset: '0',
-        include_recordings: '1'
-        // Note: Removed disposition filter - we'll filter after to ensure we get all sales
+        include_recordings: '1',
+        status_name: 'Sale'  // Filter for sales at API level (more efficient)
       });
 
       const response = await fetch(
@@ -416,20 +417,9 @@ export class ComplianceConvosoService {
         passed: 0
       };
 
-      // Filter for SALE disposition and optionally by agent
+      // Filter recordings (API already filtered for sales via status_name)
       const salesCalls = recordings.filter((call: any) => {
         filterStats.total++;
-
-        // Check if it's a sale (check multiple fields for compatibility)
-        const isSale =
-          call.status_name?.toUpperCase().includes('SALE') ||
-          call.status?.toUpperCase().includes('SALE') ||
-          call.disposition?.toUpperCase().includes('SALE');
-
-        if (!isSale) {
-          filterStats.failed_sale_check++;
-          return false;
-        }
 
         // If specific agent requested, match by name
         if (agentName) {
@@ -441,7 +431,7 @@ export class ComplianceConvosoService {
           }
         }
 
-        // Check for recording
+        // Check for recording (required for compliance review)
         const hasRecording = call.recording &&
           (typeof call.recording === 'string' ||
            (Array.isArray(call.recording) && call.recording.length > 0));
@@ -451,9 +441,9 @@ export class ComplianceConvosoService {
           return false;
         }
 
-        // Check duration
+        // Check duration (at least 10 seconds for meaningful compliance check)
         const duration = call.call_length ? parseInt(call.call_length) : 0;
-        const isLongEnough = duration >= 10; // At least 10 seconds
+        const isLongEnough = duration >= 10;
 
         if (!isLongEnough) {
           filterStats.failed_duration_check++;
@@ -536,10 +526,10 @@ export class ComplianceConvosoService {
     try {
       for (const call of calls) {
         try {
-          // Check if call already exists
+          // Check if call already exists (use external_id for Convoso calls)
           const existingCall = await db.oneOrNone(`
             SELECT id FROM calls
-            WHERE convoso_id = $1 OR external_id = $1
+            WHERE external_id = $1
           `, [call.id]);
 
           let callId: string;
@@ -569,7 +559,6 @@ export class ComplianceConvosoService {
             const newCall = await db.one(`
               INSERT INTO calls (
                 agency_id,
-                convoso_id,
                 external_id,
                 phone_number,
                 agent_name,
@@ -587,7 +576,7 @@ export class ComplianceConvosoService {
                 compliance_processed,
                 created_at
               ) VALUES (
-                $1, $2, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13,
+                $1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13,
                 true, false, $14
               ) RETURNING id
             `, [
