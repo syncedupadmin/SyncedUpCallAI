@@ -357,6 +357,16 @@ export class ComplianceConvosoService {
 
       const data = await response.json();
 
+      // Extract recordings array with proper fallback
+      let recordings: any[] = [];
+      if (data.data?.results && Array.isArray(data.data.results)) {
+        recordings = data.data.results;
+      } else if (data.results && Array.isArray(data.results)) {
+        recordings = data.results;
+      } else if (Array.isArray(data)) {
+        recordings = data;
+      }
+
       // DEBUG: Log the actual API response structure
       logInfo({
         event_type: 'convoso_api_response_debug',
@@ -368,20 +378,19 @@ export class ComplianceConvosoService {
           is_array: Array.isArray(data),
           top_keys: Object.keys(data || {}),
           data_keys: data.data ? Object.keys(data.data) : null,
-          sample_count: data.data?.results?.length || data.results?.length || (Array.isArray(data) ? data.length : 0)
+          recordings_count: recordings.length,
+          recordings_is_array: Array.isArray(recordings)
         }
       });
-
-      const recordings = data.data?.results || data.results || data || [];
 
       // DEBUG: Log what we're filtering
       logInfo({
         event_type: 'filtering_recordings_debug',
         agency_id: this.agencyId,
-        total_recordings: Array.isArray(recordings) ? recordings.length : 0,
+        total_recordings: recordings.length,
         is_array: Array.isArray(recordings),
         agent_filter: agentId ? 'specific_agent' : 'all_agents',
-        sample_record: recordings[0] ? {
+        sample_record: recordings.length > 0 && recordings[0] ? {
           has_status_name: !!recordings[0].status_name,
           has_status: !!recordings[0].status,
           has_disposition: !!recordings[0].disposition,
@@ -389,8 +398,9 @@ export class ComplianceConvosoService {
           has_call_length: !!recordings[0].call_length,
           status_name: recordings[0].status_name,
           status: recordings[0].status,
-          disposition: recordings[0].disposition
-        } : null
+          disposition: recordings[0].disposition,
+          all_keys: Object.keys(recordings[0] || {})
+        } : 'no_records_found'
       });
 
       // Get agent name if specific agent requested
