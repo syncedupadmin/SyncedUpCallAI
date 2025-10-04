@@ -270,9 +270,9 @@ export class ComplianceConvosoService {
     agents: ConvosoAgent[],
     dateRange?: { start: Date; end: Date }
   ): Promise<ConvosoCall[]> {
-    // Default to last 30 days if no range specified (to match discovery)
+    // Default to last 90 days if no range specified (need longer range to find enough sales)
     const endDate = dateRange?.end || new Date();
-    const startDate = dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = dateRange?.start || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
     try {
       // OPTIMIZATION: Fetch ALL sales in a single API call, then filter by agent
@@ -535,76 +535,63 @@ export class ComplianceConvosoService {
     try {
       for (const call of calls) {
         try {
-          // Check if call already exists (use external_id for Convoso calls)
+          // Check if call already exists (use source_ref for Convoso calls)
           const existingCall = await db.oneOrNone(`
             SELECT id FROM calls
-            WHERE external_id = $1
+            WHERE source = 'convoso' AND source_ref = $1
           `, [call.id]);
 
           let callId: string;
 
           if (existingCall) {
             callId = existingCall.id;
-
-            // Update call with Convoso metadata
-            await db.none(`
-              UPDATE calls SET
-                convoso_agent_id = $2,
-                convoso_campaign_id = $3,
-                convoso_list_id = $4,
-                convoso_disposition = $5,
-                compliance_required = true,
-                compliance_processed = false
-              WHERE id = $1
-            `, [
-              callId,
-              call.agent_id,
-              call.campaign_id,
-              call.list_id,
-              call.disposition
-            ]);
+            logInfo({
+              event_type: 'compliance_call_exists',
+              call_id: callId,
+              convoso_id: call.id
+            });
           } else {
-            // Create new call record
+            // Create new call record using correct schema
+            const callTime = call.call_date && call.call_time ?
+              new Date(`${call.call_date} ${call.call_time}`) : new Date();
+
             const newCall = await db.one(`
               INSERT INTO calls (
-                agency_id,
-                external_id,
-                phone_number,
-                agent_name,
-                convoso_agent_id,
-                convoso_campaign_id,
-                convoso_list_id,
-                disposition,
-                convoso_disposition,
-                duration,
+                source,
+                source_ref,
+                idem_key,
+                campaign,
+                direction,
+                started_at,
+                duration_sec,
                 recording_url,
-                transcript_text,
-                product_type,
-                state,
-                compliance_required,
-                compliance_processed,
-                created_at
+                disposition
               ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13,
-                true, false, $14
+                'convoso',
+                $1,
+                $2,
+                $3,
+                'outbound',
+                $4,
+                $5,
+                $6,
+                $7
               ) RETURNING id
             `, [
-              this.agencyId,
-              call.id,
-              call.phone_number,
-              call.agent_name,
-              call.agent_id,
-              call.campaign_id,
-              call.list_id,
-              call.disposition,
-              call.duration,
-              call.recording_url,
-              call.transcript,
-              call.product_type,
-              call.state,
-              new Date(`${call.call_date} ${call.call_time}`)
+              call.id,                    // source_ref
+              `convoso-${call.id}`,       // idem_key
+              call.campaign_id || 'unknown', // campaign
+              callTime,                   // started_at
+              call.duration,              // duration_sec
+              call.recording_url,         // recording_url
+              call.disposition            // disposition
             ]);
             callId = newCall.id;
+            logInfo({
+              event_type: 'compliance_call_created',
+              call_id: callId,
+              convoso_id: call.id
+            });
           }
 
           // Check if segment already exists
