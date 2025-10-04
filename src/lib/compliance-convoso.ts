@@ -327,20 +327,19 @@ export class ComplianceConvosoService {
     endDate: Date
   ): Promise<ConvosoCall[]> {
     try {
-      // Format dates correctly for log/retrieve API
-      const startTime = Math.floor(startDate.getTime() / 1000).toString();
-      const endTime = Math.floor(endDate.getTime() / 1000).toString();
+      // Format dates for log/retrieve API (matches discovery pattern)
+      const dateStart = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const dateEnd = endDate.toISOString().split('T')[0];     // YYYY-MM-DD
 
-      // Build params for log/retrieve endpoint
-      // Use Convoso's built-in filtering to only get SALE calls
+      // Build params for log/retrieve endpoint (use same params as discovery)
       const params = new URLSearchParams({
         auth_token: this.authToken,
-        start_time: startTime,
-        end_time: endTime,
+        start: dateStart,
+        end: dateEnd,
         limit: '5000',
         offset: '0',
-        include_recordings: '1',
-        status_name: 'Sale'  // Filter for sales at API level (more efficient)
+        include_recordings: '1'
+        // NOTE: Can't filter by disposition at API level - must filter client-side
       });
 
       const response = await fetch(
@@ -417,9 +416,19 @@ export class ComplianceConvosoService {
         passed: 0
       };
 
-      // Filter recordings (API already filtered for sales via status_name)
+      // Filter recordings (must filter client-side since API doesn't support disposition filter)
       const salesCalls = recordings.filter((call: any) => {
         filterStats.total++;
+
+        // Check if it's a SALE (must check client-side)
+        const isSale =
+          call.status_name?.toUpperCase().includes('SALE') ||
+          call.status?.toUpperCase().includes('SALE');
+
+        if (!isSale) {
+          filterStats.failed_sale_check++;
+          return false;
+        }
 
         // If specific agent requested, match by name
         if (agentName) {
