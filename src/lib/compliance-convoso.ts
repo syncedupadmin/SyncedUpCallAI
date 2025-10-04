@@ -78,8 +78,9 @@ export class ComplianceConvosoService {
       SELECT office_id FROM agencies WHERE id = $1
     `, [this.agencyId]);
 
-    this.officeId = result?.office_id || this.agencyId; // Fallback to agency_id
-    return this.officeId;
+    const officeId = result?.office_id || this.agencyId;
+    this.officeId = officeId;
+    return officeId;
   }
 
   /**
