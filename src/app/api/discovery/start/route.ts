@@ -103,7 +103,6 @@ export async function POST(req: NextRequest) {
 
       // Encrypt and store credentials
       const encryptedCredentials = encryptConvosoCredentials(
-        '', // API key not used
         convoso_auth_token,
         apiBase
       );
