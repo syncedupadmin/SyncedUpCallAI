@@ -562,8 +562,7 @@ export async function createComplianceConvosoService(
         name,
         convoso_auth_token,
         convoso_base_url,
-        convoso_credentials,
-        webhook_token
+        convoso_credentials
       FROM agencies
       WHERE id = $1
     `, [agencyId]);
@@ -646,8 +645,7 @@ export async function createComplianceConvosoService(
       convoso_credentials: {
         auth_token: authToken,
         api_url: apiUrl
-      },
-      webhook_token: agency.webhook_token
+      }
     };
 
     return new ComplianceConvosoService(config);
