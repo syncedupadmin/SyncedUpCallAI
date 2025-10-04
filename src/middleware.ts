@@ -269,6 +269,15 @@ export async function middleware(request: NextRequest) {
 
   // Check subscription status for authenticated users on protected paths
   if (isProtectedPath && user) {
+    // Check if user is super admin first - they bypass subscription checks
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+
+    if (isSuperAdmin) {
+      console.log('[Middleware] Super admin detected, bypassing subscription checks');
+      // Super admins can access everything, skip subscription checks
+      return response;
+    }
+
     // Routes that don't require active subscription or discovery check
     const subscriptionExemptPaths = [
       '/dashboard/billing',
