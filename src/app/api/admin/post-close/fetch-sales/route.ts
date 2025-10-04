@@ -55,7 +55,7 @@ async function handler(
       );
     }
 
-    // Parse date range if provided
+    // Parse date range if provided, or default to 90 days
     let dateRange;
     if (body.date_range) {
       dateRange = {
@@ -74,13 +74,28 @@ async function handler(
         );
       }
 
-      // Limit to 30 days
+      // Check if range is too short (less than 7 days)
       const daysDiff = Math.floor((dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff > 30) {
+      if (daysDiff < 7) {
+        // Override with 90 days to ensure we get enough sales
+        logInfo({
+          event_type: 'date_range_override',
+          original_days: daysDiff,
+          new_days: 90,
+          reason: 'range_too_short'
+        });
+        dateRange = {
+          start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+          end: new Date()
+        };
+      }
+
+      // Allow up to 90 days max
+      if (daysDiff > 90) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Date range cannot exceed 30 days'
+            error: 'Date range cannot exceed 90 days'
           },
           { status: 400 }
         );

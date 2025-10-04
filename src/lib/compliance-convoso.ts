@@ -59,13 +59,27 @@ export class ComplianceConvosoService {
   private apiBaseUrl: string;
   private authToken: string;
   private agencyId: string;
+  private officeId: string | null;
   private agentNameToIdMap: Map<string, string> = new Map();
   private agentIdToNameMap: Map<string, string> = new Map();
 
   constructor(config: AgencySyncConfig) {
     this.agencyId = config.agency_id;
+    this.officeId = null; // Will be fetched when needed
     this.apiBaseUrl = config.convoso_credentials.api_url || 'https://api.convoso.com';
     this.authToken = config.convoso_credentials.auth_token || '';
+  }
+
+  private async getOfficeId(): Promise<string> {
+    if (this.officeId) return this.officeId;
+
+    // Get agency's office_id
+    const result = await db.oneOrNone(`
+      SELECT office_id FROM agencies WHERE id = $1
+    `, [this.agencyId]);
+
+    this.officeId = result?.office_id || this.agencyId; // Fallback to agency_id
+    return this.officeId;
   }
 
   /**
@@ -555,11 +569,14 @@ export class ComplianceConvosoService {
             const callTime = call.call_date && call.call_time ?
               new Date(`${call.call_date} ${call.call_time}`) : new Date();
 
+            const officeId = await this.getOfficeId();
+
             const newCall = await db.one(`
               INSERT INTO calls (
                 source,
                 source_ref,
                 idem_key,
+                office_id,
                 campaign,
                 direction,
                 started_at,
@@ -571,15 +588,17 @@ export class ComplianceConvosoService {
                 $1,
                 $2,
                 $3,
-                'outbound',
                 $4,
+                'outbound',
                 $5,
                 $6,
-                $7
+                $7,
+                $8
               ) RETURNING id
             `, [
               call.id,                    // source_ref
               `convoso-${call.id}`,       // idem_key
+              officeId,                   // office_id
               call.campaign_id || 'unknown', // campaign
               callTime,                   // started_at
               call.duration,              // duration_sec
