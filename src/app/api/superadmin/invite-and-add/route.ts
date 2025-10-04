@@ -39,14 +39,20 @@ export async function POST(req: Request) {
 
     // 1) First check if user already exists
     console.log('[invite-and-add] Checking if user exists with email:', email)
-    const { data: existingUser, error: lookupError } = await admin.auth.admin.getUserByEmail(email)
+
+    // Try to find user in auth.users table via listUsers
+    const { data: { users }, error: lookupError } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000
+    })
 
     let userId: string | undefined
     let isNewUser = false
+    let existingUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
-    if (existingUser && existingUser.user) {
-      console.log('[invite-and-add] User already exists, using existing user ID:', existingUser.user.id)
-      userId = existingUser.user.id
+    if (existingUser) {
+      console.log('[invite-and-add] User already exists, using existing user ID:', existingUser.id)
+      userId = existingUser.id
 
       // Update profile if name is provided
       if (name) {
@@ -91,9 +97,14 @@ export async function POST(req: Request) {
         // Check if it's because user already exists (shouldn't happen since we checked, but just in case)
         if (inviteErr.message?.includes('already registered') || inviteErr.message?.includes('already exists')) {
           // Try to get the user again
-          const { data: existingUserRetry } = await admin.auth.admin.getUserByEmail(email)
-          if (existingUserRetry?.user) {
-            userId = existingUserRetry.user.id
+          const { data: { users: retryUsers } } = await admin.auth.admin.listUsers({
+            page: 1,
+            perPage: 1000
+          })
+          const existingUserRetry = retryUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+          if (existingUserRetry) {
+            userId = existingUserRetry.id
             console.log('[invite-and-add] Found user on retry, ID:', userId)
           } else {
             return NextResponse.json(
