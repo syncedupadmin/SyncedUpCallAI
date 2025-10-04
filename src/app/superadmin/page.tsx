@@ -411,6 +411,120 @@ export default function AdminPage() {
         <ConvosoImporter />
       </div>
 
+      {/* Portal Access */}
+      <div className="glass-card" style={{ marginTop: 24 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+          🚀 Portal Access
+        </h3>
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 14, fontWeight: 500, color: '#a8a8b3', marginBottom: 12 }}>
+            Full Platform Portals
+          </h4>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+            <a href="/dashboard" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              👤 Agent Dashboard
+            </a>
+            <a href="/dashboard" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              👔 Admin Dashboard
+            </a>
+            <a href="/analytics" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              📊 Analytics Portal
+            </a>
+          </div>
+
+          <h4 style={{ fontSize: 14, fontWeight: 500, color: '#a8a8b3', marginBottom: 12 }}>
+            Compliance Portal Access
+          </h4>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+            <a href="/compliance" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              ✅ Compliance Dashboard
+            </a>
+            <a href="/compliance/scripts" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              📝 Compliance Scripts
+            </a>
+            <a href="/compliance/results" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #00bcd4 0%, #0097a7 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              📈 Compliance Results
+            </a>
+            <a href="/compliance/agents" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #00acc1 0%, #00838f 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              👥 Agent Monitoring
+            </a>
+          </div>
+
+          <h4 style={{ fontSize: 14, fontWeight: 500, color: '#a8a8b3', marginBottom: 12 }}>
+            Management Portals
+          </h4>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <a href="/superadmin/agencies" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              🏢 Agencies Management
+            </a>
+            <a href="/superadmin/post-close" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              🎯 Post-Close Management
+            </a>
+            <a href="/superadmin/discovery-management" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              🔍 Discovery Management
+            </a>
+            <a href="/superadmin/billing" className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              fontWeight: 600,
+              border: 'none'
+            }}>
+              💳 Billing Management
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* System Info */}
       <div className="glass-card" style={{ marginTop: 24 }}>
         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
