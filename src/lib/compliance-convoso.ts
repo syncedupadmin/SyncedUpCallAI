@@ -356,24 +356,79 @@ export class ComplianceConvosoService {
       }
 
       const data = await response.json();
+
+      // DEBUG: Log the actual API response structure
+      logInfo({
+        event_type: 'convoso_api_response_debug',
+        agency_id: this.agencyId,
+        response_structure: {
+          has_data: !!data.data,
+          has_results: !!data.results,
+          has_data_results: !!data.data?.results,
+          is_array: Array.isArray(data),
+          top_keys: Object.keys(data || {}),
+          data_keys: data.data ? Object.keys(data.data) : null,
+          sample_count: data.data?.results?.length || data.results?.length || (Array.isArray(data) ? data.length : 0)
+        }
+      });
+
       const recordings = data.data?.results || data.results || data || [];
+
+      // DEBUG: Log what we're filtering
+      logInfo({
+        event_type: 'filtering_recordings_debug',
+        agency_id: this.agencyId,
+        total_recordings: Array.isArray(recordings) ? recordings.length : 0,
+        is_array: Array.isArray(recordings),
+        agent_filter: agentId ? 'specific_agent' : 'all_agents',
+        sample_record: recordings[0] ? {
+          has_status_name: !!recordings[0].status_name,
+          has_status: !!recordings[0].status,
+          has_disposition: !!recordings[0].disposition,
+          has_recording: !!recordings[0].recording,
+          has_call_length: !!recordings[0].call_length,
+          status_name: recordings[0].status_name,
+          status: recordings[0].status,
+          disposition: recordings[0].disposition
+        } : null
+      });
 
       // Get agent name if specific agent requested
       const agentName = agentId ? this.agentIdToNameMap.get(agentId) : null;
 
+      // DEBUG: Track filtering stats
+      let filterStats = {
+        total: 0,
+        failed_sale_check: 0,
+        failed_agent_check: 0,
+        failed_recording_check: 0,
+        failed_duration_check: 0,
+        passed: 0
+      };
+
       // Filter for SALE disposition and optionally by agent
       const salesCalls = recordings.filter((call: any) => {
+        filterStats.total++;
+
         // Check if it's a sale (check multiple fields for compatibility)
         const isSale =
           call.status_name?.toUpperCase().includes('SALE') ||
           call.status?.toUpperCase().includes('SALE') ||
           call.disposition?.toUpperCase().includes('SALE');
 
+        if (!isSale) {
+          filterStats.failed_sale_check++;
+          return false;
+        }
+
         // If specific agent requested, match by name
         if (agentName) {
           const callAgentName = call.user || call.user_name || '';
           const matchesAgent = callAgentName.toLowerCase() === agentName.toLowerCase();
-          if (!matchesAgent) return false;
+          if (!matchesAgent) {
+            filterStats.failed_agent_check++;
+            return false;
+          }
         }
 
         // Check for recording
@@ -381,11 +436,29 @@ export class ComplianceConvosoService {
           (typeof call.recording === 'string' ||
            (Array.isArray(call.recording) && call.recording.length > 0));
 
+        if (!hasRecording) {
+          filterStats.failed_recording_check++;
+          return false;
+        }
+
         // Check duration
         const duration = call.call_length ? parseInt(call.call_length) : 0;
         const isLongEnough = duration >= 10; // At least 10 seconds
 
-        return isSale && hasRecording && isLongEnough;
+        if (!isLongEnough) {
+          filterStats.failed_duration_check++;
+          return false;
+        }
+
+        filterStats.passed++;
+        return true;
+      });
+
+      // DEBUG: Log filtering results
+      logInfo({
+        event_type: 'filtering_results_debug',
+        agency_id: this.agencyId,
+        filter_stats: filterStats
       });
 
       // Convert to ConvosoCall format
