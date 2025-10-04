@@ -37,7 +37,6 @@ interface AgencySyncConfig {
   agency_id: string;
   agency_name: string;
   convoso_credentials: {
-    api_key?: string;
     auth_token?: string;
     api_url?: string;
     account_id?: string;
@@ -134,10 +133,10 @@ export class ComplianceConvosoService {
    */
   async discoverAgents(): Promise<ConvosoAgent[]> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/agents`, {
+      const response = await fetch(`${this.apiBaseUrl}/users`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': `Basic ${this.authToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -312,10 +311,10 @@ export class ComplianceConvosoService {
         include_transcript: 'true'
       });
 
-      const response = await fetch(`${this.apiBaseUrl}/calls?${params}`, {
+      const response = await fetch(`${this.apiBaseUrl}/reports/calls?${params}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': `Basic ${this.authToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -556,11 +555,13 @@ export async function createComplianceConvosoService(
   agencyId: string
 ): Promise<ComplianceConvosoService | null> {
   try {
-    // Get agency configuration
+    // Get agency configuration with new fields
     const agency = await db.oneOrNone(`
       SELECT
         id,
         name,
+        convoso_auth_token,
+        convoso_base_url,
         convoso_credentials,
         webhook_token
       FROM agencies
@@ -572,7 +573,56 @@ export async function createComplianceConvosoService(
       return null;
     }
 
-    if (!agency.convoso_credentials) {
+    // Try new encrypted auth_token field first, then fall back to old convoso_credentials
+    let authToken, apiUrl;
+
+    if (agency.convoso_auth_token) {
+      // Use new encrypted auth_token field
+      const crypto = await import('crypto');
+
+      // Get encryption key with proper error handling
+      const encryptionKeySource = process.env.CONVOSO_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!encryptionKeySource) {
+        logError('Missing encryption key', new Error('CONVOSO_ENCRYPTION_KEY or SUPABASE_SERVICE_ROLE_KEY must be set'), {
+          agency_id: agencyId
+        });
+        return null;
+      }
+      const ENCRYPTION_KEY = crypto.createHash('sha256').update(encryptionKeySource).digest();
+
+      // Decrypt function
+      const decrypt = (text: string): string => {
+        try {
+          const parts = text.split(':');
+          const iv = Buffer.from(parts[0], 'hex');
+          const encryptedText = Buffer.from(parts[1], 'hex');
+          const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+          let decrypted = decipher.update(encryptedText);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          return decrypted.toString();
+        } catch (error) {
+          // Decryption error already logged by logError
+          return '';
+        }
+      };
+
+      authToken = decrypt(agency.convoso_auth_token);
+      apiUrl = agency.convoso_base_url || 'https://api.convoso.com/v1';
+
+    } else if (agency.convoso_credentials) {
+      // Fall back to old convoso_credentials field (could contain auth_token)
+      let decryptedCreds;
+      if (agency.convoso_credentials.encrypted) {
+        // Credentials are encrypted using old method
+        decryptedCreds = decryptConvosoCredentials(agency.convoso_credentials);
+      } else {
+        // Credentials are in plain JSON
+        decryptedCreds = agency.convoso_credentials;
+      }
+
+      authToken = decryptedCreds.auth_token || decryptedCreds.api_token;
+      apiUrl = decryptedCreds.api_url || 'https://api.convoso.com/v1';
+    } else {
       logInfo({
         event_type: 'no_convoso_credentials',
         agency_id: agencyId,
@@ -581,17 +631,7 @@ export async function createComplianceConvosoService(
       return null;
     }
 
-    // Decrypt credentials if they are encrypted
-    let decryptedCreds;
-    if (agency.convoso_credentials.encrypted) {
-      // Credentials are encrypted
-      decryptedCreds = decryptConvosoCredentials(agency.convoso_credentials);
-    } else {
-      // Credentials are in plain JSON
-      decryptedCreds = agency.convoso_credentials;
-    }
-
-    if (!decryptedCreds.auth_token && !decryptedCreds.api_key) {
+    if (!authToken) {
       logInfo({
         event_type: 'missing_auth_token',
         agency_id: agencyId,
@@ -603,7 +643,10 @@ export async function createComplianceConvosoService(
     const config: AgencySyncConfig = {
       agency_id: agencyId,
       agency_name: agency.name,
-      convoso_credentials: decryptedCreds,
+      convoso_credentials: {
+        auth_token: authToken,
+        api_url: apiUrl
+      },
       webhook_token: agency.webhook_token
     };
 

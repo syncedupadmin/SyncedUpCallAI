@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Search, Filter, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react';
 
 interface ComplianceResult {
   id: string;
@@ -75,6 +75,40 @@ export default function ResultsPage() {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  const exportToCSV = () => {
+    const headers = ['Agent Name', 'Call ID', 'Score', 'Status', 'Analyzed At', 'Script Name', 'Missing Phrases'];
+
+    const csvData = filteredResults.map(r => [
+      r.agent_name,
+      r.call_id,
+      r.overall_score.toFixed(2),
+      r.compliance_passed ? 'Passed' : 'Failed',
+      new Date(r.analyzed_at).toLocaleString(),
+      r.script_name,
+      r.missing_phrases.join('; ')
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `compliance_results_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const exportToJSON = () => {
+    const jsonContent = JSON.stringify(filteredResults, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `compliance_results_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
+
   if (loading) {
     return <div className="text-center py-12 text-gray-400">Loading results...</div>;
   }
@@ -113,6 +147,26 @@ export default function ResultsPage() {
               <option value="passed">Passed Only</option>
               <option value="failed">Failed Only</option>
             </select>
+          </div>
+
+          {/* Export Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportToCSV}
+              disabled={filteredResults.length === 0}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" />
+              Export CSV
+            </button>
+            <button
+              onClick={exportToJSON}
+              disabled={filteredResults.length === 0}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              Export JSON
+            </button>
           </div>
         </div>
 

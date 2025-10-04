@@ -78,9 +78,8 @@ export function decryptData(encryptedData: EncryptedData): string {
 /**
  * Encrypts Convoso credentials for secure storage
  */
-export function encryptConvosoCredentials(apiKey: string, authToken: string, apiBase?: string) {
+export function encryptConvosoCredentials(authToken: string, apiBase?: string) {
   return {
-    api_key: encryptData(apiKey),
     auth_token: encryptData(authToken),
     api_base: apiBase || 'https://api.convoso.com/v1'
   };
@@ -91,7 +90,6 @@ export function encryptConvosoCredentials(apiKey: string, authToken: string, api
  */
 export function decryptConvosoCredentials(encrypted: any) {
   return {
-    api_key: decryptData(encrypted.api_key),
     auth_token: decryptData(encrypted.auth_token),
     api_base: encrypted.api_base || 'https://api.convoso.com/v1'
   };

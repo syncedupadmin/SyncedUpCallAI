@@ -11,6 +11,7 @@ const rateLimitConfigs = {
   '/api/jobs/transcribe': { maxRequests: 10, windowMs: 60000 },
   '/api/jobs/analyze': { maxRequests: 20, windowMs: 60000 },
   '/api/webhooks': { maxRequests: 100, windowMs: 60000 },
+  '/api/compliance/convoso-test': { maxRequests: 5, windowMs: 60000 },  // 5 tests per minute
   'default': { maxRequests: 30, windowMs: 60000 }
 };
 

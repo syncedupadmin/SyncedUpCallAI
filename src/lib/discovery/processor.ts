@@ -14,7 +14,6 @@ import { transcribe } from '@/server/asr';
 import { ANALYSIS_SYSTEM, userPrompt } from '@/server/lib/prompts';
 
 export interface ConvosoCredentials {
-  api_key: string;
   auth_token: string;
   api_base: string;
 }

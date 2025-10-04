@@ -77,7 +77,6 @@ export async function POST(req: NextRequest) {
 
       // Check data availability (10+ second calls only)
       const credentials: ConvosoCredentials = {
-        api_key: '', // Not used anymore
         auth_token: convoso_auth_token,
         api_base: apiBase
       };
