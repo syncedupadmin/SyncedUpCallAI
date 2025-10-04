@@ -59,6 +59,8 @@ export class ComplianceConvosoService {
   private apiBaseUrl: string;
   private authToken: string;
   private agencyId: string;
+  private agentNameToIdMap: Map<string, string> = new Map();
+  private agentIdToNameMap: Map<string, string> = new Map();
 
   constructor(config: AgencySyncConfig) {
     this.agencyId = config.agency_id;
@@ -195,7 +197,7 @@ export class ComplianceConvosoService {
 
       // Extract agent data from response
 
-      // Convert to ConvosoAgent format
+      // Convert to ConvosoAgent format and build name mapping
       const agents: ConvosoAgent[] = agentData
         .filter(agent => {
           // Filter out system users and agents with no activity
@@ -204,18 +206,28 @@ export class ComplianceConvosoService {
           const isSystemUser = agent.user_name === 'System User' || agent.user_id === '666666';
           return !isSystemUser && humanAnswered >= 0; // Include all real agents
         })
-        .map(agent => ({
-          id: agent.user_id || agent.id || String(Math.random()),
-          name: agent.user_name || agent.name || 'Unknown',
-          email: agent.email || null,
-          status: 'active'
-        }));
+        .map(agent => {
+          const agentId = agent.user_id || agent.id || String(Math.random());
+          const agentName = agent.user_name || agent.name || 'Unknown';
+
+          // Build bidirectional name <-> ID mapping
+          this.agentNameToIdMap.set(agentName.toLowerCase(), agentId);
+          this.agentIdToNameMap.set(agentId, agentName);
+
+          return {
+            id: agentId,
+            name: agentName,
+            email: agent.email || null,
+            status: 'active' as const
+          };
+        });
 
       logInfo({
         event_type: 'agents_discovered',
         agency_id: this.agencyId,
         total_agents: agents.length,
-        active_agents: agents.length
+        active_agents: agents.length,
+        name_map_size: this.agentNameToIdMap.size
       });
 
       return agents;
@@ -360,17 +372,30 @@ export class ComplianceConvosoService {
     endDate: Date
   ): Promise<ConvosoCall[]> {
     try {
-      const dateStart = startDate.toISOString().split('T')[0];
-      const dateEnd = endDate.toISOString().split('T')[0];
+      // Get agent name from our mapping for matching
+      const agentName = this.agentIdToNameMap.get(agentId);
+      if (!agentName) {
+        logInfo({
+          event_type: 'agent_not_found_in_map',
+          agency_id: this.agencyId,
+          agent_id: agentId
+        });
+        return [];
+      }
 
-      // Use log/retrieve endpoint (verified working pattern from discovery)
+      // Format dates correctly for log/retrieve API
+      const startTime = Math.floor(startDate.getTime() / 1000).toString();
+      const endTime = Math.floor(endDate.getTime() / 1000).toString();
+
+      // Use log/retrieve endpoint with correct parameters (from documentation)
       const params = new URLSearchParams({
         auth_token: this.authToken,
-        start: dateStart,
-        end: dateEnd,
+        start_time: startTime,
+        end_time: endTime,
         limit: '1000',
         offset: '0',
-        include_recordings: '1'
+        include_recordings: '1',
+        status: 'SALE'  // Filter for SALE disposition directly
       });
 
       const response = await fetch(
@@ -389,13 +414,21 @@ export class ComplianceConvosoService {
       const data = await response.json();
       const recordings = data.data?.results || [];
 
-      // Filter for this specific agent and SALE disposition
+      // Filter for this specific agent by NAME (not ID) and SALE disposition
       const salesCalls = recordings.filter((call: any) => {
-        const matchesAgent = call.user_id === agentId || call.user === agentId;
+        // Match agent by name (case-insensitive)
+        const callAgentName = call.user || call.user_name || '';
+        const matchesAgent = callAgentName.toLowerCase() === agentName.toLowerCase();
+
+        // Check if it's a sale
         const isSale = call.status_name?.toUpperCase().includes('SALE') ||
                       call.status?.toUpperCase().includes('SALE') ||
                       call.disposition?.toUpperCase().includes('SALE');
+
+        // Check for recording
         const hasRecording = call.recording && Array.isArray(call.recording) && call.recording.length > 0;
+
+        // Check duration
         const duration = call.call_length ? parseInt(call.call_length) : 0;
         const isLongEnough = duration >= 10; // At least 10 seconds
 
@@ -404,15 +437,21 @@ export class ComplianceConvosoService {
 
       // Convert to ConvosoCall format
       const formattedCalls: ConvosoCall[] = salesCalls.map((call: any) => ({
-        id: call.id,
-        lead_id: call.lead_id,
-        user_id: call.user_id,
-        user_name: call.user || 'Unknown',
+        id: call.id || call.unique_id,
+        agent_id: agentId,  // Use our mapped agent ID
+        agent_name: call.user || call.user_name || agentName,
+        campaign_id: call.campaign_id || '',
+        list_id: call.list_id || '',
+        phone_number: call.phone_number || call.phone || '',
         disposition: call.status_name || call.status || 'SALE',
-        call_length: parseInt(call.call_length) || 0,
+        call_date: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[0] : '',
+        call_time: call.start_epoch ? new Date(parseInt(call.start_epoch) * 1000).toISOString().split('T')[1].split('.')[0] : '',
+        duration: parseInt(call.call_length) || 0,
         recording_url: Array.isArray(call.recording) && call.recording.length > 0 ? call.recording[0] : null,
-        started_at: call.started_at,
-        campaign: call.campaign || null
+        transcript: call.transcript || undefined,
+        sale_amount: call.sale_amount || undefined,
+        product_type: call.product_type || undefined,
+        state: call.state || undefined
       }));
 
       logInfo({
